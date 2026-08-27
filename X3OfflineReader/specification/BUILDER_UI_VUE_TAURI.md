@@ -1,4 +1,4 @@
-# 听读工坊 0.6.0：Vue / Tauri 桌面界面
+# 听读工坊 0.6.x：Vue / Tauri 桌面界面
 
 ## 目标与边界
 
@@ -33,6 +33,14 @@
 ## 依赖与运行条件
 
 前端锁定 Vue 3.5.41、PrimeVue 4.5.5、PrimeIcons 7.0.0、PrimeUIX Themes 1.2.5、Vite 8.2.2；桌面层为 Tauri 2.11 系列。PrimeVue 4 用于稳定的 MIT 组件线，避免把本次迁移与新主版本风险捆绑。Windows 需要系统 WebView2；转换核心仍随包携带 Java 17 和已验证的 TTS/FFmpeg 环境。
+
+## 0.6.1 回归修复（2026-08-27）
+
+- 试听播放器是单实例资源。新试听在请求前停止旧音频；Provider/音色变化和窗口销毁也会停止；请求序号阻止较慢的旧请求在新请求之后播放。
+- ETA 不再用静止的总进度每秒外推。文本/缓存估算仍是初值并包含解析耗时，只有收到更大的进度值才采样实际吞吐，观察值在合理边界内以 15% 权重平滑合入。
+- 正式入口的 Windows PE Subsystem 为 2（GUI）；后台 Java 子进程保留 `CREATE_NO_WINDOW`。
+- 正式包版本与桥接状态均为 0.6.1；Java 28 项测试、Vue 构建、Rust release 测试/构建全部通过。EXE SHA-256：`4A3481F2CBDF9E3304EAC22115CB4977C44575DBB9F604991C6894B77C7B25C3`。
+- 完整包已验证 Melo、AISHELL-3/Kokoro、Edge 和 FFmpeg；现有 88% 可恢复 checkpoint 与完整工作缓存保留（36,248 个文件 / 18,836,237,018 字节）。
 
 ## 0.6.0 验收证据
 

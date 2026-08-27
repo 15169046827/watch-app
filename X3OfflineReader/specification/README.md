@@ -10,7 +10,7 @@
 所有 v1 文件使用 UTF-8 JSON、整数毫秒和稳定 ID。重大不兼容变更必须升级主版本，不能静默改变 v1 语义。
 Builder 实现与运行规格：
 
-- `BUILDER_UI_VUE_TAURI.md`：0.6.0 Vue/PrimeVue/Tauri 展示层、Java 桥接、生命周期、隐私和验收。
+- `BUILDER_UI_VUE_TAURI.md`：0.6.x Vue/PrimeVue/Tauri 展示层、Java 桥接、试听单实例、ETA、生命周期、隐私和验收。
 - `BUILDER_RESUME_CACHE.md`：断点、原子句子缓存、Track 复用与缓存整理。
 - `BUILDER_PERFORMANCE.md`：Melo 并行度、资源守卫和实测吞吐。
 - `TTS_PROVIDERS.md`：离线/在线 Provider、音色、试听与许可边界。
