@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:opbook:schema:v1:checksums",
+  "title": "OPBook v1 checksums",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "algorithm", "files"],
+  "properties": {
+    "formatVersion": { "const": "1.0" },
+    "algorithm": { "const": "SHA-256" },
+    "files": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^(manifest\\.json|cover\\.webp|(content|timeline)/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json|audio/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.m4a)$" },
+      "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    }
+  }
+}
+

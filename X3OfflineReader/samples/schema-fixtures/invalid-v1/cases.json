@@ -1,0 +1,52 @@
+{
+  "unsafePaths": [
+    { "id": "path-parent", "value": "audio/../escape.m4a" },
+    { "id": "path-absolute", "value": "/audio/track.m4a" },
+    { "id": "path-backslash", "value": "audio\\track.m4a" },
+    { "id": "path-empty-segment", "value": "audio//track.m4a" }
+  ],
+  "invalidTimelines": [
+    {
+      "id": "timeline-overlap",
+      "durationMs": 2000,
+      "blockText": "甲乙丙丁",
+      "segments": [
+        { "segmentId": "a", "startMs": 0, "endMs": 1200, "text": "甲乙", "blockId": "block", "startChar": 0, "endChar": 2 },
+        { "segmentId": "b", "startMs": 1000, "endMs": 1800, "text": "丙丁", "blockId": "block", "startChar": 2, "endChar": 4 }
+      ]
+    },
+    {
+      "id": "timeline-duration-overflow",
+      "durationMs": 2000,
+      "blockText": "甲乙",
+      "segments": [
+        { "segmentId": "a", "startMs": 0, "endMs": 2001, "text": "甲乙", "blockId": "block", "startChar": 0, "endChar": 2 }
+      ]
+    },
+    {
+      "id": "timeline-text-mismatch",
+      "durationMs": 2000,
+      "blockText": "甲乙",
+      "segments": [
+        { "segmentId": "a", "startMs": 0, "endMs": 2000, "text": "乙甲", "blockId": "block", "startChar": 0, "endChar": 2 }
+      ]
+    },
+    {
+      "id": "timeline-utf16-offset-used-as-codepoint",
+      "durationMs": 2000,
+      "blockText": "字符𠀀。",
+      "segments": [
+        { "segmentId": "a", "startMs": 0, "endMs": 2000, "text": "字符𠀀。", "blockId": "block", "startChar": 0, "endChar": 5 }
+      ]
+    },
+    {
+      "id": "timeline-duplicate-segment-id",
+      "durationMs": 2000,
+      "blockText": "甲乙",
+      "segments": [
+        { "segmentId": "same", "startMs": 0, "endMs": 900, "text": "甲", "blockId": "block", "startChar": 0, "endChar": 1 },
+        { "segmentId": "same", "startMs": 1000, "endMs": 2000, "text": "乙", "blockId": "block", "startChar": 1, "endChar": 2 }
+      ]
+    }
+  ]
+}

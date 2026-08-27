@@ -1,0 +1,9 @@
+{
+  "formatVersion": "1.0",
+  "chapterId": "chapter-02",
+  "blocks": [
+    { "blockId": "c02-title", "order": 0, "type": "heading", "text": "第二章" },
+    { "blockId": "c02-p01", "order": 1, "type": "paragraph", "text": "格式样例含字符𠀀。" }
+  ]
+}
+

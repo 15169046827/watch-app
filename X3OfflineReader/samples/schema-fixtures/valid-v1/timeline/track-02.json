@@ -1,0 +1,10 @@
+{
+  "formatVersion": "1.0",
+  "trackId": "track-02",
+  "chapterId": "chapter-02",
+  "durationMs": 2000,
+  "segments": [
+    { "segmentId": "seg-02-01", "startMs": 0, "endMs": 650, "text": "第二章", "blockId": "c02-title", "startChar": 0, "endChar": 3 },
+    { "segmentId": "seg-02-02", "startMs": 800, "endMs": 2000, "text": "格式样例含字符𠀀。", "blockId": "c02-p01", "startChar": 0, "endChar": 9 }
+  ]
+}

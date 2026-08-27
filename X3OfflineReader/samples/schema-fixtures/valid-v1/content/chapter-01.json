@@ -1,0 +1,9 @@
+{
+  "formatVersion": "1.0",
+  "chapterId": "chapter-01",
+  "blocks": [
+    { "blockId": "c01-title", "order": 0, "type": "heading", "text": "第一章" },
+    { "blockId": "c01-p01", "order": 1, "type": "paragraph", "text": "你好，离线听读。" }
+  ]
+}
+

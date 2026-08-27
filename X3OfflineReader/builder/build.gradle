@@ -1,0 +1,30 @@
+plugins {
+    id 'application'
+}
+
+group = 'com.canace.x3offlinereader'
+version = '0.6.1'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+application {
+    mainClass = 'com.canace.x3offlinereader.builder.BuilderMain'
+    applicationDefaultJvmArgs = ['-Dfile.encoding=UTF-8']
+}
+
+dependencies {
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

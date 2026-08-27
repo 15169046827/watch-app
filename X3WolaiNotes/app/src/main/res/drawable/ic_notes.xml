@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- API 25- fallback: the background deliberately fills the complete canvas. -->
+    <path
+        android:fillColor="#7E74B2"
+        android:pathData="M0,0H48V48H0Z" />
+
+    <!-- Foreground is optically centered; the full motif occupies roughly 9..40. -->
+    <path
+        android:fillColor="#F7F3EA"
+        android:pathData="M13,9.5H29.5C32.26,9.5 34.5,11.74 34.5,14.5V24.5C34.5,28.2 33.03,31.75 30.42,34.37C27.8,36.98 24.25,38.5 20.55,38.5H13C10.79,38.5 9,36.71 9,34.5V13.5C9,11.29 10.79,9.5 13,9.5Z" />
+    <path
+        android:fillColor="#7E74B2"
+        android:pathData="M20.5,38.5C24.1,37.35 25.9,35 25.9,31.65C25.9,28.75 28.65,26.6 34.5,24.5C34.1,29.05 32.4,32.65 29.35,35.2C27.05,37.1 24.1,38.2 20.5,38.5Z" />
+
+    <path
+        android:fillColor="#2F3437"
+        android:pathData="M14,15.5H29.5C30.38,15.5 31.1,16.22 31.1,17.1C31.1,17.98 30.38,18.7 29.5,18.7H14C13.12,18.7 12.4,17.98 12.4,17.1C12.4,16.22 13.12,15.5 14,15.5ZM14,22H27.5C28.38,22 29.1,22.72 29.1,23.6C29.1,24.48 28.38,25.2 27.5,25.2H14C13.12,25.2 12.4,24.48 12.4,23.6C12.4,22.72 13.12,22 14,22ZM14,28.5H21.8C22.68,28.5 23.4,29.22 23.4,30.1C23.4,30.98 22.68,31.7 21.8,31.7H14C13.12,31.7 12.4,30.98 12.4,30.1C12.4,29.22 13.12,28.5 14,28.5Z" />
+
+    <path
+        android:fillColor="#D8A142"
+        android:pathData="M36.5,28L37.65,32.35L40.5,33.5L37.65,34.65L36.5,39L35.35,34.65L32.5,33.5L35.35,32.35Z" />
+</vector>

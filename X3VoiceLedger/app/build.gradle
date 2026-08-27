@@ -1,0 +1,47 @@
+plugins {
+    id 'com.android.application'
+}
+
+def stableDebugKey = rootProject.file('../.signing/x3-debug.keystore')
+
+android {
+    namespace 'com.canace.x3voiceledger'
+    compileSdk 30
+
+    defaultConfig {
+        applicationId 'com.canace.x3voiceledger'
+        minSdk 26
+        targetSdk 30
+        versionCode 12
+        versionName '0.8.3'
+    }
+
+    signingConfigs {
+        if (stableDebugKey.isFile()) {
+            debug {
+                storeFile stableDebugKey
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (stableDebugKey.isFile()) { signingConfig signingConfigs.debug }
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    lint {
+        disable 'ExpiredTargetSdkVersion', 'GradleDependency', 'LockedOrientationActivity', 'DiscouragedApi'
+    }
+}
+
+dependencies {
+    implementation project(':common')
+}

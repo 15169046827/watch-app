@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="choice_dialog_title" type="id" />
+    <item name="choice_dialog_list" type="id" />
+</resources>

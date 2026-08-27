@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">记账</string>
+    <string name="alipay_accessibility_description">在支付宝 NFC 付款成功页读取成交金额，生成可修改的本地账单。不会读取优惠金额。</string>
+</resources>

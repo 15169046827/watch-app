@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">能力测试</string>
+    <string name="probe_title">能力测试</string>
+    <string name="refresh_status">Refresh status</string>
+    <string name="open_accessibility_settings">Open accessibility settings</string>
+    <string name="run_ble_probe">Run BLE capability probe</string>
+    <string name="ble_waiting">BLE probe has not run yet.</string>
+    <string name="ble_permission_denied">Location permission denied. Android 11 requires it for BLE scanning.</string>
+    <string name="swipe_right_to_exit">Swipe right to exit →</string>
+    <string name="probe_status">Device: OPPO Watch X3\nLayout: %5$s\n\nProbe registered: %1$s\nAccessibility manager: %2$s\nProbe enabled: %3$s\nOfficial settings entry: %4$s</string>
+    <string name="status_yes">YES</string>
+    <string name="status_no">NO</string>
+    <string name="status_on">ON</string>
+    <string name="status_off">OFF</string>
+    <string name="status_available">AVAILABLE</string>
+    <string name="status_unavailable">UNAVAILABLE</string>
+    <string name="layout_round_safe">ROUND SAFE AREA</string>
+    <string name="layout_rectangular">RECTANGULAR</string>
+    <string name="settings_action_unavailable">No Activity handles the official accessibility settings action.</string>
+    <string name="settings_action_launched">Official settings action launched.</string>
+    <string name="settings_action_failed">Settings launch failed: %1$s</string>
+    <string name="service_name">能力测试无障碍服务</string>
+    <string name="service_description">用于记录结构化无障碍事件并验证手表系统兼容性。</string>
+</resources>

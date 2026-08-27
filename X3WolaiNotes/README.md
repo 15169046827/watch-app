@@ -1,0 +1,42 @@
+# X3 Wolai Notes
+
+OPPO Watch X3（OWW261）端的轻量 Wolai 速记应用。项目独立于同目录下的其他手表应用。
+
+## MVP
+
+- 创建短文本笔记和待办（待办以 `☐` 前缀写入，避免依赖未稳定开放的专用块类型）
+- 本地 SQLite 先保存，失败时保留队列并支持重试
+- 在线读取“手表收藏”中的页面引用，支持子页面导航和常用文字块展示
+- 使用 Wolai 官方 GET /databases/{id} 在线读取嵌入式数据表格；按行卡片展示列名与单元格，并可进入行页面
+- 阅读内容只保存在当前界面内存中，退出后不落盘；图片、视频和附件只显示占位提示
+- 针对圆屏预留安全边距
+- 从左向右滑动退出
+- 仅使用 HTTPS；Token 不写入源码、Gradle 配置或 APK
+- 安装时通过 ADB 标准输入注入 Token，随后使用 Android Keystore 加密保存并删除明文文件
+
+目标页面和收藏目录的页面 ID 属于本地配置，不写入源码。复制 `local.properties.example` 中的示例项到未纳入版本控制的 `local.properties`，或设置对应环境变量。
+
+## 构建
+
+```powershell
+.\gradlew.bat :app:assembleDebug :app:lintDebug
+```
+
+## 设备测试
+
+安装脚本只从进程或 Windows 用户环境变量读取 `WOLAI_OPENAPI_TOKEN`，不会打印 Token：
+
+```powershell
+.\scripts\check_device.ps1
+.\scripts\install_and_provision.ps1
+```
+
+脚本从 `ANDROID_SERIAL` 读取设备序列号，并从 `ANDROID_SDK_ROOT`、`ANDROID_HOME` 或 `PATH` 查找 ADB；也可显式传入 `-Serial` 和 `-AndroidSdk`。仓库不保存具体设备编号。
+
+## 安全边界
+
+- 不 Root、不解锁 Bootloader、不修改系统分区。
+- Debug APK 不包含 Wolai App Secret 或 Token。
+- 卸载应用会删除设备端加密 Token 和本地缓存。
+- 当前是单用户自建应用 MVP；若未来面向其他 Wolai 用户发布，应改用正式用户授权流程或手机中转。
+- 数据表格要求自建应用具备所需的数据表格权限；接口异常通过 Wolai 官方开发者文档底部的问题反馈入口提交。

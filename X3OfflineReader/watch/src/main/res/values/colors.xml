@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="screen_background">#080A0D</color>
+    <color name="text_primary">#F5F7FA</color>
+    <color name="text_secondary">#B7C0CC</color>
+    <color name="accent">#72D6C9</color>
+    <color name="dialog_background">#171C24</color>
+    <color name="divider">#34404D</color>
+    <color name="app_icon_background">#D9775C</color>
+</resources>

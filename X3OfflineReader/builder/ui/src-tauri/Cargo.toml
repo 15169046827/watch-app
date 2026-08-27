@@ -1,0 +1,19 @@
+[package]
+name = "tingdu-workshop"
+version = "0.6.1"
+description = "听读工坊 Windows audiobook builder shell"
+authors = ["X3 Offline Reader"]
+edition = "2021"
+
+[lib]
+name = "tingdu_workshop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"

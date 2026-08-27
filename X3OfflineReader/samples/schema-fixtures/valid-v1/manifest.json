@@ -1,0 +1,65 @@
+{
+  "format": "opbook",
+  "formatVersion": "1.0",
+  "book": {
+    "bookId": "golden-two-volume",
+    "title": "公开格式样例",
+    "authors": ["X3OfflineReader Project"],
+    "language": "zh-CN"
+  },
+  "volumes": [
+    {
+      "volumeId": "volume-01",
+      "title": "上卷",
+      "order": 0,
+      "chapters": [
+        {
+          "chapterId": "chapter-01",
+          "title": "第一章",
+          "order": 0,
+          "contentPath": "content/chapter-01.json",
+          "tracks": [
+            {
+              "trackId": "track-01",
+              "order": 0,
+              "audioPath": "audio/track-01.m4a",
+              "timelinePath": "timeline/track-01.json",
+              "durationMs": 2000,
+              "mimeType": "audio/mp4"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "volumeId": "volume-02",
+      "title": "下卷",
+      "order": 1,
+      "chapters": [
+        {
+          "chapterId": "chapter-02",
+          "title": "第二章",
+          "order": 0,
+          "contentPath": "content/chapter-02.json",
+          "tracks": [
+            {
+              "trackId": "track-02",
+              "order": 0,
+              "audioPath": "audio/track-02.m4a",
+              "timelinePath": "timeline/track-02.json",
+              "durationMs": 2000,
+              "mimeType": "audio/mp4"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "checksumsPath": "checksums.json",
+  "createdWith": {
+    "application": "X3 Audiobook Builder fixture",
+    "version": "0.1.0"
+  },
+  "createdAt": "2026-08-19T00:00:00Z"
+}
+

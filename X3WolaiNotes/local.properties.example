@@ -1,0 +1,4 @@
+# Copy these entries into the ignored local.properties file.
+# Keep real page IDs out of version control.
+wolai.targetPageId=your_target_page_id
+wolai.favoritesPageId=your_favorites_page_id

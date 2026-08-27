@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:paddingStart="24dp" android:paddingTop="24dp" android:paddingEnd="24dp" android:paddingBottom="24dp">
+    <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:textColor="@color/text_primary" android:textSize="20sp" android:textStyle="bold" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="@string/chapters" android:textColor="@color/text_secondary" android:textSize="13sp" />
+    <Button android:id="@+id/resume_button" style="@style/CompactGridButton" android:layout_width="match_parent" android:layout_height="32dp" android:ellipsize="end" android:maxLines="1" android:text="@string/no_listening_history" />
+    <ListView android:id="@+id/chapter_list" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:clipToPadding="false" android:dividerHeight="1dp" android:paddingTop="2dp" android:paddingBottom="2dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="@string/swipe_hint" android:textColor="@color/accent" android:textSize="11sp" />
+</LinearLayout>
