@@ -15,7 +15,7 @@ import java.util.stream.Stream;
 
 /** Small, non-secret task registry. Book text and credentials are never stored here. */
 final class BuildCheckpointStore {
-    record Checkpoint(String id, Path file, BuilderOptions options, String state, int percent, String message, long updatedAt) {}
+    record Checkpoint(String id, Path file, BuilderOptions options, String state, int percent, String message, long elapsedSeconds, long updatedAt) {}
 
     private final Path directory;
 
@@ -26,7 +26,7 @@ final class BuildCheckpointStore {
         String id=Instant.now().toEpochMilli()+"-"+UUID.randomUUID().toString().substring(0,8);
         Path file=directory.resolve(id+".properties");
         Properties values=fromOptions(id,options);
-        values.setProperty("state","running");values.setProperty("percent","0");values.setProperty("message","准备转换");touch(values);
+        values.setProperty("state","running");values.setProperty("percent","0");values.setProperty("message","准备转换");values.setProperty("elapsedSeconds","0");touch(values);
         write(file,values);
         return read(file);
     }
@@ -42,9 +42,14 @@ final class BuildCheckpointStore {
     }
 
     synchronized Checkpoint update(Checkpoint checkpoint,String state,int percent,String message) throws Exception {
+        return update(checkpoint,state,percent,message,checkpoint.elapsedSeconds());
+    }
+
+    synchronized Checkpoint update(Checkpoint checkpoint,String state,int percent,String message,long elapsedSeconds) throws Exception {
         Properties values=load(checkpoint.file());
         values.setProperty("state",state);values.setProperty("percent",Integer.toString(Math.max(0,Math.min(100,percent))));
         if(message!=null&&!message.isBlank())values.setProperty("message",message);
+        values.setProperty("elapsedSeconds",Long.toString(Math.max(0,elapsedSeconds)));
         touch(values);write(checkpoint.file(),values);return read(checkpoint.file());
     }
 
@@ -52,7 +57,7 @@ final class BuildCheckpointStore {
 
     private Checkpoint read(Path file) throws Exception {
         Properties values=load(file);BuilderOptions options=toOptions(values);
-        return new Checkpoint(values.getProperty("id",strip(file)),file,options,values.getProperty("state","paused"),integer(values,"percent",0),values.getProperty("message",""),longValue(values,"updatedAt",Files.getLastModifiedTime(file).toMillis()));
+        return new Checkpoint(values.getProperty("id",strip(file)),file,options,values.getProperty("state","paused"),integer(values,"percent",0),values.getProperty("message",""),longValue(values,"elapsedSeconds",0),longValue(values,"updatedAt",Files.getLastModifiedTime(file).toMillis()));
     }
     private Optional<Checkpoint> readQuietly(Path file){try{return Optional.of(read(file));}catch(Exception ignored){return Optional.empty();}}
 

@@ -1,14 +1,14 @@
 # Watch Offline Reader
 
-包名 `com.canace.x3offlinereader`，版本 0.2.0（versionCode 2）。技术栈为 Java、Android Views、Media3 ExoPlayer/MediaSessionService 和 SQLite；minSdk 26、targetSdk 30、compileSdk 35，不依赖 Wear OS、Compose 或 Native 库。
+包名 `com.canace.x3offlinereader`，版本 0.4.1（versionCode 5）。技术栈为 Java、Android Views、Media3 ExoPlayer/MediaSessionService 和 SQLite；minSdk 26、targetSdk 30、compileSdk 35，不依赖 Wear OS、Compose 或 Native 库。
 
 ## 已实现
 
 - SAF 选择 `.opbook`，复制到应用 inbox；staging 解压后做路径、数量、大小、压缩比、格式版本、资源路径、M4A/WebP 头、Timeline/正文、SHA-256 和未引用文件检查，再原子提交。
-- 小说书库按卷→章→Track 展示；章节队列、自动跨 Track、±15秒、收藏、句级高亮、全文和每5秒/暂停/切轨进度持久化。
+- 小说书库只展示卷与逻辑章节，Track 分片对用户隐藏；同章多 Track 自动连续播放，章内累计续听、±15秒、收藏、统一正文逐句高亮及周期/暂停/切轨进度持久化均已实现。
 - 独立音乐库导入 MP3/M4A/LRC；独立 SQLite、队列、进度、收藏、设置、倍速和 LRC 同步。
 - 小说和音乐各自保存倍速；选择框提供 0.8×、1×、1.25×、1.5×、2×、2.5×、3×、5×。
-- 小说和音乐各自保存播放模式；选择框提供“播完暂停、单曲循环、列表循环”，默认“播完暂停”。
+- 小说固定按卷与逻辑章节顺序播放；音乐独立提供“播完暂停、单曲循环、列表循环、列表随机”，随机队列与历史栈可恢复。
 - App 首页只提供横向等分的同级“小说 / 音乐”入口；小说书库、音乐库和章节列表使用圆屏中部 360px 以上宽度的紧凑双行条目，路径/状态压缩为单行，底部按钮不换行。
 - 小说与音乐播放页的八个操作统一为等分 4×2 网格；倍速、播放模式、音量和输出列表使用固定不透明标题栏，滚动选项不会与页面标题重叠。
 - 小说与音乐播放器共享系统媒体音量和输出控制：音量按设备系统步进从 0% 调到 100%，输出选择使用 Android 公共 MediaRouter，按钮只显示“扬声器 / 蓝牙”，详细设备名只在弹窗中显示；不做超过系统上限的软件增益。
@@ -27,6 +27,6 @@
 
 已通过签名更新安装、Golden 导入、AAC/M4A/MP3 解码、Timeline/LRC、实际 5× 播放、三种播放模式状态转换、圆屏边界、固定弹窗标题、右滑、自动 Track、熄屏后台、MediaSession/AVRCP、系统媒体入口回到原播放页、Audio Focus 暂停/恢复和进程重启持久化。用户已确认耳机实际可听到声音，物理播放、暂停和下一首可触发，且声音输出可在 OWW261 扬声器与蓝牙设备之间成功切换。
 
-下一阶段体验优化已记录但尚未开始，包括上次播放章节定位、每章内部进度与小说详情页一键续听、章节级上一项/下一项、小说固定顺序与音乐列表随机、Music 默认导入目录、导入进度、统一段落听读高亮、章节首段标题以及多 Track 对用户透明。详见 [`../specification/NEXT_PHASE_BACKLOG.md`](../specification/NEXT_PHASE_BACKLOG.md)。
+原下一阶段体验清单已在 0.3.0 完成，包括最近章节定位、每章内部进度与一键续听、章节级上一项/下一项、音乐随机、Music 初始目录、多文件导入反馈、统一段落高亮、首段标题和多 Track 无感播放。详见 [`../specification/NEXT_PHASE_BACKLOG.md`](../specification/NEXT_PHASE_BACKLOG.md)。
 
 已知设备限制：当前耳机/手表组合没有向 App 发送“上一首”的 AVRCP `76`；重复尝试仍失败，而 App 的 MediaSession 已提供上一首能力。OPPO 固件不允许 shell 强制 deep idle；USB 充电层会覆盖并暂停 Activity，但后台播放与暂停/切轨进度仍正常。扬声器与蓝牙听感均已确认；扬声器偏小是因为当时媒体音量仅为系统 6/16，现可在播放器内直接调整。

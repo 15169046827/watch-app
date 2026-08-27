@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -16,9 +16,9 @@ import ToggleSwitch from 'primevue/toggleswitch'
 type Voice = { id: string; preview: boolean }
 type Provider = { id: string; label: string; online: boolean; defaultVoice: string; voices: Voice[] }
 type CacheStats = { sentenceFiles: number; sentenceBytes: number; unfinishedDirectories: number; unfinishedBytes: number }
-type Checkpoint = { id: string; state: string; percent: number; message: string; provider: string; online: boolean; output: string; inputs: string[] }
+type Checkpoint = { id: string; state: string; percent: number; message: string; elapsedSeconds?: number; provider: string; online: boolean; output: string; inputs: string[] }
 type BridgeState = { version: string; providers: Provider[]; cache: CacheStats; checkpoint?: Checkpoint }
-type BuilderEvent = { type: string; percent?: number; message?: string; seconds?: number; estimateSeconds?: number; outputs?: string[] }
+type BuilderEvent = { type: string; percent?: number; message?: string; seconds?: number; estimateSeconds?: number; taskElapsedSeconds?: number; runElapsedSeconds?: number; outputs?: string[] }
 
 const page = ref<'build' | 'voices' | 'tasks' | 'storage'>('build')
 const loading = ref(true)
@@ -27,6 +27,7 @@ const pausing = ref(false)
 const status = ref('正在连接本地转换核心…')
 const progress = ref(0)
 const logs = ref<string[]>([])
+const logView = ref<HTMLElement>()
 const outputs = ref<string[]>([])
 const providers = ref<Provider[]>([])
 const checkpoint = ref<Checkpoint>()
@@ -35,6 +36,8 @@ const startedAt = ref(0)
 const elapsedSeconds = ref(0)
 const initialEstimate = ref(0)
 const projectedTotal = ref(0)
+const completedTaskSeconds = ref<number | null>(null)
+const completedRunSeconds = ref<number | null>(null)
 let timer = 0
 let unlisten: UnlistenFn | undefined
 let previewAudio: HTMLAudioElement | undefined
@@ -127,7 +130,7 @@ async function startBuild(resume = false) {
     form.allowOnlineTts = true
   }
   busy.value = true; pausing.value = false; progress.value = resume ? checkpoint.value?.percent ?? 0 : 0
-  logs.value = []; outputs.value = []; startedAt.value = Date.now(); elapsedSeconds.value = 0
+  logs.value = []; outputs.value = []; completedTaskSeconds.value = null; completedRunSeconds.value = null; startedAt.value = Date.now(); elapsedSeconds.value = 0
   initialEstimate.value = 0; projectedTotal.value = 0; lastEtaProgress = -1
   status.value = resume ? '正在恢复上次任务…' : '正在准备转换…'
   try {
@@ -135,6 +138,7 @@ async function startBuild(resume = false) {
     else await invoke('start_build', { request: { ...form } })
   } catch (error) {
     busy.value = false
+    startedAt.value = 0
     status.value = `启动失败：${errorText(error)}`
   }
 }
@@ -194,10 +198,14 @@ async function handleEvent(event: BuilderEvent) {
   if (event.message) {
     status.value = event.message
     logs.value.push(`[${formatDuration(elapsedSeconds.value)}] ${event.message}`)
-    if (logs.value.length > 200) logs.value.splice(0, logs.value.length - 200)
+    await nextTick()
+    if (logView.value) logView.value.scrollTop = logView.value.scrollHeight
   }
   if (event.type === 'complete') {
+    completedRunSeconds.value = event.runElapsedSeconds ?? elapsedSeconds.value
+    completedTaskSeconds.value = event.taskElapsedSeconds ?? completedRunSeconds.value
     busy.value = false; pausing.value = false; progress.value = 100; outputs.value = event.outputs ?? []
+    startedAt.value = 0; elapsedSeconds.value = 0; initialEstimate.value = 0; projectedTotal.value = 0; lastEtaProgress = -1
     status.value = '转换完成，可以把 .opbook 传入手表'
     await refreshState()
   } else if (event.type === 'paused') {
@@ -341,8 +349,9 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
           <template #content>
             <div class="progress-head"><div><p class="eyebrow">当前任务</p><h3>{{ status }}</h3></div><strong>{{ progressLabel }}</strong></div>
             <ProgressBar :value="progress" :showValue="false" />
-            <div class="time-grid"><span>已用时 <b>{{ formatDuration(elapsedSeconds) }}</b></span><span>预计总用时 <b>{{ projectedTotal ? formatDuration(projectedTotal) : '--' }}</b></span><span>预计剩余 <b>{{ projectedTotal ? formatDuration(remaining) : '--' }}</b></span></div>
-            <div v-if="logs.length" class="log-view"><div v-for="line in logs.slice(-8)" :key="line">{{ line }}</div></div>
+            <div v-if="completedTaskSeconds !== null" class="time-grid completed-time"><span>任务总时长 <b>{{ formatDuration(completedTaskSeconds) }}</b></span><span>本次执行总时长 <b>{{ formatDuration(completedRunSeconds ?? 0) }}</b></span></div>
+            <div v-else class="time-grid"><span>已用时 <b>{{ formatDuration(elapsedSeconds) }}</b></span><span>预计总用时 <b>{{ projectedTotal ? formatDuration(projectedTotal) : '--' }}</b></span><span>预计剩余 <b>{{ projectedTotal ? formatDuration(remaining) : '--' }}</b></span></div>
+            <div v-if="logs.length" ref="logView" class="log-view"><div v-for="(line, index) in logs" :key="`${index}-${line}`">{{ line }}</div></div>
             <div v-if="outputs.length" class="output-results"><strong>已生成</strong><span v-for="item in outputs" :key="item">{{ item }}</span></div>
           </template>
         </Card>
@@ -354,9 +363,11 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
           <Card v-for="provider in providers" :key="provider.id" class="voice-provider">
             <template #title><div class="provider-title"><span>{{ provider.label }}</span><Tag :value="provider.online ? '在线' : '离线'" :severity="provider.online ? 'warn' : 'success'" /></div></template>
             <template #content>
-              <button v-for="voice in provider.voices" :key="voice.id" class="voice-item" :disabled="!voice.preview" @click="previewVoice(provider.id, voice.id)">
-                <span class="play-circle"><i class="pi" :class="voice.preview ? 'pi-play' : 'pi-lock'" /></span><span><strong>{{ voice.id }}</strong><small>{{ voice.preview ? '自然语速预生成试听' : '试听尚未准备' }}</small></span>
-              </button>
+              <div class="voice-list">
+                <button v-for="voice in provider.voices" :key="voice.id" class="voice-item" :disabled="!voice.preview" @click="previewVoice(provider.id, voice.id)">
+                  <span class="play-circle"><i class="pi" :class="voice.preview ? 'pi-play' : 'pi-lock'" /></span><span><strong>{{ voice.id }}</strong><small>{{ voice.preview ? '自然语速预生成试听' : '试听尚未准备' }}</small></span>
+                </button>
+              </div>
             </template>
           </Card>
         </div>

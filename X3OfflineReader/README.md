@@ -42,10 +42,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\create-start-m
 
 ## 当前状态
 
-听读工坊 0.6.1 延续 Vue 3.5 + PrimeVue 4.5 + Tauri 2.11 界面并修复三项回归：任何新试听或音色/Provider 切换都会先停止旧音频并使旧请求失效；ETA 以文本与缓存分析结果为基准，只在进度实际前进时平滑校准；正式 Windows 入口使用 GUI 子系统，启动不再弹出命令行窗口。Java 继续作为唯一转换核心，`.opbook`、断点、缓存、正式路径和开始菜单入口保持兼容。详见 [`specification/BUILDER_UI_VUE_TAURI.md`](specification/BUILDER_UI_VUE_TAURI.md)。
+听读工坊 0.6.2 延续 Vue 3.5 + PrimeVue 4.5 + Tauri 2.11 界面：转换完成后将运行中的三项预计时间替换为“任务总时长 / 本次执行总时长”，断点累计字段向后兼容；日志保留当前会话全部记录并在固定区域内滚动；多音色模型卡固定高度、各自滚动，不再拉长整个试听页面。0.6.1 的试听单实例、稳定 ETA 与无命令行窗口修复保持不变。Java 继续作为唯一转换核心，`.opbook`、缓存、正式路径和开始菜单入口保持兼容。详见 [`specification/BUILDER_UI_VUE_TAURI.md`](specification/BUILDER_UI_VUE_TAURI.md)。
 0.4.1 延续已通过 OWW261 验收的阅读、续听、逐句高亮、逻辑章节和音乐功能。Watch 图标保持已验收的 SPEC v2.1：全画布 adaptive background 与 0.72 居中 foreground，本轮不改动 Watch。Windows“听读工坊”按 SPEC v2.2 改为透明 512×512 外画布、居中的 420×420（82.03%）`#D8A142` 圆角底板与原有窗口/书/波形前景；ICO 包含 16/24/32/48/64/128/256 七个原生尺寸，四角透明、中心不透明，避免 Windows 将完整色块显示成方形图标。
 
-正式 Windows app-image 与“听读工坊”开始菜单快捷方式已按 v2.2 安全刷新；句子语音缓存保留，Watch 工程、安装与数据未改动。Windows Shell 最终同屏证据位于 `builder/build/icon-v22-validation/windows-shell-formal-shortcut.png`。
+正式 Windows app-image 与“听读工坊”开始菜单快捷方式已按 v2.2 安全刷新；句子语音缓存保留，Watch 工程、安装与数据未改动。Windows Shell 验收确认透明圆角、视觉尺度与同系列应用协调。
 
 听读工坊 0.4.1 清晰标注网络边界，并随包提供 223 条可即时播放的自然语音试听：Melo 1、Kokoro 81、AISHELL-3 130、Microsoft Edge 中文 11。试听使用模型 1× 自然速率，只通过选择约 5–10 秒可读完的短句控制时长，不做后期变速；超时或过短且调整文本后仍不合格的模型音色不进入清单。Windows SAPI 仍是离线保底，但本机 Huihui 注册异常，未生成其试听。在线正式转换前必须确认正文会发送给第三方服务；`.opbook` 格式仍为 v1。详见 [`specification/TTS_PROVIDERS.md`](specification/TTS_PROVIDERS.md)。
 

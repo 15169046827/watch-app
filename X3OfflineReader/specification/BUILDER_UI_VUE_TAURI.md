@@ -34,22 +34,30 @@
 
 前端锁定 Vue 3.5.41、PrimeVue 4.5.5、PrimeIcons 7.0.0、PrimeUIX Themes 1.2.5、Vite 8.2.2；桌面层为 Tauri 2.11 系列。PrimeVue 4 用于稳定的 MIT 组件线，避免把本次迁移与新主版本风险捆绑。Windows 需要系统 WebView2；转换核心仍随包携带 Java 17 和已验证的 TTS/FFmpeg 环境。
 
+## 0.6.2 完成态与长列表收尾（2026-08-27）
+
+- 运行中保留“已用时 / 预计总用时 / 预计剩余”。`complete` 事件提供 `taskElapsedSeconds` 与 `runElapsedSeconds`，完成态改为“任务总时长 / 本次执行总时长”。
+- checkpoint 新增累计实际执行秒数；每次暂停、失败或进度里程碑原子更新。恢复后继续累计，暂停期间不计入；旧 checkpoint 未包含字段时按 0 读取。
+- 日志保留当前会话的全部消息，不再在模板层裁剪最后八条；固定 240px 高度、内部滚动并自动定位最新消息。
+- Provider 卡统一限制在 420–560px 之间，音色按钮在各卡内部独立纵向滚动，避免大量音色撑高页面。
+- Java 30 项测试、Vue 类型检查/生产构建与 Rust release 测试/构建通过；正式入口仍为 Windows GUI 子系统。
+
 ## 0.6.1 回归修复（2026-08-27）
 
 - 试听播放器是单实例资源。新试听在请求前停止旧音频；Provider/音色变化和窗口销毁也会停止；请求序号阻止较慢的旧请求在新请求之后播放。
 - ETA 不再用静止的总进度每秒外推。文本/缓存估算仍是初值并包含解析耗时，只有收到更大的进度值才采样实际吞吐，观察值在合理边界内以 15% 权重平滑合入。
 - 正式入口的 Windows PE Subsystem 为 2（GUI）；后台 Java 子进程保留 `CREATE_NO_WINDOW`。
-- 正式包版本与桥接状态均为 0.6.1；Java 28 项测试、Vue 构建、Rust release 测试/构建全部通过。EXE SHA-256：`4A3481F2CBDF9E3304EAC22115CB4977C44575DBB9F604991C6894B77C7B25C3`。
-- 完整包已验证 Melo、AISHELL-3/Kokoro、Edge 和 FFmpeg；现有 88% 可恢复 checkpoint 与完整工作缓存保留（36,248 个文件 / 18,836,237,018 字节）。
+- 正式包版本与桥接状态均为 0.6.1；Java 28 项测试、Vue 构建、Rust release 测试/构建全部通过。
+- 完整包已验证 Melo、AISHELL-3/Kokoro、Edge 和 FFmpeg；重建过程保留工作缓存与可恢复任务。
 
 ## 0.6.0 验收证据
 
 - Java：28 tests，0 failures/errors/skips；包括进度 10/44/78 字符权重回归。
 - Vue：`vue-tsc -b --noEmit` 与 Vite production build 通过；npm audit 为 0 vulnerabilities。
-- Tauri：Windows release profile 构建通过，正式 EXE SHA-256 为 `CA572D2135FCD706CEFEE57D864A16448902DECE9FEFE73DF72DD08E0B7FB1C8`（后续重建以当前产物为准）。
+- Tauri：Windows release profile 构建通过，正式入口使用 GUI 子系统。
 - 公开样例桥接转换成功；21 个事件完成，百分比序列 `0,3,7,8,9,10,78,79,79,85,85,85,85,90,90,91,95,99,100` 单调不回退。
-- 正式 UI 人工检查：主制作页、223 条预生成音色入口、任务续作、存储统计与中文编码通过；原 64% 暂停任务在新界面正确呈现，未触发恢复。
-- 正式升级前后 `builder/.work` 均为 36,099 个文件 / 18,703,086,674 字节；无临时备份遗留，开始菜单目标路径不变。
+- 正式 UI 人工检查：主制作页、预生成音色入口、任务续作、存储统计与中文编码通过；可恢复任务能够呈现且不会被验证流程自动启动。
+- 正式升级验证确认 `builder/.work` 完整保留、无临时备份遗留，开始菜单目标路径不变。
 
 ## 已知限制
 

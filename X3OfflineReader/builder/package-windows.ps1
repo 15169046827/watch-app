@@ -35,11 +35,11 @@ if(Test-Path -LiteralPath $oldWork -PathType Container){
 if(Test-Path -LiteralPath $outputRoot){Remove-Item -LiteralPath $outputRoot -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $launcher=Join-Path $outputRoot 'cli.properties'
-@('main-jar=builder-0.6.1.jar','main-class=com.canace.x3offlinereader.builder.BuilderMain','arguments=','win-console=true') | Set-Content -LiteralPath $launcher -Encoding ASCII
+@('main-jar=builder-0.6.2.jar','main-class=com.canace.x3offlinereader.builder.BuilderMain','arguments=','win-console=true') | Set-Content -LiteralPath $launcher -Encoding ASCII
 if(-not $JpackagePath -and $env:JAVA_HOME){$JpackagePath=Join-Path $env:JAVA_HOME 'bin\jpackage.exe'}
 if(-not $JpackagePath){$command=Get-Command jpackage.exe -ErrorAction SilentlyContinue;if($command){$JpackagePath=$command.Source}}
 if(-not $JpackagePath -or -not(Test-Path -LiteralPath $JpackagePath -PathType Leaf)){throw 'JDK 17 jpackage.exe not found. Pass -JpackagePath, set JAVA_HOME, or add jpackage to PATH.'}
-& $JpackagePath --type app-image --name X3AudiobookBuilder --app-version '0.6.1' --dest $outputRoot --input (Join-Path $PSScriptRoot 'build\install\builder\lib') --main-jar 'builder-0.6.1.jar' --main-class 'com.canace.x3offlinereader.builder.BuilderMain' --arguments gui --java-options '-Dfile.encoding=UTF-8' --icon $icon --add-launcher "X3BuilderCLI=$launcher"
+& $JpackagePath --type app-image --name X3AudiobookBuilder --app-version '0.6.2' --dest $outputRoot --input (Join-Path $PSScriptRoot 'build\install\builder\lib') --main-jar 'builder-0.6.2.jar' --main-class 'com.canace.x3offlinereader.builder.BuilderMain' --arguments gui --java-options '-Dfile.encoding=UTF-8' --icon $icon --add-launcher "X3BuilderCLI=$launcher"
 if($LASTEXITCODE -ne 0){throw 'jpackage failed'}
 $app=Join-Path $outputRoot 'X3AudiobookBuilder'
 Copy-Item -LiteralPath $tauriExecutable -Destination (Join-Path $app 'X3AudiobookBuilder.exe') -Force
