@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import android.os.ParcelFileDescriptor;
-import java.util.zip.ZipFile;
 
 /** Persistent SAF source access without copying the selected package. */
 public final class BookSourceAccess {
@@ -27,7 +26,7 @@ public final class BookSourceAccess {
         try(InputStream ignored=open(context,sourceUri)){return true;}catch(Exception missing){return false;}
     }
     public static SeekableZip tryOpenZip(Context context,String sourceUri){
-        try{Uri uri=Uri.parse(sourceUri);if("file".equalsIgnoreCase(uri.getScheme()))return new SeekableZip(null,new ZipFile(new File(uri.getPath())));ParcelFileDescriptor descriptor=context.getContentResolver().openFileDescriptor(uri,"r");if(descriptor==null)return null;try{return new SeekableZip(descriptor,new ZipFile(new File("/proc/self/fd/"+descriptor.getFd())));}catch(Exception failure){descriptor.close();return null;}}catch(Exception failure){return null;}
+        try{Uri uri=Uri.parse(sourceUri);if("file".equalsIgnoreCase(uri.getScheme()))return new SeekableZip(SeekableZipArchive.open(new File(uri.getPath())));ParcelFileDescriptor descriptor=context.getContentResolver().openFileDescriptor(uri,"r");if(descriptor==null)return null;return new SeekableZip(SeekableZipArchive.open(new ParcelFileDescriptor.AutoCloseInputStream(descriptor)));}catch(Exception failure){return null;}
     }
 
     public static boolean delete(Context context,String sourceUri){
@@ -46,8 +45,8 @@ public final class BookSourceAccess {
         public SourceMissingException(){super("源文件不存在或已失去访问权限");}
     }
     public static final class SeekableZip implements AutoCloseable {
-        public final ZipFile zip;private final ParcelFileDescriptor descriptor;
-        SeekableZip(ParcelFileDescriptor descriptor,ZipFile zip){this.descriptor=descriptor;this.zip=zip;}
-        @Override public void close()throws Exception{try{zip.close();}finally{if(descriptor!=null)descriptor.close();}}
+        final SeekableZipArchive zip;
+        SeekableZip(SeekableZipArchive zip){this.zip=zip;}
+        @Override public void close()throws Exception{zip.close();}
     }
 }

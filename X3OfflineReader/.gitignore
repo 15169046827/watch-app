@@ -6,4 +6,5 @@ local.properties
 *.iml
 .tools/
 builder/.work/
+builder/voice-previews/
 samples/generated/

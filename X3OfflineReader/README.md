@@ -9,7 +9,7 @@
 - `specification/`：`.opbook` 1.0 开放格式、Draft 2020-12 JSON Schema 和安全/语义验证器。
 - `samples/`：项目自写公开输入、Schema 正反例和本机生成但不纳入源码的 Golden 包。
 
-小说与音乐在 UI、SQLite、队列、进度、收藏、设置和存储上隔离，只共享 `PlaybackService`、MediaSession、Audio Focus 与系统媒体控制。Watch 0.5.0 不再复制或完整解压 `.opbook`：通过 SAF 持久授权原地建立元数据索引；对可寻址文件只读取 ZIP 中央目录、元数据和各音频 12 字节媒体头，播放前才把当前与相邻章节的 M4A 解到受限缓存并核对 SHA-256，不把 ZIP 直接交给系统解码器。
+小说与音乐在 UI、SQLite、队列、进度、收藏、设置和存储上隔离，只共享 `PlaybackService`、MediaSession、Audio Focus 与系统媒体控制。Watch 0.5.0 不再复制或完整解压 `.opbook`：通过 SAF 持久授权原地建立元数据索引；对可寻址文件直接解析 ZIP/ZIP64 中央目录，只读取元数据和封面，播放前才随机提取当前与相邻章节的 M4A、验证媒体头及 SHA-256，不把 ZIP 直接交给系统解码器。
 
 ## 构建与验证
 
@@ -49,6 +49,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\create-start-m
 
 正式 Windows app-image 与“听读工坊”开始菜单快捷方式已按 v2.2 安全刷新；句子语音缓存保留，Watch 工程、安装与数据未改动。Windows Shell 验收确认透明圆角、视觉尺度与同系列应用协调。
 
-听读工坊 0.4.1 清晰标注网络边界，并随包提供 223 条可即时播放的自然语音试听：Melo 1、Kokoro 81、AISHELL-3 130、Microsoft Edge 中文 11。试听使用模型 1× 自然速率，只通过选择约 5–10 秒可读完的短句控制时长，不做后期变速；超时或过短且调整文本后仍不合格的模型音色不进入清单。Windows SAPI 仍是离线保底，但本机 Huihui 注册异常，未生成其试听。在线正式转换前必须确认正文会发送给第三方服务；`.opbook` 格式仍为 v1。详见 [`specification/TTS_PROVIDERS.md`](specification/TTS_PROVIDERS.md)。
+听读工坊 0.6.2 修复了 AISHELL-3/Kokoro 中文预处理把 Unicode 字符数组当作对象文本传入模型的问题，并升级缓存命名空间以隔离旧错误句子缓存。随包试听已重建为 286 条：Melo 1、Kokoro 中文 100、AISHELL-3 174、Microsoft Edge 中文 11；离线模型转换与试听现在使用同一条正确的中文文本路径。试听保持模型 1× 自然速率，不做后期变速。Windows SAPI 仍是离线保底；在线正式转换前必须确认正文会发送给第三方服务。详见 [`specification/TTS_PROVIDERS.md`](specification/TTS_PROVIDERS.md)。
 
 听读工坊 0.5.0 增加“保存进度并关闭 / 恢复未完成”、原子句子缓存、已编码 Track 复用、20 GiB/180 天自动缓存整理和可视化缓存管理；成功任务会立即删除重复 PCM/Track 工作文件。AISHELL-3、Kokoro 的 ETA 已改用本机端到端实测速率，并在每句完成时动态校准。详见 [`specification/BUILDER_RESUME_CACHE.md`](specification/BUILDER_RESUME_CACHE.md)。

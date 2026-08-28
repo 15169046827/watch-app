@@ -18,13 +18,11 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import org.json.JSONObject;
 
@@ -32,6 +30,7 @@ import org.json.JSONObject;
 public final class OpbookImporter {
     private static final int MAX_ENTRIES=4096;
     private static final long MAX_ENTRY=512L*1024*1024,MAX_TOTAL=4L*1024*1024*1024,MAX_METADATA=256L*1024*1024;
+    private static final byte[] INDEXED_AUDIO_PLACEHOLDER={0,0,0,12,'f','t','y','p',0,0,0,0};
     private final Context context;private final LibraryDb db;
     public OpbookImporter(Context context,LibraryDb db){this.context=context.getApplicationContext();this.db=db;File base=this.context.getExternalFilesDir(null);if(base==null)base=this.context.getFilesDir();delete(new File(base,"book-index-staging"));}
 
@@ -56,19 +55,18 @@ public final class OpbookImporter {
         return scanSequential(sourceUri,staging);
     }
 
-    private ScanResult scanSeekable(ZipFile zip,File staging)throws Exception{
+    private ScanResult scanSeekable(SeekableZipArchive zip,File staging)throws Exception{
         Set<String> names=new HashSet<>();Map<String,String> hashes=new HashMap<>();int count=0;long total=0,metadata=0;
-        Enumeration<? extends ZipEntry> entries=zip.entries();
-        while(entries.hasMoreElements()){
-            ZipEntry entry=entries.nextElement();if(entry.isDirectory())continue;
+        for(SeekableZipArchive.Entry entry:zip.entries()){
+            if(entry.name.endsWith("/"))continue;
             if(++count>MAX_ENTRIES)throw new IllegalArgumentException("压缩包文件数量过多");
-            String name=OpbookValidator.safe(entry.getName());if(!names.add(name))throw new IllegalArgumentException("压缩包存在重复路径");if(!allowedFile(name))throw new IllegalArgumentException("不支持的包内文件");
-            long limit=entryLimit(name),size=entry.getSize(),compressed=entry.getCompressedSize();if(size<0||size>limit)throw new IllegalArgumentException("包内文件过大");total+=size;if(total>MAX_TOTAL)throw new IllegalArgumentException("压缩包展开大小超过限制");if(size>1024*1024&&compressed>0&&size/Math.max(1,compressed)>500)throw new IllegalArgumentException("压缩比异常");
+            String name=OpbookValidator.safe(entry.name);if(!names.add(name))throw new IllegalArgumentException("压缩包存在重复路径");if(!allowedFile(name))throw new IllegalArgumentException("不支持的包内文件");
+            long limit=entryLimit(name),size=entry.size,compressed=entry.compressedSize;if(size<0||size>limit)throw new IllegalArgumentException("包内文件过大");if(size>MAX_TOTAL-total)throw new IllegalArgumentException("压缩包展开大小超过限制");total+=size;if(size>1024*1024&&compressed>0&&size/Math.max(1,compressed)>500)throw new IllegalArgumentException("压缩比异常");
             File target=new File(staging,name);File parent=target.getParentFile();if(!parent.mkdirs()&&!parent.isDirectory())throw new IllegalStateException("无法创建索引目录");
             if(name.startsWith("audio/")){
-                byte[] header=new byte[12];try(InputStream input=zip.getInputStream(entry)){readHeader(input,header);}validateM4a(header);try(OutputStream placeholder=new FileOutputStream(target)){placeholder.write(header);}continue;
+                try(OutputStream placeholder=new FileOutputStream(target)){placeholder.write(INDEXED_AUDIO_PLACEHOLDER);}continue;
             }
-            MessageDigest digest=MessageDigest.getInstance("SHA-256");long item=0;byte[] buffer=new byte[64*1024];try(InputStream input=zip.getInputStream(entry);OutputStream output=new BufferedOutputStream(new FileOutputStream(target))){for(int read;(read=input.read(buffer))!=-1;){if(read==0)continue;item+=read;metadata+=read;if(item>limit||metadata>MAX_METADATA)throw new IllegalArgumentException("书籍索引数据过大");digest.update(buffer,0,read);output.write(buffer,0,read);}}
+            MessageDigest digest=MessageDigest.getInstance("SHA-256");long item=0;byte[] buffer=new byte[64*1024];try(InputStream input=zip.open(entry);OutputStream output=new BufferedOutputStream(new FileOutputStream(target))){for(int read;(read=input.read(buffer))!=-1;){if(read==0)continue;item+=read;metadata+=read;if(item>limit||metadata>MAX_METADATA)throw new IllegalArgumentException("书籍索引数据过大");digest.update(buffer,0,read);output.write(buffer,0,read);}}
             if(item!=size)throw new IllegalArgumentException("包内文件大小异常");if(!"checksums.json".equals(name))hashes.put(name,hex(digest.digest()));
         }
         if(count==0)throw new IllegalArgumentException("空的 .opbook 文件");return new ScanResult(names,hashes,true);
@@ -101,8 +99,6 @@ public final class OpbookImporter {
         JSONObject expected=document.getJSONObject("files");Set<String> listed=new HashSet<>();Iterator<String> keys=expected.keys();while(keys.hasNext()){String name=OpbookValidator.safe(keys.next());String checksum=expected.getString(name);listed.add(name);if(!checksum.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("文件校验值无效");String actual=scanned.hashes.get(name);if(actual!=null){if(!checksum.equals(actual))throw new IllegalArgumentException("文件校验失败");}else if(!scanned.deferredAudio||!name.startsWith("audio/"))throw new IllegalArgumentException("文件校验失败");}
         Set<String> archive=new HashSet<>(scanned.names);archive.remove("checksums.json");if(!listed.equals(archive))throw new IllegalArgumentException("校验清单不完整");
     }
-    private static void readHeader(InputStream input,byte[] header)throws Exception{int offset=0;while(offset<header.length){int read=input.read(header,offset,header.length-offset);if(read<0)break;if(read>0)offset+=read;}if(offset<header.length)throw new IllegalArgumentException("音频格式无效");}
-    private static void validateM4a(byte[] header){if(header[4]!='f'||header[5]!='t'||header[6]!='y'||header[7]!='p')throw new IllegalArgumentException("音频格式无效");}
     private static final class ScanResult {final Set<String> names;final Map<String,String> hashes;final boolean deferredAudio;ScanResult(Set<String> names,Map<String,String> hashes,boolean deferredAudio){this.names=names;this.hashes=hashes;this.deferredAudio=deferredAudio;}}
     private static long entryLimit(String name){if("cover.webp".equals(name))return 8L*1024*1024;if(name.endsWith(".json"))return 16L*1024*1024;return MAX_ENTRY;}
     private static boolean allowedFile(String path){return path.equals("manifest.json")||path.equals("checksums.json")||path.equals("cover.webp")||path.matches("content/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json")||path.matches("timeline/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json")||path.matches("audio/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.m4a");}

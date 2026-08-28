@@ -11,7 +11,7 @@ import java.util.List;
 /** Stable locations for distributable, public-sentence voice previews. */
 final class VoicePreviewLibrary {
     static final double RATE = 1.0;
-    static final String REVISION = "natural-zh-v5-provider-length";
+    static final String REVISION = "natural-zh-v6-text-v2";
 
     private VoicePreviewLibrary() {}
 
@@ -32,26 +32,26 @@ final class VoicePreviewLibrary {
     static String key(String provider, String voice) {
         try {
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
-            byte[] value=(REVISION+"\n"+provider+"\n"+voice+"\n"+sentence(provider)+"\n"+RATE).getBytes(StandardCharsets.UTF_8);
+            byte[] value=(keyRevision(provider)+"\n"+provider+"\n"+voice+"\n"+sentence(provider)+"\n"+RATE).getBytes(StandardCharsets.UTF_8);
             return HexFormat.of().formatHex(digest.digest(value)).substring(0,24);
         } catch (Exception impossible) { throw new IllegalStateException(impossible); }
     }
 
+    private static String keyRevision(String provider) {
+        return provider!=null&&provider.toLowerCase(java.util.Locale.ROOT).startsWith("sherpa-")?REVISION:"natural-zh-v5-provider-length";
+    }
+
     static String sentence(String provider) {
-        if ("sherpa-kokoro".equalsIgnoreCase(provider)) return "请试听";
-        if ("sherpa-aishell3".equalsIgnoreCase(provider)) return "试听";
+        if ("sherpa-kokoro".equalsIgnoreCase(provider) || "sherpa-aishell3".equalsIgnoreCase(provider)) return "你好，欢迎试听这段自然语音，也愿这个声音陪你享受阅读时光。";
         return "你好，欢迎试听这段自然语音。愿这个声音陪你读过每一段文字，也陪你享受阅读时光。";
     }
 
     static String adjustedSentence(String provider,long durationMs) {
         if (durationMs > 10000) {
-            if ("sherpa-kokoro".equalsIgnoreCase(provider)) return "听";
-            if ("sherpa-aishell3".equalsIgnoreCase(provider)) return "听";
+            if ("sherpa-kokoro".equalsIgnoreCase(provider) || "sherpa-aishell3".equalsIgnoreCase(provider)) return "你好，欢迎试听这段自然语音。";
             return "你好，欢迎试听自然语音。";
-        } else if (durationMs < 5000 && "sherpa-aishell3".equalsIgnoreCase(provider)) {
-            if(durationMs<3000)return "欢迎试听这个声音";
-            if(durationMs<4000)return "欢迎试听声音";
-            return "欢迎试听";
+        } else if (durationMs < 5000 && ("sherpa-kokoro".equalsIgnoreCase(provider) || "sherpa-aishell3".equalsIgnoreCase(provider))) {
+            return "你好，欢迎试听这段自然语音。愿这个声音陪你读过每一段文字，也陪你享受阅读时光。";
         }
         return sentence(provider);
     }

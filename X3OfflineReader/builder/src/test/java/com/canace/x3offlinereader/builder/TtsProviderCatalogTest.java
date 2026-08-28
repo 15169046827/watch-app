@@ -27,13 +27,10 @@ final class TtsProviderCatalogTest {
         String first=VoicePreviewLibrary.key("sherpa-kokoro","中文女声 zf_001 · sid=3");
         assertEquals(first,VoicePreviewLibrary.key("sherpa-kokoro","中文女声 zf_001 · sid=3"));
         assertEquals(24,first.length());
-        assertEquals("请试听",VoicePreviewLibrary.sentence("sherpa-kokoro"));
-        assertEquals("试听",VoicePreviewLibrary.sentence("sherpa-aishell3"));
-        assertEquals("听",VoicePreviewLibrary.adjustedSentence("sherpa-kokoro",10001));
-        assertEquals("听",VoicePreviewLibrary.adjustedSentence("sherpa-aishell3",10001));
-        assertEquals("欢迎试听这个声音",VoicePreviewLibrary.adjustedSentence("sherpa-aishell3",2999));
-        assertEquals("欢迎试听声音",VoicePreviewLibrary.adjustedSentence("sherpa-aishell3",3999));
-        assertEquals("欢迎试听",VoicePreviewLibrary.adjustedSentence("sherpa-aishell3",4999));
+        assertTrue(VoicePreviewLibrary.sentence("sherpa-kokoro").contains("自然语音"));
+        assertEquals(VoicePreviewLibrary.sentence("sherpa-kokoro"),VoicePreviewLibrary.sentence("sherpa-aishell3"));
+        assertEquals("你好，欢迎试听这段自然语音。",VoicePreviewLibrary.adjustedSentence("sherpa-kokoro",10001));
+        assertTrue(VoicePreviewLibrary.adjustedSentence("sherpa-aishell3",2999).contains("每一段文字"));
         assertTrue(VoicePreviewLibrary.sentence("melo").contains("自然语音"));
         assertEquals(1.0,VoicePreviewLibrary.RATE);
     }
