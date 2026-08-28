@@ -4,7 +4,6 @@
     <ListView android:id="@+id/book_list" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:clipToPadding="false" android:dividerHeight="1dp" android:paddingTop="2dp" android:paddingBottom="2dp" />
     <TextView android:id="@+id/inbox_status" android:layout_width="match_parent" android:layout_height="18dp" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:textColor="@color/text_secondary" android:textSize="10sp" />
     <LinearLayout android:layout_width="match_parent" android:layout_height="36dp" android:gravity="center" android:orientation="horizontal">
-        <Button android:id="@+id/choose_button" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1.2" android:maxLines="1" android:minWidth="0dp" android:paddingStart="2dp" android:paddingEnd="2dp" android:text="@string/add_book" android:textSize="10sp" />
-        <Button android:id="@+id/import_button" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:maxLines="1" android:minWidth="0dp" android:paddingStart="2dp" android:paddingEnd="2dp" android:text="@string/import_inbox" android:textSize="10sp" />
+        <Button android:id="@+id/choose_button" android:layout_width="match_parent" android:layout_height="match_parent" android:maxLines="1" android:minWidth="0dp" android:paddingStart="2dp" android:paddingEnd="2dp" android:text="@string/add_book" android:textSize="11sp" />
     </LinearLayout>
 </LinearLayout>

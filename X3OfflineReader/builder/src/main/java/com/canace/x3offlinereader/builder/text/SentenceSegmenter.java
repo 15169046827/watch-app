@@ -44,18 +44,24 @@ public final class SentenceSegmenter {
 
     private int append(List<Segment> output, String chapterId, String blockId, String text,
                        int startCp, int endCp, int sequence) {
-        int startUtf16 = text.offsetByCodePoints(0, startCp);
-        int endUtf16 = text.offsetByCodePoints(0, endCp);
-        String slice = text.substring(startUtf16, endUtf16).trim();
-        if (!slice.isEmpty()) {
-            int trimStart = 0;
-            while (trimStart < endCp - startCp) {
-                int ci = text.offsetByCodePoints(0, startCp + trimStart);
-                if (!Character.isWhitespace(text.codePointAt(ci))) break;
-                trimStart++;
-            }
+        int trimStart = startCp;
+        while (trimStart < endCp) {
+            int ci = text.offsetByCodePoints(0, trimStart);
+            if (!Character.isWhitespace(text.codePointAt(ci))) break;
+            trimStart++;
+        }
+        int trimEnd = endCp;
+        while (trimEnd > trimStart) {
+            int ci = text.offsetByCodePoints(0, trimEnd - 1);
+            if (!Character.isWhitespace(text.codePointAt(ci))) break;
+            trimEnd--;
+        }
+        if (trimStart < trimEnd) {
+            int startUtf16 = text.offsetByCodePoints(0, trimStart);
+            int endUtf16 = text.offsetByCodePoints(0, trimEnd);
+            String slice = text.substring(startUtf16, endUtf16);
             output.add(new Segment(chapterId + "-s" + String.format("%04d", sequence), blockId,
-                    startCp + trimStart, endCp, slice));
+                    trimStart, trimEnd, slice));
             return sequence + 1;
         }
         return sequence;

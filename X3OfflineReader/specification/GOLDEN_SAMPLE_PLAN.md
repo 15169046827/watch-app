@@ -14,4 +14,4 @@ Golden 输入全部位于 `samples/builder-inputs`，只含项目自写短句；
 8. `GS-LIMIT-01`：压缩比炸弹拒绝；Watch 实现另固定 4096 条目、512MiB 单项、4GiB 总展开上限。
 9. `GS-RESOURCE-01`：未被 manifest 引用的 content/timeline/audio 以及未知包内文件拒绝。
 
-待 OWW261 实机完成：真实导入、系统 AAC 解码、连续多 Track、Seek/逐句边界、进度恢复、后台/熄屏、Audio Focus、扬声器、蓝牙按键、右滑圆屏安全区和 OPPO 进程回收。完成这些前不得把本机结果表述为实机兼容结论。
+待 OPPO Watch X3 实机完成：真实导入、系统 AAC 解码、连续多 Track、Seek/逐句边界、进度恢复、后台/熄屏、Audio Focus、扬声器、蓝牙按键、右滑圆屏安全区和 OPPO 进程回收。完成这些前不得把本机结果表述为实机兼容结论。

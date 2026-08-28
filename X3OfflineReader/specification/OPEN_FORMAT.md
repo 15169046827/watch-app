@@ -13,7 +13,7 @@ timeline/<track-id>.json
 audio/<track-id>.m4a
 ```
 
-ZIP 条目名必须使用 `/` 和 UTF-8，相对路径不得包含空段、`.`、`..`、反斜杠、盘符、绝对路径、NUL 或符号链接。Watch 必须先解压到 staging，限制条目数、单项大小和总展开大小，验证 Schema、语义与校验和后再原子提交；不得直接从 ZIP 播放。`checksums.json` 不校验自身，其他包内普通文件都必须列入，算法固定 SHA-256。
+ZIP 条目名必须使用 `/` 和 UTF-8，相对路径不得包含空段、`.`、`..`、反斜杠、盘符、绝对路径、NUL 或符号链接。Watch 必须在信任内容前限制条目数、单项大小、总展开大小和压缩比，并验证 Schema、语义、媒体头与校验和。读取器可以完整解压后原子提交，也可以原地流式验证并只原子提交元数据索引；后一模式播放前必须把所需音频条目解到受限缓存并再次核对 SHA-256，不得把未经验证的 ZIP 条目直接交给解码器。`checksums.json` 不校验自身，其他包内普通文件都必须列入，算法固定 SHA-256。
 
 v1 不允许未知附加文件：除 `checksums.json` 外，只能出现 `manifest.json`、可选 `cover.webp`、`content/*.json`、`timeline/*.json` 和 `audio/*.m4a`，且每个都必须在校验清单中。
 
@@ -29,6 +29,8 @@ v1 不允许未知附加文件：除 `checksums.json` 外，只能出现 `manife
 时间为非负整数毫秒，`startMs` 包含、`endMs` 不包含。每个 segment 必须满足 `0 <= startMs < endMs <= durationMs`，按时间排序且不得重叠。相邻 segment 可以留有停顿。
 
 `startChar`/`endChar` 是对应 content block 文本中的零基、尾端不含 Unicode code point 索引，不是 UTF-8 byte 或 UTF-16 code unit 索引。Watch 的 Java 实现必须显式转换 code point offset。Timeline 的 `text` 必须等于 `[startChar, endChar)` 切片。
+
+生成器裁剪句首或句尾空白时必须同步调整字符范围，确保上式始终成立。Watch 可窄范围兼容旧版听读工坊已知的句首 Unicode 空白偏差，但只有在把范围向前扩展经过的字符全部为 Unicode 空白、且扩展后的原文切片与 Timeline `text` 完全一致时才可接受；这不是对任意文本不一致的放宽。
 
 ## Versioning
 

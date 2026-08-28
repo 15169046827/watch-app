@@ -21,8 +21,8 @@ public final class LibraryModels {
         public String id, audioPath, timelinePath; public int order; public long durationMs;
     }
     public static final class BookSummary {
-        public final String id, title, author;public final boolean favorite;
-        public BookSummary(String id, String title, String author,boolean favorite) { this.id = id; this.title = title; this.author = author;this.favorite=favorite; }
+        public final String id, title, author, sourceUri;public final boolean favorite;
+        public BookSummary(String id, String title, String author,String sourceUri,boolean favorite) { this.id = id; this.title = title; this.author = author;this.sourceUri=sourceUri;this.favorite=favorite; }
         @Override public String toString() { return (favorite?"★ ":"")+title + (author == null || author.isEmpty() ? "" : "\n" + author); }
     }
     public static final class ChapterSummary {
@@ -32,8 +32,13 @@ public final class LibraryModels {
         @Override public String toString() { return title; }
     }
     public static final class TrackSummary {
-        public final String id,audioPath,timelinePath;public final long durationMs,chapterOffsetMs;
-        public TrackSummary(String id,String audioPath,String timelinePath,long durationMs,long chapterOffsetMs){this.id=id;this.audioPath=audioPath;this.timelinePath=timelinePath;this.durationMs=durationMs;this.chapterOffsetMs=chapterOffsetMs;}
+        public final String id,audioPath,audioEntryPath,timelinePath,sourceUri;public final long durationMs,chapterOffsetMs;
+        public TrackSummary(String id,String audioPath,String audioEntryPath,String timelinePath,String sourceUri,long durationMs,long chapterOffsetMs){this.id=id;this.audioPath=audioPath;this.audioEntryPath=audioEntryPath;this.timelinePath=timelinePath;this.sourceUri=sourceUri;this.durationMs=durationMs;this.chapterOffsetMs=chapterOffsetMs;}
+    }
+    public static final class BookStorage {
+        public final String id,title,rootPath,sourceUri;
+        public BookStorage(String id,String title,String rootPath,String sourceUri){this.id=id;this.title=title;this.rootPath=rootPath;this.sourceUri=sourceUri;}
+        public boolean indexedPackage(){return sourceUri!=null&&!sourceUri.isEmpty();}
     }
     public static final class ResumePoint {
         public final String chapterId,trackId;public final long trackPositionMs,chapterPositionMs,updatedAt;

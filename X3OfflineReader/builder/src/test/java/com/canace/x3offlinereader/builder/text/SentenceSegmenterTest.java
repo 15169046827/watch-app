@@ -15,4 +15,25 @@ final class SentenceSegmenterTest {
         assertEquals(4, segments.get(1).startChar);
         assertEquals(8, segments.get(1).endChar);
     }
+
+    @Test void excludesTrimmedLineBreaksFromTheDeclaredRange() {
+        BookModel.Chapter chapter = new BookModel.Chapter(); chapter.chapterId = "chapter-001-001";
+        BookModel.Block block = new BookModel.Block(); block.blockId = "block"; block.text = "第一句。\n  第二句！\n"; chapter.blocks.add(block);
+        var segments = new SentenceSegmenter().segment(chapter);
+        assertEquals(2, segments.size());
+        assertEquals("第一句。", segments.get(0).text);
+        assertEquals(4, segments.get(0).endChar);
+        assertEquals("第二句！", segments.get(1).text);
+        assertEquals(7, segments.get(1).startChar);
+        assertEquals(11, segments.get(1).endChar);
+    }
+
+    @Test void keepsUnicodeWhitespaceOutOfBothTextAndRange() {
+        BookModel.Chapter chapter = new BookModel.Chapter(); chapter.chapterId = "chapter-001-001";
+        BookModel.Block block = new BookModel.Block(); block.blockId = "block"; block.text = "甲。　乙！"; chapter.blocks.add(block);
+        var segments = new SentenceSegmenter().segment(chapter);
+        assertEquals("乙！", segments.get(1).text);
+        assertEquals(3, segments.get(1).startChar);
+        assertEquals(5, segments.get(1).endChar);
+    }
 }
