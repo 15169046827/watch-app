@@ -46,7 +46,7 @@
 - 0.3.0 会预取后续章节的句级语音，在当前章节编码 M4A 时继续使用 Melo worker，减少章节边界的空闲时间；缓存键、Timeline 顺序和包内顺序不变。
 - 随包提供 286 条版本化本地试听：Melo 1、Kokoro 中文 100、AISHELL-3 174、Edge 中文 11。点击“试听”只播放 16 kHz 单声道 PCM WAV，不加载模型、不临时合成、不联网。所有样本保持 Provider 的 1× 自然速率；不会把长句强行加速。
 - 在线 Edge 转换会把待朗读正文发送给 Microsoft 服务。GUI 会在开始前再次确认，CLI 必须显式传入 `--allow-online-tts`；Builder 不保存 API Key、账号或正文日志。安装额外组件运行 `builder\install-tts-voices.ps1`，许可与数据来源见 [`THIRD_PARTY_TTS.md`](THIRD_PARTY_TTS.md)。
-- Edge online conversion pins edge-tts 7.2.8, uses a Windows-compatible event loop, retries a transient sentence failure once, and preserves the real service error instead of cleanup noise.
+- Edge online conversion pins edge-tts 7.2.8, uses a Windows-compatible event loop, retries transient sentence failures up to five times with a bounded 2/5/10/20/40-second backoff, and preserves the real service error instead of cleanup noise. Invalid parameters still fail immediately.
 - 声音改为选择框；存在预生成索引时仅显示通过时长门槛的可试听音色。当前 Melo 中文仅有 `ZH`，Windows SAPI 列出本机声音，tone 仅用于测试且不会出现在 GUI。
 - 进度区同时显示开始时间、总耗时和当前阶段耗时；超过一小时明确写“小时/分”。连续 10 分钟无真实进度会提示观察，Melo 单句、FFmpeg 单 Track 超过 12 分钟会只重启该步骤并自动重试一次，打包失败只重建 staging，已完成缓存保留。
 - 合并输出默认命名为 `书名 [作者].opbook`；标题为空时使用首个源文件名，作者为空时使用“未署名”。Windows 文件名非法字符会安全替换，用户手动选定的名称仍会保留。
