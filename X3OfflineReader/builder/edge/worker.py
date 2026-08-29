@@ -5,6 +5,9 @@ import os
 import ssl
 import sys
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 _original_context = ssl.create_default_context
 
 
@@ -37,5 +40,19 @@ async def main():
     json.dump({"ok": True}, sys.stdout)
 
 
+def run():
+    try:
+        asyncio.run(main())
+    except Exception as failure:
+        message = " ".join(str(failure).split())[:500]
+        json.dump(
+            {"errorType": type(failure).__name__, "error": message or "服务未返回诊断"},
+            sys.stderr,
+            ensure_ascii=False,
+        )
+        sys.stderr.write("\n")
+        raise SystemExit(1)
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()

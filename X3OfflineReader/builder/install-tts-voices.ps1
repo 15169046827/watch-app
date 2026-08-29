@@ -49,7 +49,14 @@ if(-not(Test-Path -LiteralPath (Join-Path $sherpaSite 'sherpa_onnx') -PathType C
 if(-not $SkipOnlineClient){
     $sitePackages=Join-Path $project '.tools\edge-tts\site-packages'
     New-Item -ItemType Directory -Force -Path $sitePackages | Out-Null
-    & $python -m pip install --upgrade --target $sitePackages 'edge-tts==7.2.3'
+    $siteBoundary=[IO.Path]::GetFullPath($sitePackages)+[IO.Path]::DirectorySeparatorChar
+    Get-ChildItem -LiteralPath $sitePackages -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq 'edge_tts' -or $_.Name -like 'edge_tts-*.dist-info' } |
+        ForEach-Object {
+            if(-not $_.FullName.StartsWith($siteBoundary,[StringComparison]::OrdinalIgnoreCase)){throw 'Edge client cleanup escaped its tool directory'}
+            Remove-Item -LiteralPath $_.FullName -Recurse -Force
+        }
+    & $python -m pip install --upgrade --target $sitePackages 'edge-tts==7.2.8'
     if($LASTEXITCODE -ne 0){throw 'edge-tts installation failed'}
 }
 Write-Host 'Additional TTS voices are installed. Online Edge voices still require a network connection during preview and conversion.'

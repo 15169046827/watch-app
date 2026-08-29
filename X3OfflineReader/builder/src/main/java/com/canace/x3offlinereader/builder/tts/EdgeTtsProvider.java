@@ -55,5 +55,9 @@ public final class EdgeTtsProvider implements TtsProvider {
     }
     private Path python() { Path portable = root.resolve(".tools/melo/python.exe"); if (Files.isRegularFile(portable)) return portable; return Path.of("python.exe"); }
     private Path worker() { return root.resolve("builder/edge/worker.py"); }
-    private static String sanitize(String text) { String clean = text == null ? "" : text.replaceAll("[\\r\\n]+", " ").strip(); return clean.isBlank() ? "服务未返回诊断" : clean.length() > 300 ? clean.substring(clean.length() - 300) : clean; }
+    static String sanitize(String text) {
+        String clean=text==null?"":text.replaceAll("(?s)Exception ignored in: <function _ProactorBasePipeTransport\\.__del__.*?RuntimeError: Event loop is closed"," ").replaceAll("[\\r\\n]+"," ").replaceAll("\\s+"," ").strip();
+        int structured=clean.lastIndexOf("{\"errorType\"");if(structured>=0)clean=clean.substring(structured);
+        return clean.isBlank()?"服务未返回诊断":clean.length()>600?clean.substring(clean.length()-600):clean;
+    }
 }
