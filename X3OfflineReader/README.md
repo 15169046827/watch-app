@@ -44,7 +44,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\create-start-m
 
 听读 0.5.0 将“导入”改为索引式添加：用户可从任意目录多选 `.opbook`，App 持久保存文件授权并原地完成路径、大小、压缩比、格式、资源关系、元数据 SHA-256 与媒体头校验；音频内容 SHA-256 延迟到首次播放提取时核对。页面切换不会丢失任务状态或解锁重复提交。书籍按 `bookId` 去重，源文件缺失时给出明确提示；书籍和音乐均支持长按管理，书籍可选择仅移出书库或连同源文件删除。播放只缓存前一/当前/下一章节，优先对可寻址 SAF 文件随机读取 ZIP 条目，回退到流式读取。详见 [`specification/WATCH_INDEXED_LIBRARY.md`](specification/WATCH_INDEXED_LIBRARY.md)。
 
-听读工坊 0.6.2 延续 Vue 3.5 + PrimeVue 4.5 + Tauri 2.11 界面：转换完成后将运行中的三项预计时间替换为“任务总时长 / 本次执行总时长”，断点累计字段向后兼容；日志保留当前会话全部记录并在固定区域内滚动；多音色模型卡固定高度、各自滚动，不再拉长整个试听页面。流水线进度改按语音字符与已编码章节共同计算，恢复时按真实缓存重算，不再在第一章等待阶段跳到 79%；Edge 临时无音频在六次尝试后自动保存并暂停，参数错误仍明确失败。Java 继续作为唯一转换核心，`.opbook`、缓存、正式路径和开始菜单入口保持兼容。详见 [`specification/BUILDER_UI_VUE_TAURI.md`](specification/BUILDER_UI_VUE_TAURI.md)。
+听读工坊 0.6.2 延续 Vue 3.5 + PrimeVue 4.5 + Tauri 2.11 界面：转换完成后将运行中的三项预计时间替换为“任务总时长 / 本次执行总时长”，断点累计字段向后兼容；日志保留当前会话全部记录并在固定区域内滚动；多音色模型卡固定高度、各自滚动，不再拉长整个试听页面。流水线进度改按语音字符与已编码章节共同计算，恢复时按真实缓存重算，不再在第一章等待阶段跳到 79%；Edge 临时无音频会轮换六种语义等价的标点/引号请求，避免重复命中同一空音频状态；全部失败后才自动保存并暂停，参数错误仍明确失败。Java 继续作为唯一转换核心，`.opbook`、缓存、正式路径和开始菜单入口保持兼容。详见 [`specification/BUILDER_UI_VUE_TAURI.md`](specification/BUILDER_UI_VUE_TAURI.md)。
 0.5.0 延续已通过 OPPO Watch X3 验收的阅读、续听、逐句高亮、逻辑章节和音乐功能。Watch 图标保持已验收的 SPEC v2.1：全画布 adaptive background 与 0.72 居中 foreground。Windows“听读工坊”按 SPEC v2.2 使用透明 512×512 外画布、居中的 420×420（82.03%）`#D8A142` 圆角底板与原有窗口/书/波形前景；ICO 包含 16/24/32/48/64/128/256 七个原生尺寸，四角透明、中心不透明，避免 Windows 将完整色块显示成方形图标。
 
 正式 Windows app-image 与“听读工坊”开始菜单快捷方式已按 v2.2 安全刷新；句子语音缓存保留，Watch 工程、安装与数据未改动。Windows Shell 验收确认透明圆角、视觉尺度与同系列应用协调。

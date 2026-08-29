@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,9 +41,9 @@ public final class EdgeTtsProvider implements TtsProvider {
         if (!isAvailable()) throw new IllegalStateException("在线语音组件未安装");
         Files.createDirectories(workingDirectory); Path mp3 = workingDirectory.resolve(request.getSegmentId() + ".edge.mp3").toAbsolutePath(); Path wav = workingDirectory.resolve(request.getSegmentId() + ".wav").toAbsolutePath();
         Files.deleteIfExists(mp3); Files.deleteIfExists(wav);
-        Exception failure=null;int retries=0;
+        List<String> speechVariants=retryTexts(request.getText());Exception failure=null;int retries=0;
         for(int attempt=0;attempt<=RETRY_DELAYS_MILLIS.length;attempt++){
-            try{run(Map.of("action", "synthesize", "voice", request.getVoiceId(), "rate", request.getRate(), "text", request.getText(), "output", mp3.toString()), 12 * 60);if(Files.isRegularFile(mp3)&&Files.size(mp3)>0){failure=null;break;}throw new IllegalStateException("在线语音没有返回音频");}
+            try{run(Map.of("action", "synthesize", "voice", request.getVoiceId(), "rate", request.getRate(), "text", speechVariants.get(attempt), "output", mp3.toString()), 12 * 60);if(Files.isRegularFile(mp3)&&Files.size(mp3)>0){failure=null;break;}throw new IllegalStateException("在线语音没有返回音频");}
             catch(Exception current){failure=current;Files.deleteIfExists(mp3);if(attempt>=RETRY_DELAYS_MILLIS.length||!shouldRetry(current))break;long delay=RETRY_DELAYS_MILLIS[attempt];retries++;Thread.sleep(delay);}
         }
         if(failure!=null){
@@ -73,7 +74,14 @@ public final class EdgeTtsProvider implements TtsProvider {
         return Stream.of("noaudioreceived","no audio was received","connection","connectorerror","connectionreseterror","timeout","timed out","serverdisconnected","clientoserror","wssserverhandshakeerror","websocket","incompleteread","eoferror","temporarily","429","502","503","504","长时间没有响应").anyMatch(value->diagnosis.indexOf(value)>=0);
     }
     static long retryDelayMillis(int completedAttempts) { return RETRY_DELAYS_MILLIS[completedAttempts-1]; }
-    static String temporaryPauseMessage(int attempts,Throwable failure){return "Edge 在线语音暂不可用：当前句共尝试 "+attempts+" 次后仍未收到音频；已自动保存并暂停，稍后可从断点继续。诊断："+sanitize(failure==null?null:failure.getMessage());}
+    static List<String> retryTexts(String text){
+        String source=text.strip(),spoken=hasTerminalPunctuation(source)?source:source+"。",stem=stripTerminalPunctuation(source);if(stem.isBlank())stem=source;
+        LinkedHashSet<String> candidates=new LinkedHashSet<>();candidates.add(spoken);candidates.add("“"+spoken+"”");candidates.add(stem+"。");candidates.add(stem+"，");candidates.add(stem+"；");candidates.add("「"+stem+"」。");candidates.add("『"+stem+"』。");
+        List<String> variants=new ArrayList<>(candidates);return List.copyOf(variants.subList(0,RETRY_DELAYS_MILLIS.length+1));
+    }
+    private static boolean hasTerminalPunctuation(String text){if(text.isEmpty())return false;int cp=text.codePointBefore(text.length());return "。！？!?；;".indexOf(cp)>=0;}
+    private static String stripTerminalPunctuation(String text){int end=text.length();while(end>0){int cp=text.codePointBefore(end);if("。！？!?；;，,".indexOf(cp)<0)break;end-=Character.charCount(cp);}return text.substring(0,end);}
+    static String temporaryPauseMessage(int attempts,Throwable failure){return "Edge 在线语音暂不可用：当前句共尝试 "+attempts+" 种等价请求后仍未收到音频；已自动保存并暂停，稍后可从断点继续。诊断："+sanitize(failure==null?null:failure.getMessage());}
     static String sanitize(String text) {
         String clean=text==null?"":text.replaceAll("(?s)Exception ignored in: <function _ProactorBasePipeTransport\\.__del__.*?RuntimeError: Event loop is closed"," ").replaceAll("[\\r\\n]+"," ").replaceAll("\\s+"," ").strip();
         int structured=clean.lastIndexOf("{\"errorType\"");if(structured>=0)clean=clean.substring(structured);

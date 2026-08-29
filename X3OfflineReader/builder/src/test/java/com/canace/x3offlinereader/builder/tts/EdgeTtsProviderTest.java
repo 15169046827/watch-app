@@ -3,6 +3,7 @@ package com.canace.x3offlinereader.builder.tts;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.util.HashSet;
 import org.junit.jupiter.api.Test;
 
 final class EdgeTtsProviderTest {
@@ -30,8 +31,17 @@ final class EdgeTtsProviderTest {
 
     @Test void exhaustedTransientFailureExplainsAutomaticPause() {
         String message=EdgeTtsProvider.temporaryPauseMessage(6,new IllegalStateException("NoAudioReceived"));
-        assertTrue(message.contains("共尝试 6 次"));
+        assertTrue(message.contains("共尝试 6 种等价请求"));
         assertTrue(message.contains("已自动保存并暂停"));
         assertTrue(message.contains("NoAudioReceived"));
+    }
+
+    @Test void retryPayloadsAddNaturalPunctuationAndChangeTheUpstreamKey() {
+        var variants=EdgeTtsProvider.retryTexts("今天天气好");
+        assertEquals(6,variants.size());
+        assertEquals(6,new HashSet<>(variants).size());
+        assertEquals("今天天气好。",variants.get(0));
+        assertTrue(variants.stream().allMatch(value->value.contains("今天天气好")));
+        assertEquals("你好吗？",EdgeTtsProvider.retryTexts("你好吗？").get(0));
     }
 }
