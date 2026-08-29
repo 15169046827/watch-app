@@ -27,4 +27,11 @@ final class EdgeTtsProviderTest {
         assertEquals(2_000L,EdgeTtsProvider.retryDelayMillis(1));
         assertEquals(40_000L,EdgeTtsProvider.retryDelayMillis(5));
     }
+
+    @Test void exhaustedTransientFailureExplainsAutomaticPause() {
+        String message=EdgeTtsProvider.temporaryPauseMessage(6,new IllegalStateException("NoAudioReceived"));
+        assertTrue(message.contains("共尝试 6 次"));
+        assertTrue(message.contains("已自动保存并暂停"));
+        assertTrue(message.contains("NoAudioReceived"));
+    }
 }

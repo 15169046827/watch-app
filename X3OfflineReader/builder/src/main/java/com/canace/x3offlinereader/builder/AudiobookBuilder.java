@@ -75,9 +75,9 @@ public final class AudiobookBuilder {
             progress.update(8,"按文本长度与缓存初步估算：约 "+humanDuration(initialEstimate)+"（未缓存 "+uncachedCharacters+" 字；运行中按实际吞吐校准）");
             progress.update(9,options.tts.equalsIgnoreCase("melo")?"准备 MeloTTS（"+tts.parallelism()+" 个工作进程；首次加载模型可能需要一些时间）":"准备语音引擎："+TtsProviderCatalog.entry(options.tts).label());
             FfmpegAudioEncoder encoder=new FfmpegAudioEncoder(options.ffmpeg,projectRoot);List<OpbookWriter.TrackArtifact> tracks=new ArrayList<>();
-            // Progress describes work performed by this run. Cached sentences reduce the
-            // remaining estimate, but must not make a fresh run appear to jump to 40%+.
-            AtomicInteger generatedSegments=new AtomicInteger();AtomicLong generatedCharacters=new AtomicLong();progress.update(10,"语音流水线已启动：已完成句子立即落入断点缓存，已编码 Track 可直接复用");
+            final long allCharacters=totalCharacters;final int allChapters=chapterCount;
+            AtomicInteger generatedSegments=new AtomicInteger(),completedChapters=new AtomicInteger();AtomicLong completedCharacters=new AtomicLong(cachedCharacters);
+            progress.update(pipelinePercent(completedCharacters.get(),allCharacters,0,allChapters),"语音流水线已启动：已完成句子立即落入断点缓存，已编码 Track 可直接复用");
 
             List<ChapterWork> chapterWorks=new ArrayList<>();Map<Path,CompletableFuture<SynthesisResult>> pending=new LinkedHashMap<>();Set<Path> initialCache=new HashSet<>();
             for(BookModel.Volume volume:book.volumes)for(BookModel.Chapter chapter:volume.chapters){
@@ -89,32 +89,32 @@ public final class AudiobookBuilder {
                     else{
                         CompletableFuture<SynthesisResult> base=pending.get(cache);
                         if(base==null){SynthesisRequest request=new SynthesisRequest(segment.segmentId,segment.text,options.voice,options.rate);base=CompletableFuture.supplyAsync(()->{try{return synthesizeToCache(tts,request,sentenceDir,cache,control);}catch(Exception failure){throw new CompletionException(failure);}},synthesisPool);pending.put(cache,base);}
-                        int characters=codePoints(segment.text);long allCharacters=uncachedCharacters;int allSegments=totalSegments-initiallyCached;
-                        future=base.thenApply(result->{int done=generatedSegments.incrementAndGet();long doneCharacters=generatedCharacters.addAndGet(characters);progress.update(synthesisPercent(doneCharacters,allCharacters),done==allSegments?"语音生成完成：本次 "+done+" 句，复用缓存 "+reusedSegments+" 句":null);return result;});
+                        int characters=codePoints(segment.text);int allSegments=totalSegments-initiallyCached;
+                        future=base.thenApply(result->{int done=generatedSegments.incrementAndGet();long doneCharacters=completedCharacters.addAndGet(characters);progress.update(pipelinePercent(doneCharacters,allCharacters,completedChapters.get(),allChapters),done==allSegments?"语音生成完成：本次 "+done+" 句，复用缓存 "+reusedSegments+" 句":null);return result;});
                     }
                     chapterWork.results.add(future);
                 }
                 chapterWorks.add(chapterWork);
             }
-            if(uncachedCharacters==0)progress.update(78,"命中完整语音缓存：已复用 "+reusedSegments+" 句，跳过语音生成");
+            if(uncachedCharacters==0)progress.update(pipelinePercent(completedCharacters.get(),allCharacters,0,allChapters),"命中完整语音缓存：已复用 "+reusedSegments+" 句，跳过语音生成");
 
             int cachedSegments=0,chapterIndex=0;
             for(ChapterWork chapterWork:chapterWorks){
                 control.checkpoint();BookModel.Chapter chapter=chapterWork.chapter;chapterIndex++;
-                progress.update(Math.max(encodePercent(chapterIndex-1,chapterCount),Math.max(10,synthesisPercent(generatedCharacters.get(),uncachedCharacters))),"章节 "+chapterIndex+"/"+chapterCount+"：等待语音并准备 Track");
+                progress.update(pipelinePercent(completedCharacters.get(),allCharacters,completedChapters.get(),allChapters),"章节 "+chapterIndex+"/"+chapterCount+"：等待语音并准备 Track");
                 List<Path> waves=new ArrayList<>();List<Long> durations=new ArrayList<>();
                 for(int segmentIndex=0;segmentIndex<chapterWork.segments.size();segmentIndex++){
                     control.checkpoint();SynthesisResult result=await(chapterWork.results.get(segmentIndex),control);Path cache=result.getWavPath();if(initialCache.contains(cache))cachedSegments++;
                     waves.add(cache);durations.add(result.getDurationMs());
                 }
-                progress.update(encodePercent(chapterIndex-1,chapterCount),"章节 "+chapterIndex+"/"+chapterCount+"：拼接/复用并编码 M4A（缓存命中 "+cachedSegments+" 句）");
+                progress.update(pipelinePercent(completedCharacters.get(),allCharacters,completedChapters.get(),allChapters),"章节 "+chapterIndex+"/"+chapterCount+"：拼接/复用并编码 M4A（缓存命中 "+cachedSegments+" 句）");
                 long maxTrackMs=options.maxTrackMinutes*60_000L;int start=0,part=0;
                 while(start<chapterWork.segments.size()){
                     control.checkpoint();int end=start;long expectedDuration=0;
                     while(end<chapterWork.segments.size()){long added=durations.get(end)+(end>start?options.pauseMs:0);if(end>start&&expectedDuration+added>maxTrackMs)break;expectedDuration+=added;end++;}
                     String baseId=chapter.chapterId.replace("chapter","track");String trackId=part==0?baseId:baseId+"-p"+String.format("%03d",part+1);
                     Path m4a=work.resolve(trackId+".m4a"),metadata=work.resolve(trackId+".track.properties");String signature=trackSignature(tts,options,trackId,waves.subList(start,end),durations.subList(start,end));long combinedDuration=expectedDuration;
-                    if(validTrack(m4a,metadata,signature)){progress.update(encodePercent(chapterIndex,chapterCount),"章节 "+chapterIndex+"/"+chapterCount+"：复用已完成 Track "+trackId);}
+                    if(validTrack(m4a,metadata,signature)){progress.update(pipelinePercent(completedCharacters.get(),allCharacters,completedChapters.get(),allChapters),"章节 "+chapterIndex+"/"+chapterCount+"：复用已完成 Track "+trackId);}
                     else{
                         Path combined=work.resolve(trackId+".wav");try{combinedDuration=WaveSupport.concatenate(new ArrayList<>(waves.subList(start,end)),options.pauseMs,combined);encoder.encodeWave(combined,m4a,control);writeTrackMetadata(metadata,signature,combinedDuration);}finally{Files.deleteIfExists(combined);}
                     }
@@ -122,7 +122,7 @@ public final class AudiobookBuilder {
                     for(int i=start;i<end;i++){OpbookWriter.TimedSegment timed=new OpbookWriter.TimedSegment();timed.segment=chapterWork.segments.get(i);timed.startMs=cursor;timed.endMs=i+1==end?combinedDuration:cursor+durations.get(i);artifact.segments.add(timed);cursor=timed.endMs+(i+1<end?options.pauseMs:0);}
                     tracks.add(artifact);start=end;part++;
                 }
-                progress.update(encodePercent(chapterIndex,chapterCount),null);
+                completedChapters.set(chapterIndex);progress.update(pipelinePercent(completedCharacters.get(),allCharacters,completedChapters.get(),allChapters),null);
             }
             control.checkpoint();progress.update(91,"生成并编码封面");Path cover=work.resolve("cover.webp");encoder.encodeCover(options.cover,cover,control);
             control.checkpoint();progress.update(95,"写入 manifest、正文、Timeline 与校验和");Exception packageFailure=null;
@@ -148,8 +148,12 @@ public final class AudiobookBuilder {
     private static void moveAtomic(Path source,Path target)throws Exception{try{Files.move(source,target,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}catch(AtomicMoveNotSupportedException ignored){Files.move(source,target,StandardCopyOption.REPLACE_EXISTING);}}
     private static boolean validWave(Path path){try{return Files.isRegularFile(path)&&Files.size(path)>46;}catch(Exception ignored){return false;}}
     private static int codePoints(String text){return text.codePointCount(0,text.length());}
-    static int synthesisPercent(long completed,long total){return total<=0?78:Math.min(78,10+(int)Math.round(completed*68.0/total));}
-    private static int encodePercent(int completedChapters,int totalChapters){return totalChapters<=0?90:Math.min(90,79+(int)Math.round(completedChapters*11.0/totalChapters));}
+    static int synthesisPercent(long completed,long total){return pipelinePercent(completed,total,0,1);}
+    static int pipelinePercent(long completedCharacters,long totalCharacters,int completedChapters,int totalChapters){
+        double synthesis=totalCharacters<=0?1.0:Math.max(0.0,Math.min(1.0,completedCharacters/(double)totalCharacters));
+        double encoding=totalChapters<=0?1.0:Math.max(0.0,Math.min(1.0,completedChapters/(double)totalChapters));
+        return Math.min(90,10+(int)Math.round(synthesis*68.0)+(int)Math.round(encoding*12.0));
+    }
     static long estimateSeconds(String provider,long uncachedCharacters,int cachedSegments,int chapters,double rate){return estimateSeconds(provider,uncachedCharacters,cachedSegments,chapters,rate,1);}
     static long estimateSeconds(String provider,long uncachedCharacters,int cachedSegments,int chapters,double rate,int parallelism){double efficiency="melo".equalsIgnoreCase(provider)&&parallelism>1?1.25:1.0;double base=switch(provider.toLowerCase()){case "melo"->7.5;case "windows"->13.0;case "sherpa-kokoro"->4.0;case "sherpa-aishell3"->3.0;case "edge"->10.0;default->1000.0;};double speed=base*efficiency;long startup=uncachedCharacters==0?0:"melo".equalsIgnoreCase(provider)?parallelism>1?38:25:provider.startsWith("sherpa-")?20:"windows".equalsIgnoreCase(provider)?3:2;long synthesis=(long)Math.ceil(uncachedCharacters/(speed*Math.max(0.5,rate)));long cacheScan=Math.max(1,(cachedSegments+249)/250);long encode=Math.max(8,chapters*3L);return Math.max(10,startup+synthesis+cacheScan+encode+5);}
     private static SynthesisResult await(CompletableFuture<SynthesisResult> future,BuildControl control)throws Exception{while(true){control.checkpoint();try{return future.get(250,TimeUnit.MILLISECONDS);}catch(TimeoutException ignored){}catch(ExecutionException failure){Throwable cause=failure.getCause();while(cause instanceof CompletionException&&cause.getCause()!=null)cause=cause.getCause();if(cause instanceof Exception exception)throw exception;throw new IllegalStateException(cause);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();control.requestStop();control.checkpoint();}}}

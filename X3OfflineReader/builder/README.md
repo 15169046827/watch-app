@@ -41,12 +41,12 @@
 - 输入、输出和封面选择器分别记住上次目录；首次使用从“下载”或用户主目录开始，不再固定打开“文档”。
 - 勾选“输出到源目录”时，合并导出写到第一个源文件目录，分别导出则让每个 `.opbook` 回到对应源文件目录；取消勾选会恢复此前手动选择的文件或目录。
 - 转换区显示 0–100% 进度条和带耗时的里程碑日志，包括解析统计、语音句数/缓存命中、逐章 M4A 编码、封面和最终打包。
-- 进度条下方动态显示预计总用时和预计剩余时间。初值来自 TTS 类型、语速、未缓存文本字符数、缓存句数和章节数；进度改按字符权重计算，并且只有进度真正前进时才平滑校准。停滞期间预计总时长固定、剩余时间递减，完成后显示实际用时。
+- 进度条下方动态显示预计总用时和预计剩余时间。初值来自 TTS 类型、语速、未缓存文本字符数、缓存句数和章节数；流水线进度由语音字符完成度 68% 与章节编码完成度 12% 共同组成，已有缓存属于真实已完成工作。恢复任务会丢弃旧版错误百分比并按缓存与 Track 重新计算，只有进度真正前进时才平滑校准 ETA。
 - “Melo 性能”提供“加速（推荐，最多 2 进程）”与“节省内存（1 进程）”。程序按 CPU、总内存和转换开始时的可用内存自动降级；每个进程只持有一个模型，并限制 PyTorch/OMP 线程，避免盲目超卖 CPU。i7-1360P / 32 GB 的同工作量未缓存端到端基准为单进程 78.78 秒、双进程每个 8 线程 63.65 秒；三进程 5 线程为 68.16 秒、三进程 8 线程为 71.32 秒，均慢于双进程，因此生产界面不提供三进程。双进程至少需要 10 GiB 可用内存，条件不足时安全回退。实际工作进程数写入里程碑日志。
 - 0.3.0 会预取后续章节的句级语音，在当前章节编码 M4A 时继续使用 Melo worker，减少章节边界的空闲时间；缓存键、Timeline 顺序和包内顺序不变。
 - 随包提供 286 条版本化本地试听：Melo 1、Kokoro 中文 100、AISHELL-3 174、Edge 中文 11。点击“试听”只播放 16 kHz 单声道 PCM WAV，不加载模型、不临时合成、不联网。所有样本保持 Provider 的 1× 自然速率；不会把长句强行加速。
 - 在线 Edge 转换会把待朗读正文发送给 Microsoft 服务。GUI 会在开始前再次确认，CLI 必须显式传入 `--allow-online-tts`；Builder 不保存 API Key、账号或正文日志。安装额外组件运行 `builder\install-tts-voices.ps1`，许可与数据来源见 [`THIRD_PARTY_TTS.md`](THIRD_PARTY_TTS.md)。
-- Edge online conversion pins edge-tts 7.2.8, uses a Windows-compatible event loop, retries transient sentence failures up to five times with a bounded 2/5/10/20/40-second backoff, and preserves the real service error instead of cleanup noise. Invalid parameters still fail immediately.
+- Edge online conversion pins edge-tts 7.2.8, uses a Windows-compatible event loop, and makes six total attempts with bounded 2/5/10/20/40-second backoff. If a transient failure still returns no audio, the task preserves its sentence/Track cache and automatically changes to paused instead of failed; invalid parameters still fail immediately, and the Builder never silently switches voices.
 - 声音改为选择框；存在预生成索引时仅显示通过时长门槛的可试听音色。当前 Melo 中文仅有 `ZH`，Windows SAPI 列出本机声音，tone 仅用于测试且不会出现在 GUI。
 - 进度区同时显示开始时间、总耗时和当前阶段耗时；超过一小时明确写“小时/分”。连续 10 分钟无真实进度会提示观察，Melo 单句、FFmpeg 单 Track 超过 12 分钟会只重启该步骤并自动重试一次，打包失败只重建 staging，已完成缓存保留。
 - 合并输出默认命名为 `书名 [作者].opbook`；标题为空时使用首个源文件名，作者为空时使用“未署名”。Windows 文件名非法字符会安全替换，用户手动选定的名称仍会保留。

@@ -42,4 +42,11 @@ final class BuilderGuiTest {
         assertEquals(10,AudiobookBuilder.synthesisPercent(0,10_000));
         assertEquals(44,AudiobookBuilder.synthesisPercent(5_000,10_000));
         assertEquals(78,AudiobookBuilder.synthesisPercent(10_000,10_000));
-    }}
+    }
+    @Test void pipelineProgressCombinesSpeechAndCompletedChapters(){
+        assertEquals(10,AudiobookBuilder.pipelinePercent(0,100_000,0,100));
+        assertEquals(78,AudiobookBuilder.pipelinePercent(100_000,100_000,0,100));
+        assertEquals(84,AudiobookBuilder.pipelinePercent(100_000,100_000,50,100));
+        assertEquals(90,AudiobookBuilder.pipelinePercent(100_000,100_000,100,100));
+    }
+}

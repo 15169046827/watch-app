@@ -23,5 +23,6 @@ public final class BuildControl {
 
     public static final class PauseRequestedException extends Exception {
         public PauseRequestedException() { super("转换进度已保存，可在下次启动时继续"); }
+        public PauseRequestedException(String message) { super(message); }
     }
 }

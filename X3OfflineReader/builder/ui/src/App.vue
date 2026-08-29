@@ -129,7 +129,7 @@ async function startBuild(resume = false) {
     if (!ok) return
     form.allowOnlineTts = true
   }
-  busy.value = true; pausing.value = false; progress.value = resume ? checkpoint.value?.percent ?? 0 : 0
+  busy.value = true; pausing.value = false; progress.value = 0
   logs.value = []; outputs.value = []; completedTaskSeconds.value = null; completedRunSeconds.value = null; startedAt.value = Date.now(); elapsedSeconds.value = 0
   initialEstimate.value = 0; projectedTotal.value = 0; lastEtaProgress = -1
   status.value = resume ? '正在恢复上次任务…' : '正在准备转换…'
@@ -209,7 +209,7 @@ async function handleEvent(event: BuilderEvent) {
     status.value = '转换完成，可以把 .opbook 传入手表'
     await refreshState()
   } else if (event.type === 'paused') {
-    busy.value = false; pausing.value = false; status.value = '进度已安全保存，可随时恢复'
+    busy.value = false; pausing.value = false; status.value = event.message ?? '进度已安全保存，可随时恢复'
     await refreshState()
   } else if (event.type === 'failed') {
     busy.value = false; pausing.value = false; status.value = `转换失败：${event.message ?? '未知错误'}`

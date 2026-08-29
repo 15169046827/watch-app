@@ -1,5 +1,6 @@
 package com.canace.x3offlinereader.builder.tts;
 
+import com.canace.x3offlinereader.builder.BuildControl;
 import com.canace.x3offlinereader.builder.audio.FfmpegAudioEncoder;
 import com.canace.x3offlinereader.builder.audio.WaveSupport;
 import com.canace.x3offlinereader.builder.model.SynthesisRequest;
@@ -44,7 +45,10 @@ public final class EdgeTtsProvider implements TtsProvider {
             try{run(Map.of("action", "synthesize", "voice", request.getVoiceId(), "rate", request.getRate(), "text", request.getText(), "output", mp3.toString()), 12 * 60);if(Files.isRegularFile(mp3)&&Files.size(mp3)>0){failure=null;break;}throw new IllegalStateException("在线语音没有返回音频");}
             catch(Exception current){failure=current;Files.deleteIfExists(mp3);if(attempt>=RETRY_DELAYS_MILLIS.length||!shouldRetry(current))break;long delay=RETRY_DELAYS_MILLIS[attempt];retries++;Thread.sleep(delay);}
         }
-        if(failure!=null)throw new IllegalStateException(retries==0?"在线语音参数或配置错误："+failure.getMessage():"在线语音当前句在退避窗口内重试 "+retries+" 次后仍失败："+failure.getMessage(),failure);
+        if(failure!=null){
+            if(retries>0&&shouldRetry(failure))throw new BuildControl.PauseRequestedException(temporaryPauseMessage(retries+1,failure));
+            throw new IllegalStateException("在线语音参数或配置错误："+failure.getMessage(),failure);
+        }
         new FfmpegAudioEncoder(null, root).decodeToWave(mp3, wav); Files.deleteIfExists(mp3);
         return new SynthesisResult(wav, WaveSupport.durationMs(wav));
     }
@@ -69,6 +73,7 @@ public final class EdgeTtsProvider implements TtsProvider {
         return Stream.of("noaudioreceived","no audio was received","connection","connectorerror","connectionreseterror","timeout","timed out","serverdisconnected","clientoserror","wssserverhandshakeerror","websocket","incompleteread","eoferror","temporarily","429","502","503","504","长时间没有响应").anyMatch(value->diagnosis.indexOf(value)>=0);
     }
     static long retryDelayMillis(int completedAttempts) { return RETRY_DELAYS_MILLIS[completedAttempts-1]; }
+    static String temporaryPauseMessage(int attempts,Throwable failure){return "Edge 在线语音暂不可用：当前句共尝试 "+attempts+" 次后仍未收到音频；已自动保存并暂停，稍后可从断点继续。诊断："+sanitize(failure==null?null:failure.getMessage());}
     static String sanitize(String text) {
         String clean=text==null?"":text.replaceAll("(?s)Exception ignored in: <function _ProactorBasePipeTransport\\.__del__.*?RuntimeError: Event loop is closed"," ").replaceAll("[\\r\\n]+"," ").replaceAll("\\s+"," ").strip();
         int structured=clean.lastIndexOf("{\"errorType\"");if(structured>=0)clean=clean.substring(structured);
