@@ -3,7 +3,7 @@ package com.canace.x3offlinereader.builder.tts;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 final class EdgeTtsProviderTest {
@@ -27,21 +27,30 @@ final class EdgeTtsProviderTest {
         assertFalse(EdgeTtsProvider.shouldRetry(new IllegalStateException("File not found")));
         assertEquals(2_000L,EdgeTtsProvider.retryDelayMillis(1));
         assertEquals(40_000L,EdgeTtsProvider.retryDelayMillis(5));
+        assertEquals(60_000L,EdgeTtsProvider.retryDelayMillis(6));
     }
 
     @Test void exhaustedTransientFailureExplainsAutomaticPause() {
-        String message=EdgeTtsProvider.temporaryPauseMessage(6,new IllegalStateException("NoAudioReceived"));
-        assertTrue(message.contains("共尝试 6 种等价请求"));
+        String message=EdgeTtsProvider.temporaryPauseMessage(25,new IllegalStateException("NoAudioReceived"));
+        assertTrue(message.contains("持续恢复约 20 分钟"));
+        assertTrue(message.contains("共尝试 25 次"));
         assertTrue(message.contains("已自动保存并暂停"));
         assertTrue(message.contains("NoAudioReceived"));
     }
 
-    @Test void retryPayloadsAddNaturalPunctuationAndChangeTheUpstreamKey() {
-        var variants=EdgeTtsProvider.retryTexts("今天天气好");
-        assertEquals(6,variants.size());
-        assertEquals(6,new HashSet<>(variants).size());
-        assertEquals("今天天气好。",variants.get(0));
-        assertTrue(variants.stream().allMatch(value->value.contains("今天天气好")));
-        assertEquals("你好吗？",EdgeTtsProvider.retryTexts("你好吗？").get(0));
+    @Test void spokenCopyAddsOnlyNaturalTerminalPunctuation() {
+        assertEquals("今天天气好。",EdgeTtsProvider.spokenText("今天天气好"));
+        assertEquals("你好吗？",EdgeTtsProvider.spokenText("你好吗？"));
+        assertEquals("标题。",EdgeTtsProvider.spokenText("  标题  "));
+    }
+
+    @Test void transientNoAudioRecoversWithoutPausingTheTask() throws Exception {
+        AtomicInteger calls=new AtomicInteger();AtomicInteger sleeps=new AtomicInteger();
+        int attempts=EdgeTtsProvider.runWithRecovery(()->{
+            if(calls.incrementAndGet()<=6)throw new IllegalStateException("NoAudioReceived");
+        },millis->sleeps.incrementAndGet(),25);
+        assertEquals(7,attempts);
+        assertEquals(7,calls.get());
+        assertEquals(6,sleeps.get());
     }
 }
