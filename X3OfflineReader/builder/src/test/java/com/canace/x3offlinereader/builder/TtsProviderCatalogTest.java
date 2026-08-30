@@ -23,6 +23,13 @@ final class TtsProviderCatalogTest {
         assertEquals(5, TtsProviderCatalog.guiEntries().size());
     }
 
+    @Test void exposesMeasuredOptimizedThroughput(){
+        assertEquals(2,TtsProviderCatalog.entry("windows").optimizedParallelism());
+        assertEquals(8,TtsProviderCatalog.entry("edge").optimizedParallelism());
+        assertEquals("本机长篇实测约 108.3 万字/小时",TtsProviderCatalog.entry("windows").throughputLabel());
+        assertTrue(TtsProviderCatalog.entry("sherpa-aishell3").optimizedCharactersPerHour()>TtsProviderCatalog.entry("sherpa-kokoro").optimizedCharactersPerHour());
+    }
+
     @Test void previewKeysAreStableAndSentenceIsNaturalLength() {
         String first=VoicePreviewLibrary.key("sherpa-kokoro","中文女声 zf_001 · sid=3");
         assertEquals(first,VoicePreviewLibrary.key("sherpa-kokoro","中文女声 zf_001 · sid=3"));

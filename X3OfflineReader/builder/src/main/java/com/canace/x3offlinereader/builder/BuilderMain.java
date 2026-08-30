@@ -52,6 +52,9 @@ public final class BuilderMain {
                 case "--ffmpeg" -> result.ffmpeg = Path.of(require(args, ++i, key));
                 case "--melo-python" -> result.meloPython = Path.of(require(args, ++i, key));
                 case "--melo-workers" -> result.meloWorkers = Integer.parseInt(require(args, ++i, key));
+                case "--edge-workers" -> result.edgeWorkers = Integer.parseInt(require(args, ++i, key));
+                case "--sherpa-workers" -> result.sherpaWorkers = Integer.parseInt(require(args, ++i, key));
+                case "--windows-workers" -> result.windowsWorkers = Integer.parseInt(require(args, ++i, key));
                 case "--cover" -> result.cover = Path.of(require(args, ++i, key));
                 case "--created-at" -> result.createdAt = Instant.parse(require(args, ++i, key));
                 case "--separate" -> result.separate = true;
@@ -68,7 +71,7 @@ public final class BuilderMain {
     private static BuilderOptions copy(BuilderOptions source) {
         BuilderOptions target = new BuilderOptions(); target.inputs.addAll(source.inputs); target.output = source.output; target.title = source.title;
         target.author = source.author; target.language = source.language; target.tts = source.tts; target.voice = source.voice;
-        target.rate = source.rate; target.pauseMs = source.pauseMs;target.maxTrackMinutes=source.maxTrackMinutes; target.ffmpeg = source.ffmpeg; target.meloPython = source.meloPython;target.meloWorkers=source.meloWorkers; target.cover=source.cover;target.createdAt = source.createdAt;target.allowOnlineTts=source.allowOnlineTts; return target;
+        target.rate = source.rate; target.pauseMs = source.pauseMs;target.maxTrackMinutes=source.maxTrackMinutes; target.ffmpeg = source.ffmpeg; target.meloPython = source.meloPython;target.meloWorkers=source.meloWorkers;target.edgeWorkers=source.edgeWorkers;target.sherpaWorkers=source.sherpaWorkers;target.windowsWorkers=source.windowsWorkers; target.cover=source.cover;target.createdAt = source.createdAt;target.allowOnlineTts=source.allowOnlineTts; return target;
     }
 
     private static String require(String[] args, int index, String key) {
@@ -96,7 +99,7 @@ public final class BuilderMain {
                 + "  voices\n"
                 + "  gui\n"
                 + "  build --input <epub|txt> [--input ...] --output <book.opbook> [options]\n"
-                + "Options: --title --author --language --tts melo|sherpa-kokoro|sherpa-aishell3|windows|edge|tone --voice --rate --pause-ms --cover --ffmpeg --melo-python --melo-workers 1|2 --created-at\n"
+                + "Options: --title --author --language --tts melo|sherpa-kokoro|sherpa-aishell3|windows|edge|tone --voice --rate --pause-ms --cover --ffmpeg --melo-python --melo-workers 1|2 --sherpa-workers 1..4 --windows-workers 1..12 --edge-workers 1..12 --created-at\n"
                 + "         --allow-online-tts (required for edge; book text is sent to the online service)\n"
                 + "         --separate (treat --output as a directory and export each input separately)");
     }

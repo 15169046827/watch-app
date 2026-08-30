@@ -16,6 +16,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -33,9 +34,15 @@ public final class EdgeTtsProvider implements TtsProvider {
         int attempts(){return attempts;}
     }
     private final Path root;
-    public EdgeTtsProvider(Path root) { this.root = root.toAbsolutePath().normalize(); }
+    private final int parallelism;
+    public EdgeTtsProvider(Path root) { this(root,1); }
+    public EdgeTtsProvider(Path root,int parallelism) {
+        if(parallelism<1||parallelism>12)throw new IllegalArgumentException("Edge parallelism must be 1..12");
+        this.root=root.toAbsolutePath().normalize();this.parallelism=parallelism;
+    }
     @Override public String id() { return "edge-tts-online"; }
     @Override public boolean isAvailable() { return Files.isRegularFile(python()) && Files.isRegularFile(worker()); }
+    @Override public int parallelism(){return parallelism;}
     @Override public List<String> voices() {
         if (!isAvailable()) return List.of();
         try {
@@ -54,7 +61,7 @@ public final class EdgeTtsProvider implements TtsProvider {
                 Files.deleteIfExists(mp3);
                 run(Map.of("action", "synthesize", "voice", request.getVoiceId(), "rate", request.getRate(), "text", speechText, "output", mp3.toString()), 12 * 60);
                 if(!Files.isRegularFile(mp3)||Files.size(mp3)==0)throw new IllegalStateException("在线语音没有返回音频");
-            },Thread::sleep,MAX_ATTEMPTS);
+            },millis->Thread.sleep(millis+ThreadLocalRandom.current().nextLong(250,1_501)),MAX_ATTEMPTS);
         }catch(RecoveryExhaustedException exhausted){
             throw new BuildControl.PauseRequestedException(temporaryPauseMessage(exhausted.attempts(),(Exception)exhausted.getCause()));
         }catch(InterruptedException interrupted){
@@ -99,8 +106,22 @@ public final class EdgeTtsProvider implements TtsProvider {
         throw new IllegalStateException("unreachable");
     }
     static long retryDelayMillis(int completedAttempts) { return completedAttempts<=RETRY_DELAYS_MILLIS.length?RETRY_DELAYS_MILLIS[completedAttempts-1]:60_000L; }
-    static String spokenText(String text){String source=text.strip();return hasTerminalPunctuation(source)?source:source+"。";}
-    private static boolean hasTerminalPunctuation(String text){if(text.isEmpty())return false;int cp=text.codePointBefore(text.length());return "。！？!?；;".indexOf(cp)>=0;}
+    static String spokenText(String text){
+        String source=text.strip();
+        boolean speakable=source.codePoints().anyMatch(cp->Character.isLetterOrDigit(cp)||Character.isIdeographic(cp)
+                ||Character.getType(cp)==Character.LETTER_NUMBER||Character.getType(cp)==Character.OTHER_NUMBER);
+        if(!speakable)throw new IllegalArgumentException("在线语音片段不含可发音文字或数字");
+        return hasTerminalPunctuation(source)?source:source+"。";
+    }
+    private static boolean hasTerminalPunctuation(String text){
+        int end=text.length();
+        while(end>0){
+            int cp=text.codePointBefore(end),type=Character.getType(cp);
+            if(type==Character.END_PUNCTUATION||type==Character.FINAL_QUOTE_PUNCTUATION){end-=Character.charCount(cp);continue;}
+            return "。！？!?；;".indexOf(cp)>=0;
+        }
+        return false;
+    }
     static String temporaryPauseMessage(int attempts,Throwable failure){return "Edge 在线语音持续恢复约 20 分钟仍不可用：当前句共尝试 "+attempts+" 次后仍未收到音频；已自动保存并暂停，稍后可从断点继续。诊断："+sanitize(failure==null?null:failure.getMessage());}
     static String sanitize(String text) {
         String clean=text==null?"":text.replaceAll("(?s)Exception ignored in: <function _ProactorBasePipeTransport\\.__del__.*?RuntimeError: Event loop is closed"," ").replaceAll("[\\r\\n]+"," ").replaceAll("\\s+"," ").strip();

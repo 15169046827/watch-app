@@ -35,11 +35,11 @@ if(Test-Path -LiteralPath $oldWork -PathType Container){
 if(Test-Path -LiteralPath $outputRoot){Remove-Item -LiteralPath $outputRoot -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $launcher=Join-Path $outputRoot 'cli.properties'
-@('main-jar=builder-0.6.2.jar','main-class=com.canace.x3offlinereader.builder.BuilderMain','arguments=','win-console=true') | Set-Content -LiteralPath $launcher -Encoding ASCII
+@('main-jar=builder-0.6.3.jar','main-class=com.canace.x3offlinereader.builder.BuilderMain','arguments=','win-console=true') | Set-Content -LiteralPath $launcher -Encoding ASCII
 if(-not $JpackagePath -and $env:JAVA_HOME){$JpackagePath=Join-Path $env:JAVA_HOME 'bin\jpackage.exe'}
 if(-not $JpackagePath){$command=Get-Command jpackage.exe -ErrorAction SilentlyContinue;if($command){$JpackagePath=$command.Source}}
 if(-not $JpackagePath -or -not(Test-Path -LiteralPath $JpackagePath -PathType Leaf)){throw 'JDK 17 jpackage.exe not found. Pass -JpackagePath, set JAVA_HOME, or add jpackage to PATH.'}
-& $JpackagePath --type app-image --name X3AudiobookBuilder --app-version '0.6.2' --dest $outputRoot --input (Join-Path $PSScriptRoot 'build\install\builder\lib') --main-jar 'builder-0.6.2.jar' --main-class 'com.canace.x3offlinereader.builder.BuilderMain' --arguments gui --java-options '-Dfile.encoding=UTF-8' --icon $icon --add-launcher "X3BuilderCLI=$launcher"
+& $JpackagePath --type app-image --name X3AudiobookBuilder --app-version '0.6.3' --dest $outputRoot --input (Join-Path $PSScriptRoot 'build\install\builder\lib') --main-jar 'builder-0.6.3.jar' --main-class 'com.canace.x3offlinereader.builder.BuilderMain' --arguments gui --java-options '-Dfile.encoding=UTF-8' --icon $icon --add-launcher "X3BuilderCLI=$launcher"
 if($LASTEXITCODE -ne 0){throw 'jpackage failed'}
 $app=Join-Path $outputRoot 'X3AudiobookBuilder'
 Copy-Item -LiteralPath $tauriExecutable -Destination (Join-Path $app 'X3AudiobookBuilder.exe') -Force
@@ -48,6 +48,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $app 'builder') | Out-Null
 Copy-Tree (Join-Path $project 'builder\melo') (Join-Path $app 'builder\melo')
 Copy-Tree (Join-Path $project 'builder\edge') (Join-Path $app 'builder\edge')
 Copy-Tree (Join-Path $project 'builder\sherpa') (Join-Path $app 'builder\sherpa')
+Copy-Tree (Join-Path $project 'builder\windows-speech') (Join-Path $app 'builder\windows-speech')
 Copy-Tree (Join-Path $project 'builder\assets') (Join-Path $app 'builder\assets')
 Copy-Tree (Join-Path $project 'builder\voice-previews') (Join-Path $app 'builder\voice-previews')
 Copy-Item -LiteralPath (Join-Path $project 'builder\THIRD_PARTY_TTS.md') -Destination (Join-Path $app 'builder\THIRD_PARTY_TTS.md')

@@ -1,6 +1,6 @@
 # Watch Offline Reader
 
-包名 `com.canace.x3offlinereader`，版本 0.5.0（versionCode 6）。技术栈为 Java、Android Views、Media3 ExoPlayer/MediaSessionService 和 SQLite；minSdk 26、targetSdk 30、compileSdk 35，不依赖 Wear OS、Compose 或 Native 库。
+包名 `com.canace.x3offlinereader`，版本 0.5.1（versionCode 7）。技术栈为 Java、Android Views、Media3 ExoPlayer/MediaSessionService 和 SQLite；minSdk 26、targetSdk 30、compileSdk 35，不依赖 Wear OS、Compose 或 Native 库。
 
 ## 已实现
 
@@ -9,13 +9,14 @@
 - 播放前只解出前一、当前和下一逻辑章节的 M4A。可寻址 SAF 文件优先随机读取 ZIP 条目，不可寻址 Provider 安全回退到顺序流；缓存音频再次按包内 SHA-256 校验并保留 64MiB 存储余量。
 - 源文件是书库唯一权威副本。文件被移动、删除或授权失效后，点击书籍会提示源文件不存在；长按书籍可选择仅移出书库或连同源文件删除。
 - 小说书库只展示卷与逻辑章节，Track 分片对用户隐藏；同章多 Track 自动连续播放，章内累计续听、±15秒、收藏、统一正文逐句高亮及周期/暂停/切轨进度持久化均已实现。
-- 独立音乐库导入 MP3/M4A/LRC；独立 SQLite、队列、进度、收藏、设置、倍速和 LRC 同步。长按音乐可仅移出列表或连同音频文件删除；仅移出的路径不会被下次扫描自动加回。
+- 独立音乐库导入 MP3/M4A/FLAC/LRC；独立 SQLite、队列、进度、收藏、设置、倍速和 LRC 同步。歌词继续按同目录、同基础文件名匹配。长按音乐可仅移出列表或连同音频文件删除；仅移出的路径不会被下次扫描自动加回。
 - 小说和音乐各自保存倍速；选择框提供 0.8×、1×、1.25×、1.5×、2×、2.5×、3×、5×。
 - 小说固定按卷与逻辑章节顺序播放；音乐独立提供“播完暂停、单曲循环、列表循环、列表随机”，随机队列与历史栈可恢复。
 - App 首页只提供横向等分的同级“小说 / 音乐”入口；小说书库、音乐库和章节列表使用圆屏中部 360px 以上宽度的紧凑双行条目，路径/状态压缩为单行，底部按钮不换行。
 - 小说与音乐播放页的八个操作统一为等分 4×2 网格；倍速、播放模式、音量和输出列表使用固定不透明标题栏，滚动选项不会与页面标题重叠。
 - 小说与音乐播放器共享系统媒体音量和输出控制：音量按设备系统步进从 0% 调到 100%，输出选择使用 Android 公共 MediaRouter，按钮只显示“扬声器 / 蓝牙”，详细设备名只在弹窗中显示；不做超过系统上限的软件增益。
 - 两种模式只共享后台 PlaybackService、MediaSession 和 Audio Focus。Home/桌面使播放页留在后台时继续播放，系统媒体入口会回到该播放页；右滑/返回真正关闭播放页时立即停止并清空队列。
+- 小说播放页销毁时先封闭生命周期回调，再终止章节预取线程池；Media3 晚到的切轨/队列回调和线程池关闭竞态会被安全忽略，不再在返回章节列表时抛出 RejectedExecutionException。
 - SQLite 内部用 bookId 命名空间隔离各书的 volume/chapter/track ID，避免导入多本书时局部 ID 冲突。
 
 ## 导入安全上限
@@ -24,11 +25,13 @@
 - 大于 1MiB 的条目压缩比不得超过 500。
 - JSON 文件不超过 16MiB；封面不超过 8MiB。
 - 只接受 manifest 允许的 `manifest.json`、`cover.webp`、`content/*.json`、`timeline/*.json`、`audio/*.m4a` 和 `checksums.json`。
-- 音乐 SAF 只接受 MP3/M4A/LRC；音频单文件上限 1GiB，LRC 上限 8MiB，避免歌词一次读取导致内存风险。
+- 音乐 SAF 只接受 MP3/M4A/FLAC/LRC；音频单文件上限 1GiB，LRC 上限 8MiB，避免歌词一次读取导致内存风险。
 
 ## OPPO Watch X3 实机状态
 
-已通过签名更新安装、Golden 导入、AAC/M4A/MP3 解码、Timeline/LRC、实际 5× 播放、三种播放模式状态转换、圆屏边界、固定弹窗标题、右滑、自动 Track、熄屏后台、MediaSession/AVRCP、系统媒体入口回到原播放页、Audio Focus 暂停/恢复和进程重启持久化。用户已确认耳机实际可听到声音，物理播放、暂停和下一首可触发，且声音输出可在 OPPO Watch X3 扬声器与蓝牙设备之间成功切换。
+已通过签名更新安装、Golden 导入、AAC/M4A/MP3/FLAC 解码、Timeline/LRC、实际 5× 播放、三种播放模式状态转换、圆屏边界、固定弹窗标题、右滑、自动 Track、熄屏后台、MediaSession/AVRCP、系统媒体入口回到原播放页、Audio Focus 暂停/恢复和进程重启持久化。用户已确认耳机实际可听到声音，物理播放、暂停和下一首可触发，且声音输出可在 OPPO Watch X3 扬声器与蓝牙设备之间成功切换。
+
+播放页返回章节列表的生命周期专项回归已在 OPPO Watch X3 通过：等待播放队列就绪后关闭播放页，继续等待延迟回调，章节列表保持存活；测试后日志中没有线程池任务拒绝或应用崩溃。覆盖安装保留原首次安装时间和用户数据，公开测试书在用例结束后清理。
 
 原下一阶段体验清单已在 0.3.0 完成，包括最近章节定位、每章内部进度与一键续听、章节级上一项/下一项、音乐随机、Music 初始目录、多文件导入反馈、统一段落高亮、首段标题和多 Track 无感播放。详见 [`../specification/NEXT_PHASE_BACKLOG.md`](../specification/NEXT_PHASE_BACKLOG.md)。
 

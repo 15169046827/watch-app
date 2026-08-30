@@ -33,8 +33,15 @@ public final class SentenceSegmenter {
                 int cp = text.codePointAt(charIndex);
                 boolean boundary = "。！？!?；;\n".indexOf(cp) >= 0;
                 if (boundary) {
-                    sequence = append(result, chapter.chapterId, block.blockId, text, start, offset + 1, sequence);
-                    start = offset + 1;
+                    int end = offset + 1;
+                    while (end < codePointCount) {
+                        int trailingIndex = text.offsetByCodePoints(0, end);
+                        if (!isClosingPunctuation(text.codePointAt(trailingIndex))) break;
+                        end++;
+                    }
+                    sequence = append(result, chapter.chapterId, block.blockId, text, start, end, sequence);
+                    start = end;
+                    offset = end - 1;
                 }
             }
             if (start < codePointCount) append(result, chapter.chapterId, block.blockId, text, start, codePointCount, sequence++);
@@ -60,10 +67,23 @@ public final class SentenceSegmenter {
             int startUtf16 = text.offsetByCodePoints(0, trimStart);
             int endUtf16 = text.offsetByCodePoints(0, trimEnd);
             String slice = text.substring(startUtf16, endUtf16);
+            if (!hasSpeakableContent(slice)) return sequence;
             output.add(new Segment(chapterId + "-s" + String.format("%04d", sequence), blockId,
                     trimStart, trimEnd, slice));
             return sequence + 1;
         }
         return sequence;
+    }
+
+    private static boolean isClosingPunctuation(int cp) {
+        int type = Character.getType(cp);
+        return type == Character.END_PUNCTUATION || type == Character.FINAL_QUOTE_PUNCTUATION;
+    }
+
+    private static boolean hasSpeakableContent(String text) {
+        return text.codePoints().anyMatch(cp -> Character.isLetterOrDigit(cp)
+                || Character.isIdeographic(cp)
+                || Character.getType(cp) == Character.LETTER_NUMBER
+                || Character.getType(cp) == Character.OTHER_NUMBER);
     }
 }

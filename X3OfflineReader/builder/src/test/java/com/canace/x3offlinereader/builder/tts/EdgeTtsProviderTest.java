@@ -3,10 +3,17 @@ package com.canace.x3offlinereader.builder.tts;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 final class EdgeTtsProviderTest {
+    @Test void exposesConfiguredBoundedParallelism() {
+        assertEquals(1,new EdgeTtsProvider(java.nio.file.Path.of(".")).parallelism());
+        assertEquals(12,new EdgeTtsProvider(java.nio.file.Path.of("."),12).parallelism());
+        assertThrows(IllegalArgumentException.class,()->new EdgeTtsProvider(java.nio.file.Path.of("."),13));
+    }
+
     @Test void reportsRootFailureInsteadOfWindowsEventLoopCleanupNoise() {
         String error="edge_tts.exceptions.NoAudioReceived: No audio was received.\nException ignored in: <function _ProactorBasePipeTransport.__del__ at 0x1>\nTraceback\nRuntimeError: Event loop is closed";
         String clean=EdgeTtsProvider.sanitize(error);
@@ -42,6 +49,9 @@ final class EdgeTtsProviderTest {
         assertEquals("今天天气好。",EdgeTtsProvider.spokenText("今天天气好"));
         assertEquals("你好吗？",EdgeTtsProvider.spokenText("你好吗？"));
         assertEquals("标题。",EdgeTtsProvider.spokenText("  标题  "));
+        assertEquals("“今天天气好。”",EdgeTtsProvider.spokenText("“今天天气好。”"));
+        assertEquals("（你好吗？）",EdgeTtsProvider.spokenText("（你好吗？）"));
+        assertThrows(IllegalArgumentException.class,()->EdgeTtsProvider.spokenText("”……"));
     }
 
     @Test void transientNoAudioRecoversWithoutPausingTheTask() throws Exception {

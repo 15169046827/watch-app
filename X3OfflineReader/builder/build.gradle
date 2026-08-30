@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'com.canace.x3offlinereader'
-version = '0.6.2'
+version = '0.6.3'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17

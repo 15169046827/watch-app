@@ -66,7 +66,7 @@ final class BuildCheckpointStore {
         for(int i=0;i<options.inputs.size();i++)values.setProperty("input."+i,options.inputs.get(i).toAbsolutePath().normalize().toString());
         put(values,"output",options.output);put(values,"cover",options.cover);put(values,"meloPython",options.meloPython);put(values,"ffmpeg",options.ffmpeg);
         put(values,"title",options.title);put(values,"author",options.author);put(values,"language",options.language);put(values,"tts",options.tts);put(values,"voice",options.voice);
-        values.setProperty("meloWorkers",Integer.toString(options.meloWorkers));values.setProperty("rate",Double.toString(options.rate));values.setProperty("pauseMs",Integer.toString(options.pauseMs));values.setProperty("maxTrackMinutes",Integer.toString(options.maxTrackMinutes));
+        values.setProperty("meloWorkers",Integer.toString(options.meloWorkers));values.setProperty("edgeWorkers",Integer.toString(options.edgeWorkers));values.setProperty("sherpaWorkers",Integer.toString(options.sherpaWorkers));values.setProperty("windowsWorkers",Integer.toString(options.windowsWorkers));values.setProperty("rate",Double.toString(options.rate));values.setProperty("pauseMs",Integer.toString(options.pauseMs));values.setProperty("maxTrackMinutes",Integer.toString(options.maxTrackMinutes));
         values.setProperty("createdAt",options.createdAt.toString());values.setProperty("separate",Boolean.toString(options.separate));values.setProperty("outputToSource",Boolean.toString(options.outputToSource));values.setProperty("allowOnlineTts",Boolean.toString(options.allowOnlineTts));return values;
     }
 
@@ -74,7 +74,7 @@ final class BuildCheckpointStore {
         BuilderOptions options=new BuilderOptions();int count=integer(values,"input.count",0);for(int i=0;i<count;i++){String value=values.getProperty("input."+i,"");if(!value.isBlank())options.inputs.add(Path.of(value));}
         options.output=path(values,"output");options.cover=path(values,"cover");options.meloPython=path(values,"meloPython");options.ffmpeg=path(values,"ffmpeg");
         options.title=blankToNull(values.getProperty("title"));options.author=values.getProperty("author","");options.language=values.getProperty("language","zh-CN");options.tts=values.getProperty("tts","melo");options.voice=values.getProperty("voice","ZH");
-        options.meloWorkers=integer(values,"meloWorkers",2);options.rate=decimal(values,"rate",1.0);options.pauseMs=integer(values,"pauseMs",250);options.maxTrackMinutes=integer(values,"maxTrackMinutes",20);
+        options.meloWorkers=integer(values,"meloWorkers",2);options.edgeWorkers=integer(values,"edgeWorkers",1);options.sherpaWorkers=integer(values,"sherpaWorkers",1);options.windowsWorkers=integer(values,"windowsWorkers",1);options.rate=decimal(values,"rate",1.0);options.pauseMs=integer(values,"pauseMs",250);options.maxTrackMinutes=integer(values,"maxTrackMinutes",20);
         try{options.createdAt=Instant.parse(values.getProperty("createdAt"));}catch(Exception ignored){}
         options.separate=Boolean.parseBoolean(values.getProperty("separate","false"));options.outputToSource=Boolean.parseBoolean(values.getProperty("outputToSource","false"));options.allowOnlineTts=Boolean.parseBoolean(values.getProperty("allowOnlineTts","false"));return options;
     }

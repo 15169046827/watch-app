@@ -15,6 +15,9 @@ public final class BuilderOptions {
     public String voice = "ZH";
     public Path meloPython;
     public int meloWorkers = 2;
+    public int edgeWorkers = 8;
+    public int sherpaWorkers = 4;
+    public int windowsWorkers = 2;
     public double rate = 1.0;
     public int pauseMs = 250;
     public int maxTrackMinutes=20;

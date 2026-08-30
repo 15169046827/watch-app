@@ -34,9 +34,17 @@ final class BuilderGuiTest {
         long full=AudiobookBuilder.estimateSeconds("melo",7500,0,10,1.0);long cached=AudiobookBuilder.estimateSeconds("melo",0,1000,10,1.0);
         assertTrue(full>cached);assertTrue(full>900);
     }
-    @Test void sherpaEstimateUsesMeasuredRealTimeThroughputRatherThanModelSpeedFactor(){
-        assertTrue(AudiobookBuilder.estimateSeconds("sherpa-aishell3",7500,0,10,1.0)>2400);
-        assertTrue(AudiobookBuilder.estimateSeconds("sherpa-kokoro",7500,0,10,1.0)>1800);
+    @Test void sherpaEstimateUsesMeasuredEndToEndThroughput(){
+        long aishellSerial=AudiobookBuilder.estimateSeconds("sherpa-aishell3",500_000,0,100,1.0,1);
+        long aishellOptimized=AudiobookBuilder.estimateSeconds("sherpa-aishell3",500_000,0,100,1.0,4);
+        long kokoroOptimized=AudiobookBuilder.estimateSeconds("sherpa-kokoro",500_000,0,100,1.0,4);
+        assertTrue(aishellOptimized<aishellSerial/5);
+        assertTrue(kokoroOptimized>aishellOptimized*4);
+    }
+    @Test void edgeEstimateAccountsForParallelRequests(){
+        long serial=AudiobookBuilder.estimateSeconds("edge",500_000,0,100,1.0,1);
+        long parallel=AudiobookBuilder.estimateSeconds("edge",500_000,0,100,1.0,8);
+        assertTrue(parallel<serial/5);
     }
     @Test void synthesisProgressStartsAtTenForWorkRemainingThisRun(){
         assertEquals(10,AudiobookBuilder.synthesisPercent(0,10_000));

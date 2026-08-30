@@ -13,8 +13,8 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
 
-type Voice = { id: string; preview: boolean }
-type Provider = { id: string; label: string; online: boolean; defaultVoice: string; voices: Voice[] }
+type Voice = { id: string; preview: boolean; previewType: 'cached' | 'live' | 'none' }
+type Provider = { id: string; label: string; online: boolean; defaultVoice: string; throughputLabel: string; benchmarkCharactersPerHour: number; optimizedParallelism: number; voices: Voice[] }
 type CacheStats = { sentenceFiles: number; sentenceBytes: number; unfinishedDirectories: number; unfinishedBytes: number }
 type Checkpoint = { id: string; state: string; percent: number; message: string; elapsedSeconds?: number; provider: string; online: boolean; output: string; inputs: string[] }
 type BridgeState = { version: string; providers: Provider[]; cache: CacheStats; checkpoint?: Checkpoint }
@@ -47,7 +47,7 @@ let lastEtaProgress = -1
 const form = reactive({
   inputs: [] as string[], output: '', outputToSource: true, separate: false,
   title: '', author: '', language: 'zh-CN', tts: 'melo', voice: 'ZH', cover: '',
-  meloWorkers: 2, pauseMs: 250, maxTrackMinutes: 20, rate: 1, allowOnlineTts: false
+  meloWorkers: 2, edgeWorkers: 8, sherpaWorkers: 4, windowsWorkers: 2, pauseMs: 250, maxTrackMinutes: 20, rate: 1, allowOnlineTts: false
 })
 const lastInputDirectory = ref('')
 const lastCoverDirectory = ref('')
@@ -59,8 +59,9 @@ const nav = [
   { id: 'storage', icon: 'pi-database', label: '存储管理' }
 ] as const
 const selectedProvider = computed(() => providers.value.find(item => item.id === form.tts))
-const voiceOptions = computed(() => selectedProvider.value?.voices.map(item => ({ label: item.id, value: item.id, preview: item.preview })) ?? [])
-const providerOptions = computed(() => providers.value.map(item => ({ label: item.label, value: item.id, online: item.online })))
+const selectedVoice = computed(() => selectedProvider.value?.voices.find(item => item.id === form.voice))
+const voiceOptions = computed(() => selectedProvider.value?.voices.map(item => ({ label: item.id, value: item.id, preview: item.preview, previewType: item.previewType })) ?? [])
+const providerOptions = computed(() => providers.value.map(item => ({ label: `${item.label} · ${item.throughputLabel}`, value: item.id, online: item.online })))
 const canStart = computed(() => !busy.value && form.inputs.length > 0 && (form.outputToSource || !!form.output))
 const remaining = computed(() => Math.max(0, Math.round(projectedTotal.value - elapsedSeconds.value)))
 const progressLabel = computed(() => busy.value ? `${progress.value}%` : progress.value === 100 ? '已完成' : '等待开始')
@@ -73,6 +74,7 @@ watch(() => form.tts, id => {
 })
 watch(() => form.voice, () => stopPreviewAudio())
 watch(() => ({ ...form, inputs: undefined }), savePrefs, { deep: true })
+watch(() => [...form.inputs], applyRecognizedMetadata)
 
 onMounted(async () => {
   loadPrefs()
@@ -120,6 +122,7 @@ function moveInput(index: number, delta: number) {
   if (next < 0 || next >= form.inputs.length) return
   ;[form.inputs[index], form.inputs[next]] = [form.inputs[next], form.inputs[index]]
 }
+function removeInput(index: number) { form.inputs.splice(index, 1) }
 
 async function startBuild(resume = false) {
   if (busy.value) return
@@ -152,8 +155,8 @@ async function previewVoice(provider = form.tts, voice = form.voice) {
   stopPreviewAudio()
   const requestId = ++previewRequestId
   const item = providers.value.find(value => value.id === provider)?.voices.find(value => value.id === voice)
-  if (!item?.preview) { status.value = '该音色暂时没有预生成试听'; return }
-  status.value = `正在播放 ${voice} 的预生成试听…`
+  if (!item?.preview) { status.value = '该音色暂时没有可用试听'; return }
+  status.value = item.previewType === 'live' ? `正在生成 ${voice} 的本机实时试听…` : `正在播放 ${voice} 的预生成试听…`
   try {
     const result = await invoke<{ mimeType: string; audioBase64: string }>('preview_audio', { provider, voice })
     if (requestId !== previewRequestId) return
@@ -202,10 +205,12 @@ async function handleEvent(event: BuilderEvent) {
     if (logView.value) logView.value.scrollTop = logView.value.scrollHeight
   }
   if (event.type === 'complete') {
+    rememberCompletedMetadata()
     completedRunSeconds.value = event.runElapsedSeconds ?? elapsedSeconds.value
     completedTaskSeconds.value = event.taskElapsedSeconds ?? completedRunSeconds.value
     busy.value = false; pausing.value = false; progress.value = 100; outputs.value = event.outputs ?? []
     startedAt.value = 0; elapsedSeconds.value = 0; initialEstimate.value = 0; projectedTotal.value = 0; lastEtaProgress = -1
+    form.inputs.splice(0); form.title = ''; form.author = ''; form.cover = ''
     status.value = '转换完成，可以把 .opbook 传入手表'
     await refreshState()
   } else if (event.type === 'paused') {
@@ -235,12 +240,44 @@ function loadPrefs() {
     lastInputDirectory.value = saved.lastInputDirectory ?? ''
     lastCoverDirectory.value = saved.lastCoverDirectory ?? ''
     delete saved.lastInputDirectory; delete saved.lastCoverDirectory
-    Object.assign(form, saved, { inputs: [] })
+    delete saved.title; delete saved.author; delete saved.cover
+    delete saved.meloWorkers; delete saved.sherpaWorkers; delete saved.windowsWorkers
+    Object.assign(form, saved, { inputs: [], meloWorkers: 2, sherpaWorkers: 4, windowsWorkers: 2 })
   } catch { /* ignore damaged preferences */ }
 }
 function savePrefs() {
-  const { inputs: _inputs, ...preferences } = form
+  const { inputs: _inputs, title: _title, author: _author, cover: _cover, meloWorkers: _meloWorkers, sherpaWorkers: _sherpaWorkers, windowsWorkers: _windowsWorkers, ...preferences } = form
   localStorage.setItem('tingdu-builder-preferences', JSON.stringify({ ...preferences, lastInputDirectory: lastInputDirectory.value, lastCoverDirectory: lastCoverDirectory.value }))
+}
+type CompletedMetadata = { title: string; author: string }
+const metadataStorageKey = 'tingdu-builder-completed-metadata-v1'
+let activeInputIdentity = ''
+function inputIdentity(inputs = form.inputs) {
+  return JSON.stringify(inputs.map(path => path.replaceAll('/', '\\').toLocaleLowerCase()).sort())
+}
+function completedMetadata(): Record<string, CompletedMetadata> {
+  try { return JSON.parse(localStorage.getItem(metadataStorageKey) ?? '{}') }
+  catch { return {} }
+}
+function applyRecognizedMetadata() {
+  const identity = inputIdentity()
+  if (identity === activeInputIdentity) return
+  activeInputIdentity = identity
+  const recognized = identity === '[]' ? undefined : completedMetadata()[identity]
+  form.title = recognized?.title ?? ''
+  form.author = recognized?.author ?? ''
+  form.cover = ''
+}
+function rememberCompletedMetadata() {
+  try {
+    const identity = inputIdentity()
+    if (identity === '[]') return
+    const history = completedMetadata()
+    delete history[identity]
+    history[identity] = { title: form.title.trim(), author: form.author.trim() }
+    const recent = Object.fromEntries(Object.entries(history).slice(-50))
+    localStorage.setItem(metadataStorageKey, JSON.stringify(recent))
+  } catch { /* metadata history is an optional convenience */ }
 }
 function basename(path: string) { return path.split(/[\\/]/).pop() ?? path }
 function directory(path: string) { const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')); return index > 0 ? path.slice(0, index) : '' }
@@ -273,7 +310,6 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
           <p class="eyebrow">X3 OFFLINE READER</p>
           <h1>{{ nav.find(item => item.id === page)?.label }}</h1>
         </div>
-        <Tag :value="selectedProvider?.online ? '在线音色' : '离线处理'" :severity="selectedProvider?.online ? 'warn' : 'success'" rounded />
       </header>
 
       <Message v-if="status && (status.includes('失败') || status.includes('无法'))" severity="error" :closable="false">{{ status }}</Message>
@@ -298,7 +334,7 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
                 <div class="row-actions">
                   <Button icon="pi pi-arrow-up" text rounded :disabled="busy || index === 0" @click="moveInput(index, -1)" />
                   <Button icon="pi pi-arrow-down" text rounded :disabled="busy || index === form.inputs.length - 1" @click="moveInput(index, 1)" />
-                  <Button icon="pi pi-times" text rounded severity="danger" :disabled="busy" @click="form.inputs.splice(index, 1)" />
+                  <Button icon="pi pi-times" text rounded severity="danger" :disabled="busy" @click="removeInput(index)" />
                 </div>
               </div>
             </div>
@@ -310,8 +346,8 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
           <template #title><span class="section-title"><b>2</b> 书籍信息</span></template>
           <template #content>
             <div class="form-stack">
-              <label><span>书名 <small>留空时读取文件名</small></span><InputText v-model="form.title" placeholder="自动识别" :disabled="busy" /></label>
-              <label><span>作者</span><InputText v-model="form.author" placeholder="未署名" :disabled="busy" /></label>
+              <label><span>书名 <small>曾转换来源可自动回填</small></span><InputText v-model="form.title" placeholder="请填写书名" :disabled="busy" /></label>
+              <label><span>作者</span><InputText v-model="form.author" placeholder="请填写作者" :disabled="busy" /></label>
               <label><span>封面 <small>可选</small></span><div class="input-action"><InputText v-model="form.cover" readonly placeholder="自动生成暖色封面" /><Button icon="pi pi-image" outlined :disabled="busy" @click="chooseCover" /></div></label>
               <label class="switch-row"><div><span>分别导出</span><small>每本书单独生成一个文件</small></div><ToggleSwitch v-model="form.separate" :disabled="busy" /></label>
             </div>
@@ -323,11 +359,12 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
           <template #content>
             <div class="form-stack">
               <label><span>语音引擎</span><Select v-model="form.tts" :options="providerOptions" optionLabel="label" optionValue="value" :disabled="busy" fluid><template #option="slot"><span>{{ slot.option.label }}</span><Tag :value="slot.option.online ? '在线' : '离线'" :severity="slot.option.online ? 'warn' : 'success'" /></template></Select></label>
-              <label><span>音色</span><div class="input-action"><Select v-model="form.voice" :options="voiceOptions" optionLabel="label" optionValue="value" :disabled="busy" fluid /><Button icon="pi pi-play" aria-label="试听" :disabled="busy" @click="previewVoice()" /></div></label>
+              <label><span>音色</span><div class="input-action"><Select v-model="form.voice" :options="voiceOptions" optionLabel="label" optionValue="value" :disabled="busy" fluid /><Button icon="pi pi-play" aria-label="试听" :disabled="busy || !selectedVoice?.preview" @click="previewVoice()" /></div></label>
               <div class="two-fields">
                 <label><span>朗读速度</span><InputNumber v-model="form.rate" :min="0.5" :max="2" :step="0.05" :minFractionDigits="2" :maxFractionDigits="2" :disabled="busy" /></label>
                 <label><span>句间停顿</span><InputNumber v-model="form.pauseMs" suffix=" ms" :min="0" :max="3000" :step="50" :disabled="busy" /></label>
               </div>
+              <label v-if="form.tts === 'edge'"><span>在线并发 <small>1–12；默认 8，网络稳定时可提高</small></span><InputNumber v-model="form.edgeWorkers" :min="1" :max="12" :step="1" :disabled="busy" /></label>
               <p class="hint"><i class="pi pi-info-circle" /> Track 时长由工坊自动管理，不需要手动设置。</p>
             </div>
           </template>
@@ -358,14 +395,14 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
       </section>
 
       <section v-else-if="page === 'voices'" class="voice-page">
-        <div class="page-intro"><div><p class="eyebrow">VOICE GALLERY</p><h2>先听，再决定陪你读书的声音</h2><p>试听均为预生成的自然语速短句，点击后立即播放，不会临时加载模型。</p></div></div>
+        <div class="page-intro"><div><p class="eyebrow">VOICE GALLERY</p><h2>先听，再决定陪你读书的声音</h2><p>离线模型使用预生成短句；Windows 系统语音会在本机实时生成试听。</p></div></div>
         <div class="voice-grid">
           <Card v-for="provider in providers" :key="provider.id" class="voice-provider">
             <template #title><div class="provider-title"><span>{{ provider.label }}</span><Tag :value="provider.online ? '在线' : '离线'" :severity="provider.online ? 'warn' : 'success'" /></div></template>
             <template #content>
               <div class="voice-list">
                 <button v-for="voice in provider.voices" :key="voice.id" class="voice-item" :disabled="!voice.preview" @click="previewVoice(provider.id, voice.id)">
-                  <span class="play-circle"><i class="pi" :class="voice.preview ? 'pi-play' : 'pi-lock'" /></span><span><strong>{{ voice.id }}</strong><small>{{ voice.preview ? '自然语速预生成试听' : '试听尚未准备' }}</small></span>
+                  <span class="play-circle"><i class="pi" :class="voice.preview ? 'pi-play' : 'pi-lock'" /></span><span><strong>{{ voice.id }}</strong><small>{{ voice.previewType === 'live' ? '本机实时生成试听' : voice.previewType === 'cached' ? '自然语速预生成试听' : '试听尚未准备' }}</small></span>
                 </button>
               </div>
             </template>

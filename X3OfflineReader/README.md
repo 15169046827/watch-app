@@ -9,7 +9,7 @@
 - `specification/`：`.opbook` 1.0 开放格式、Draft 2020-12 JSON Schema 和安全/语义验证器。
 - `samples/`：项目自写公开输入、Schema 正反例和本机生成但不纳入源码的 Golden 包。
 
-小说与音乐在 UI、SQLite、队列、进度、收藏、设置和存储上隔离，只共享 `PlaybackService`、MediaSession、Audio Focus 与系统媒体控制。Watch 0.5.0 不再复制或完整解压 `.opbook`：通过 SAF 持久授权原地建立元数据索引；对可寻址文件直接解析 ZIP/ZIP64 中央目录，只读取元数据和封面，播放前才随机提取当前与相邻章节的 M4A、验证媒体头及 SHA-256，不把 ZIP 直接交给系统解码器。
+小说与音乐在 UI、SQLite、队列、进度、收藏、设置和存储上隔离，只共享 `PlaybackService`、MediaSession、Audio Focus 与系统媒体控制。Watch 0.5.1 的独立音乐库支持 MP3、M4A、FLAC 与同名 LRC；小说侧继续沿用 0.5.0 的 SAF 原地索引，不复制或完整解压 `.opbook`：对可寻址文件直接解析 ZIP/ZIP64 中央目录，只读取元数据和封面，播放前才随机提取当前与相邻章节的 M4A、验证媒体头及 SHA-256，不把 ZIP 直接交给系统解码器。
 
 ## 构建与验证
 
@@ -44,11 +44,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\create-start-m
 
 听读 0.5.0 将“导入”改为索引式添加：用户可从任意目录多选 `.opbook`，App 持久保存文件授权并原地完成路径、大小、压缩比、格式、资源关系、元数据 SHA-256 与媒体头校验；音频内容 SHA-256 延迟到首次播放提取时核对。页面切换不会丢失任务状态或解锁重复提交。书籍按 `bookId` 去重，源文件缺失时给出明确提示；书籍和音乐均支持长按管理，书籍可选择仅移出书库或连同源文件删除。播放只缓存前一/当前/下一章节，优先对可寻址 SAF 文件随机读取 ZIP 条目，回退到流式读取。详见 [`specification/WATCH_INDEXED_LIBRARY.md`](specification/WATCH_INDEXED_LIBRARY.md)。
 
-听读工坊 0.6.2 延续 Vue 3.5 + PrimeVue 4.5 + Tauri 2.11 界面：转换完成后将运行中的三项预计时间替换为“任务总时长 / 本次执行总时长”，断点累计字段向后兼容；日志保留当前会话全部记录并在固定区域内滚动；多音色模型卡固定高度、各自滚动，不再拉长整个试听页面。流水线进度改按语音字符与已编码章节共同计算，恢复时按真实缓存重算，不再在第一章等待阶段跳到 79%。Edge 的 `NoAudioReceived` 已确认是 Microsoft Read Aloud WebSocket 正常结束却未下发任何音频的上游空响应，不是中文、JSON、UTF-8、SSML 或所选音色格式错误；重试不再改写正文，而是在同一请求格式上自动恢复约 20 分钟，用户保存/暂停时可立即中断，持续失败才保留断点并暂停。Java 继续作为唯一转换核心，`.opbook`、缓存、正式路径和开始菜单入口保持兼容。详见 [`specification/BUILDER_UI_VUE_TAURI.md`](specification/BUILDER_UI_VUE_TAURI.md)。
+听读工坊 0.6.3 已完成五种语音引擎的并行优化与公开长样本端到端复测。模型选择框会显示本机长篇参考效率：Windows 系统语音 2 进程约 108.3 万字/小时、Edge 8 并发约 83.3 万、AISHELL-3 4 进程约 46.5 万、Kokoro 4 进程约 8.3 万、Melo 2 进程约 7.4 万；效率包含解析、模型启动、合成、编码与打包。Windows 每句重启 PowerShell 的瓶颈已由长驻 worker 池消除，Kokoro/AISHELL-3 使用受控模型进程池，ETA 同步改用实测曲线。结果会随硬件、文本、音色、网络和在线服务状态变化。详见 [`specification/TTS_PROVIDERS.md`](specification/TTS_PROVIDERS.md)。
+
+听读工坊 0.6.2 延续 Vue 3.5 + PrimeVue 4.5 + Tauri 2.11 界面：转换完成后将运行中的三项预计时间替换为“任务总时长 / 本次执行总时长”，日志完整滚动，多音色卡固定高度。Edge 故障的真实 RCA 是旧切句器在句号后把右引号拆成纯标点独立句，导致 Microsoft 服务对确定性不可发音请求连续返回 `NoAudioReceived`；单纯延长到 25 次重试无法修复。现在闭合引号/括号会归入前句，纯标点片段被过滤，Provider 联网前再次校验文字/数字并正确识别闭合标点后的真正句末；只有有效文本的上游空响应才进入恢复窗口。公开引号文本已由源码和正式 CLI 真实在线转换并通过全部 `.opbook` 校验。Java 继续作为唯一转换核心，缓存、断点、正式路径和开始菜单入口保持兼容。
 0.5.0 延续已通过 OPPO Watch X3 验收的阅读、续听、逐句高亮、逻辑章节和音乐功能。Watch 图标保持已验收的 SPEC v2.1：全画布 adaptive background 与 0.72 居中 foreground。Windows“听读工坊”按 SPEC v2.2 使用透明 512×512 外画布、居中的 420×420（82.03%）`#D8A142` 圆角底板与原有窗口/书/波形前景；ICO 包含 16/24/32/48/64/128/256 七个原生尺寸，四角透明、中心不透明，避免 Windows 将完整色块显示成方形图标。
 
 正式 Windows app-image 与“听读工坊”开始菜单快捷方式已按 v2.2 安全刷新；句子语音缓存保留，Watch 工程、安装与数据未改动。Windows Shell 验收确认透明圆角、视觉尺度与同系列应用协调。
 
-听读工坊 0.6.2 修复了 AISHELL-3/Kokoro 中文预处理把 Unicode 字符数组当作对象文本传入模型的问题，并升级缓存命名空间以隔离旧错误句子缓存。随包试听已重建为 286 条：Melo 1、Kokoro 中文 100、AISHELL-3 174、Microsoft Edge 中文 11；离线模型转换与试听现在使用同一条正确的中文文本路径。试听保持模型 1× 自然速率，不做后期变速。Windows SAPI 仍是离线保底；在线正式转换前必须确认正文会发送给第三方服务。详见 [`specification/TTS_PROVIDERS.md`](specification/TTS_PROVIDERS.md)。
+听读工坊 0.6.2 修复了 AISHELL-3/Kokoro 中文预处理把 Unicode 字符数组当作对象文本传入模型的问题，并升级缓存命名空间以隔离旧错误句子缓存。随包试听已重建为 286 条：Melo 1、Kokoro 中文 100、AISHELL-3 174、Microsoft Edge 中文 11；离线模型转换与试听现在使用同一条正确的中文文本路径。试听保持模型 1× 自然速率，不做后期变速。Windows 系统语音继续作为离线保底；在线正式转换前必须确认正文会发送给第三方服务。详见 [`specification/TTS_PROVIDERS.md`](specification/TTS_PROVIDERS.md)。
+
+听读工坊的新任务不再继承上次书名、作者或封面；仅当用户再次选择成功转换过的完全相同来源文件集合时，才从最近 50 条本机记录回填书名/作者。Windows 系统语音已改为实测可用的 `System.Speech` 实时试听与合成；误留在所有页面顶栏的全局“在线音色/离线处理”标识已移除。Edge 支持 1–12 个并发请求（新任务默认 8、旧断点保持 1），缓存和输出顺序不变；0.6.3 公开基准确认 8 并发比 12 并发更快且压力更低。
 
 听读工坊 0.5.0 增加“保存进度并关闭 / 恢复未完成”、原子句子缓存、已编码 Track 复用、20 GiB/180 天自动缓存整理和可视化缓存管理；成功任务会立即删除重复 PCM/Track 工作文件。AISHELL-3、Kokoro 的 ETA 已改用本机端到端实测速率，并在每句完成时动态校准。详见 [`specification/BUILDER_RESUME_CACHE.md`](specification/BUILDER_RESUME_CACHE.md)。

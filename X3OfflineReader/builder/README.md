@@ -6,9 +6,16 @@
 
 - 多选、排序并合并 EPUB/TXT 为多卷 `.opbook`，或 `--separate` 分别导出。
 - UTF-8/BOM、UTF-16LE、GB18030 TXT；安全 EPUB 2/3 spine 解析；允许常见 XHTML `DOCTYPE`，`&nbsp;` 等命名实体从 JDK 内置安全表本地转换，但禁止加载外部 DTD/外部实体并拒绝内部实体子集；明确拒绝加密/DRM 及超限 XML。
-- 默认 MeloTTS（自适应本地长驻 worker 池），Windows SAPI 保底，以及只供确定性测试的 tone provider。
+- 默认 MeloTTS（自适应本地长驻 worker 池），Windows `System.Speech` 保底，以及只供确定性测试的 tone provider。
 - 句级 WAV 真实时长生成 Timeline，再拼接并编码 AAC-LC/M4A；章节超过固定 20 分钟时在句子边界自动拆 Track。该内部保护值不在 GUI/CLI 暴露。
 - 512×512 WebP 封面、稳定 ID、完整 SHA-256 和确定顺序 ZIP。
+
+## 0.6.3 全 Provider 性能优化
+
+- Windows `System.Speech` 改为可复用的 32 位长驻 worker 池，避免每句重启 PowerShell；本机 2 进程长篇端到端实测约 108.3 万字/小时，继续增加进程反而变慢。
+- Kokoro 与 AISHELL-3 改为独立长驻模型进程池，并按 CPU 数限制每个模型的线程预算；本机 4 进程分别约 8.3 万与 46.5 万字/小时。
+- Melo 保留已验证的 2 进程上限，长篇样本约 7.4 万字/小时；Edge 保留可靠性更好的 8 并发，约 83.3 万字/小时，12 并发无额外收益。
+- 模型选择框直接显示“本机长篇实测”效率；初始 ETA 使用同一组端到端实测曲线，不再沿用理论速度因子。公开可复现脚本为 `benchmark-tts.ps1`，其输出和临时成书位于被忽略的工作目录并在每轮后清理。
 
 ## 0.6.2 界面收尾
 
@@ -17,6 +24,9 @@
 - 每个 Provider 音色卡使用统一高度；Kokoro、AISHELL-3 等大量音色在卡片内部滚动，不再撑长整个试听页面。
 - 修复 AISHELL-3/Kokoro 中文规范化时把字符数组对象标识传给模型的问题；离线转换与试听都恢复为自然中文，并用新版 Provider 缓存键隔离旧错误句子缓存。
 - 本地试听重建为 286 条：Melo 1、Kokoro 中文 100、AISHELL-3 174、Edge 中文 11。
+- 新任务的书名、作者和封面始终从空白开始，不再从上次任务偏好中残留；成功转换后只按完全相同的本机来源文件集合保留最近 50 组书名/作者，下次再次选择同一来源时才回填。成功页会立即清空来源与书籍信息，旧版偏好中的书名/作者/封面会被忽略。
+- Windows 系统语音改用本机已验证的 32 位 `System.Speech`，可在试听页实时生成中文短句；其余 Provider 继续使用随包预生成试听。各页面右上角不再显示与当前页面无关的全局“在线音色/离线处理”标识。
+- Edge 新任务默认 8 个并发请求，可在 GUI 或 `--edge-workers 1..12` 调整；旧断点缺少该字段时仍按 1 个请求恢复。并发只改变调度，不改变音频缓存键、Timeline、章节和包内顺序；重试加入小幅错峰，避免所有请求同时再次冲击在线服务。
 - `builder/voice-previews/` 是由 `generate-voice-previews*.ps1` 生成的本机打包资源，Git 仅保留生成代码与说明；正式包仍嵌入完整索引和 WAV。
 - 正式包继续使用 Windows GUI 子系统和隐藏 Java 子进程；`.opbook` v1、Provider、缓存键、可执行文件名和工作目录保持兼容。
 
@@ -37,17 +47,17 @@
 
 ## GUI 使用习惯
 
-- 点击“开始转换”不会重置表单。作者、TTS、各 Provider 的声音 ID、语速和导出模式会保存到当前 Windows 用户设置；作者留空时包内写为“未署名”，不会再拼接 `Unknown`。
+- TTS、各 Provider 的声音 ID、语速和导出模式会保存到当前 Windows 用户设置；书名、作者和封面不属于全局偏好，每个新来源默认留空。成功转换过的完全相同来源可从最近本机记录回填书名/作者；作者仍留空时包内写为“未署名”。
 - 输入、输出和封面选择器分别记住上次目录；首次使用从“下载”或用户主目录开始，不再固定打开“文档”。
 - 勾选“输出到源目录”时，合并导出写到第一个源文件目录，分别导出则让每个 `.opbook` 回到对应源文件目录；取消勾选会恢复此前手动选择的文件或目录。
 - 转换区显示 0–100% 进度条和带耗时的里程碑日志，包括解析统计、语音句数/缓存命中、逐章 M4A 编码、封面和最终打包。
 - 进度条下方动态显示预计总用时和预计剩余时间。初值来自 TTS 类型、语速、未缓存文本字符数、缓存句数和章节数；流水线进度由语音字符完成度 68% 与章节编码完成度 12% 共同组成，已有缓存属于真实已完成工作。恢复任务会丢弃旧版错误百分比并按缓存与 Track 重新计算，只有进度真正前进时才平滑校准 ETA。
 - “Melo 性能”提供“加速（推荐，最多 2 进程）”与“节省内存（1 进程）”。程序按 CPU、总内存和转换开始时的可用内存自动降级；每个进程只持有一个模型，并限制 PyTorch/OMP 线程，避免盲目超卖 CPU。i7-1360P / 32 GB 的同工作量未缓存端到端基准为单进程 78.78 秒、双进程每个 8 线程 63.65 秒；三进程 5 线程为 68.16 秒、三进程 8 线程为 71.32 秒，均慢于双进程，因此生产界面不提供三进程。双进程至少需要 10 GiB 可用内存，条件不足时安全回退。实际工作进程数写入里程碑日志。
 - 0.3.0 会预取后续章节的句级语音，在当前章节编码 M4A 时继续使用 Melo worker，减少章节边界的空闲时间；缓存键、Timeline 顺序和包内顺序不变。
-- 随包提供 286 条版本化本地试听：Melo 1、Kokoro 中文 100、AISHELL-3 174、Edge 中文 11。点击“试听”只播放 16 kHz 单声道 PCM WAV，不加载模型、不临时合成、不联网。所有样本保持 Provider 的 1× 自然速率；不会把长句强行加速。
+- 随包提供 286 条版本化试听：Melo 1、Kokoro 中文 100、AISHELL-3 174、Edge 中文 11。以上样本点击后直接播放 16 kHz 单声道 PCM WAV；Windows 系统语音不随包复制音频，而是在本机实时生成短句。所有样本保持 Provider 的 1× 自然速率；不会把长句强行加速。
 - 在线 Edge 转换会把待朗读正文发送给 Microsoft 服务。GUI 会在开始前再次确认，CLI 必须显式传入 `--allow-online-tts`；Builder 不保存 API Key、账号或正文日志。安装额外组件运行 `builder\install-tts-voices.ps1`，许可与数据来源见 [`THIRD_PARTY_TTS.md`](THIRD_PARTY_TTS.md)。
-- Edge online conversion pins edge-tts 7.2.8 and uses a Windows-compatible event loop. `NoAudioReceived` means the Microsoft Read Aloud WebSocket reached `turn.end` without one audio frame; it is not a client timeout and, with the same voice/request succeeding before and after the incident, must not be misreported as a JSON/UTF-8/SSML formatting error. Unpunctuated fragments receive one sentence-final mark in the spoken copy, but retries keep that spoken text unchanged. A transient empty response now enters an interruptible 25-attempt recovery window (2/5/10/20/40 seconds, then 60 seconds; roughly 20 minutes) instead of pausing after 88 seconds. Exhaustion preserves sentence/Track cache and pauses; invalid parameters still fail immediately, and the Builder never silently switches voices.
-- 声音改为选择框；存在预生成索引时仅显示通过时长门槛的可试听音色。当前 Melo 中文仅有 `ZH`，Windows SAPI 列出本机声音，tone 仅用于测试且不会出现在 GUI。
+- Edge online conversion pins edge-tts 7.2.8 and uses a Windows-compatible event loop. 本次真实 RCA 证明 `NoAudioReceived` 不一定是上游瞬时故障：旧切句器会在句号处截断，把随后的右引号/右括号拆成纯标点“句子”，这类确定性不可发音请求重试 25 次仍必然失败。切句器现在把闭合标点并回前句、过滤纯标点片段；Edge Provider 还会在联网前快速拒绝不含文字或数字的请求，并正确识别引号/括号内的句末标点。只有包含可发音内容却收到空音频的请求才进入可中断的 25 次恢复窗口；缓存、音色和正文均不会被静默替换。
+- 声音使用选择框；存在预生成索引时仅显示通过时长门槛的可试听音色。当前 Melo 中文仅有 `ZH`，Windows `System.Speech` 动态列出本机中文声音并支持实时试听，tone 仅用于测试且不会出现在 GUI。
 - 进度区同时显示开始时间、总耗时和当前阶段耗时；超过一小时明确写“小时/分”。连续 10 分钟无真实进度会提示观察，Melo 单句、FFmpeg 单 Track 超过 12 分钟会只重启该步骤并自动重试一次，打包失败只重建 staging，已完成缓存保留。
 - 合并输出默认命名为 `书名 [作者].opbook`；标题为空时使用首个源文件名，作者为空时使用“未署名”。Windows 文件名非法字符会安全替换，用户手动选定的名称仍会保留。
 - Melo 会把超长句安全拆成短片段后无间隔拼回同一句 WAV；较短片段失败时会进一步拆分或重启 worker 重试。失败信息现在包含异常类型和有限的诊断尾部，不再只显示空白 `ERROR`，且不会记录正文。
@@ -63,7 +73,7 @@
   --tts melo --voice ZH --melo-workers 2
 ```
 
-`--melo-workers 1|2` 设置允许的最大工作进程数，仍受资源保护规则限制。`--tts windows` 使用 SAPI；先运行 `voices` 查看可用声音。`--tts tone` 仅用于 Golden/回归测试。GUI 使用同一转换核心，不另写转换逻辑。
+`--melo-workers 1|2`、`--sherpa-workers 1..4`、`--windows-workers 1..12` 与 `--edge-workers 1..12` 设置最大并发，仍受资源保护规则限制；实测默认分别为 2、4、2、8。`--tts windows` 使用 SAPI；先运行 `voices` 查看可用声音。`--tts tone` 仅用于 Golden/回归测试。GUI 使用同一转换核心，不另写转换逻辑。
 
 ## Melo 与便携包
 

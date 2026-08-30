@@ -1,5 +1,7 @@
 package com.canace.x3offlinereader.builder;
 
+import com.canace.x3offlinereader.builder.model.SynthesisRequest;
+import com.canace.x3offlinereader.builder.model.SynthesisResult;
 import com.canace.x3offlinereader.builder.spi.TtsProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -9,6 +11,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -21,7 +24,7 @@ final class BuilderBridge {
 
     static final class Request {
         public List<String> inputs=new ArrayList<>();public String output,title,author="",language="zh-CN",tts="melo",voice="ZH",cover,controlFile;
-        public int meloWorkers=2,pauseMs=250,maxTrackMinutes=20;public double rate=1.0;public boolean separate,outputToSource,allowOnlineTts,resume;
+        public int meloWorkers=2,edgeWorkers=8,sherpaWorkers=4,windowsWorkers=2,pauseMs=250,maxTrackMinutes=20;public double rate=1.0;public boolean separate,outputToSource,allowOnlineTts,resume;
     }
 
     static int run(Path root,String[] args)throws Exception{
@@ -35,16 +38,34 @@ final class BuilderBridge {
     }
 
     private static ObjectNode state(Path root){
-        ObjectNode state=JSON.createObjectNode();state.put("version","0.6.2");ArrayNode providers=state.putArray("providers");
+        ObjectNode state=JSON.createObjectNode();state.put("version","0.6.3");ArrayNode providers=state.putArray("providers");
         for(TtsProviderCatalog.Entry entry:TtsProviderCatalog.guiEntries()){
-            ObjectNode node=providers.addObject();node.put("id",entry.id());node.put("label",entry.label());node.put("online",entry.online());node.put("defaultVoice",entry.defaultVoice());ArrayNode voices=node.putArray("voices");
-            List<String> values=VoicePreviewLibrary.cachedVoices(root,entry.id());if(values.isEmpty())try{TtsProvider engine=TtsProviderCatalog.previewProvider(entry.id(),root,null);try{values=engine.voices();}finally{if(engine instanceof AutoCloseable closeable)closeable.close();}}catch(Exception ignored){values=List.of(entry.defaultVoice());}
-            for(String voice:values){ObjectNode item=voices.addObject();item.put("id",voice);item.put("preview",VoicePreviewLibrary.available(root,entry.id(),voice));}
+            ObjectNode node=providers.addObject();node.put("id",entry.id());node.put("label",entry.label());node.put("online",entry.online());node.put("defaultVoice",entry.defaultVoice());node.put("throughputLabel",entry.throughputLabel());node.put("benchmarkCharactersPerHour",entry.optimizedCharactersPerHour());node.put("optimizedParallelism",entry.optimizedParallelism());ArrayNode voices=node.putArray("voices");
+            boolean livePreview=false;List<String> values=VoicePreviewLibrary.cachedVoices(root,entry.id());
+            if(values.isEmpty())try{TtsProvider engine=TtsProviderCatalog.previewProvider(entry.id(),root,null);try{livePreview="windows".equals(entry.id())&&engine.isAvailable();values=engine.voices();}finally{if(engine instanceof AutoCloseable closeable)closeable.close();}}catch(Exception ignored){values=List.of(entry.defaultVoice());}
+            for(String voice:values){ObjectNode item=voices.addObject();boolean cached=VoicePreviewLibrary.available(root,entry.id(),voice);String previewType=cached?"cached":livePreview?"live":"none";item.put("id",voice);item.put("preview",!"none".equals(previewType));item.put("previewType",previewType);}
         }
         appendCache(state,new BuilderCacheManager(root).stats());new BuildCheckpointStore(root).latest().ifPresent(checkpoint->{ObjectNode task=state.putObject("checkpoint");task.put("id",checkpoint.id());task.put("state",checkpoint.state());task.put("percent",checkpoint.percent());task.put("message",checkpoint.message());task.put("elapsedSeconds",checkpoint.elapsedSeconds());task.put("provider",checkpoint.options().tts);task.put("online",TtsProviderCatalog.entry(checkpoint.options().tts).online());task.put("output",checkpoint.options().output==null?"":checkpoint.options().output.toString());ArrayNode inputs=task.putArray("inputs");checkpoint.options().inputs.forEach(path->inputs.add(path.toString()));});return state;
     }
 
-    private static ObjectNode preview(Path root,String provider,String voice)throws Exception{if(!VoicePreviewLibrary.available(root,provider,voice))throw new IllegalArgumentException("该音色没有预生成试听");ObjectNode result=JSON.createObjectNode();result.put("mimeType","audio/wav");result.put("audioBase64",Base64.getEncoder().encodeToString(Files.readAllBytes(VoicePreviewLibrary.path(root,provider,voice))));return result;}
+    private static ObjectNode preview(Path root,String provider,String voice)throws Exception{
+        byte[] audio;
+        if(VoicePreviewLibrary.available(root,provider,voice))audio=Files.readAllBytes(VoicePreviewLibrary.path(root,provider,voice));
+        else{
+            if(!"windows".equalsIgnoreCase(provider))throw new IllegalArgumentException("该音色没有预生成试听");
+            Path workRoot=root.resolve("builder/.work");Files.createDirectories(workRoot);Path work=Files.createTempDirectory(workRoot,"windows-preview-");
+            TtsProvider engine=TtsProviderCatalog.previewProvider(provider,root,null);
+            try{
+                if(!engine.isAvailable()||!engine.voices().contains(voice))throw new IllegalArgumentException("该 Windows 音色不可用");
+                SynthesisResult generated=engine.synthesize(new SynthesisRequest("preview",VoicePreviewLibrary.sentence(provider),voice,VoicePreviewLibrary.RATE),work);
+                audio=Files.readAllBytes(generated.getWavPath());
+            }finally{
+                if(engine instanceof AutoCloseable closeable)closeable.close();
+                try(var paths=Files.walk(work)){for(Path path:paths.sorted(Comparator.reverseOrder()).toList())Files.deleteIfExists(path);}
+            }
+        }
+        ObjectNode result=JSON.createObjectNode();result.put("mimeType","audio/wav");result.put("audioBase64",Base64.getEncoder().encodeToString(audio));return result;
+    }
     private static ObjectNode cache(Path root,String action)throws Exception{BuilderCacheManager manager=new BuilderCacheManager(root);BuilderCacheManager.PruneResult result=switch(action){case "prune"->manager.pruneSentenceCache(BuilderCacheManager.DEFAULT_MAX_BYTES,BuilderCacheManager.DEFAULT_MAX_AGE);case "stale"->manager.clearStaleWork(Duration.ofDays(30));case "clear"->manager.clearSentenceCache();default->new BuilderCacheManager.PruneResult(0,0);};ObjectNode response=JSON.createObjectNode();response.put("deletedFiles",result.deletedFiles());response.put("deletedBytes",result.deletedBytes());appendCache(response,manager.stats());return response;}
 
     private static int build(Path root,Path requestFile)throws Exception{
@@ -62,8 +83,8 @@ final class BuilderBridge {
         finally{Files.deleteIfExists(control);}
     }
 
-    private static BuilderOptions options(Request request){BuilderOptions options=new BuilderOptions();request.inputs.forEach(value->options.inputs.add(Path.of(value)));options.title=blank(request.title);options.author=request.author==null?"":request.author.trim();options.language=request.language;options.tts=request.tts;options.voice=request.voice;options.meloWorkers=request.meloWorkers;options.rate=request.rate;options.pauseMs=request.pauseMs;options.maxTrackMinutes=request.maxTrackMinutes;options.cover=blank(request.cover)==null?null:Path.of(request.cover);options.separate=request.separate;options.outputToSource=request.outputToSource;options.allowOnlineTts=request.allowOnlineTts;if(options.inputs.isEmpty())throw new IllegalArgumentException("请添加 EPUB/TXT 来源");if(request.outputToSource)options.output=request.separate?options.inputs.get(0).toAbsolutePath().getParent():BuilderGui.mergedSourceOutput(options.inputs,options.title,options.author);else options.output=Path.of(required(request.output,"output"));return options;}
-    private static BuilderOptions copy(BuilderOptions source){BuilderOptions copy=new BuilderOptions();copy.title=source.title;copy.author=source.author;copy.language=source.language;copy.tts=source.tts;copy.voice=source.voice;copy.meloPython=source.meloPython;copy.meloWorkers=source.meloWorkers;copy.rate=source.rate;copy.pauseMs=source.pauseMs;copy.maxTrackMinutes=source.maxTrackMinutes;copy.ffmpeg=source.ffmpeg;copy.cover=source.cover;copy.createdAt=source.createdAt;copy.outputToSource=source.outputToSource;copy.allowOnlineTts=source.allowOnlineTts;return copy;}
+    private static BuilderOptions options(Request request){BuilderOptions options=new BuilderOptions();request.inputs.forEach(value->options.inputs.add(Path.of(value)));options.title=blank(request.title);options.author=request.author==null?"":request.author.trim();options.language=request.language;options.tts=request.tts;options.voice=request.voice;options.meloWorkers=request.meloWorkers;options.edgeWorkers=request.edgeWorkers;options.sherpaWorkers=request.sherpaWorkers;options.windowsWorkers=request.windowsWorkers;options.rate=request.rate;options.pauseMs=request.pauseMs;options.maxTrackMinutes=request.maxTrackMinutes;options.cover=blank(request.cover)==null?null:Path.of(request.cover);options.separate=request.separate;options.outputToSource=request.outputToSource;options.allowOnlineTts=request.allowOnlineTts;if(options.inputs.isEmpty())throw new IllegalArgumentException("请添加 EPUB/TXT 来源");if(request.outputToSource)options.output=request.separate?options.inputs.get(0).toAbsolutePath().getParent():BuilderGui.mergedSourceOutput(options.inputs,options.title,options.author);else options.output=Path.of(required(request.output,"output"));return options;}
+    private static BuilderOptions copy(BuilderOptions source){BuilderOptions copy=new BuilderOptions();copy.title=source.title;copy.author=source.author;copy.language=source.language;copy.tts=source.tts;copy.voice=source.voice;copy.meloPython=source.meloPython;copy.meloWorkers=source.meloWorkers;copy.edgeWorkers=source.edgeWorkers;copy.sherpaWorkers=source.sherpaWorkers;copy.windowsWorkers=source.windowsWorkers;copy.rate=source.rate;copy.pauseMs=source.pauseMs;copy.maxTrackMinutes=source.maxTrackMinutes;copy.ffmpeg=source.ffmpeg;copy.cover=source.cover;copy.createdAt=source.createdAt;copy.outputToSource=source.outputToSource;copy.allowOnlineTts=source.allowOnlineTts;return copy;}
     private static void appendCache(ObjectNode node,BuilderCacheManager.Stats stats){ObjectNode cache=node.putObject("cache");cache.put("sentenceFiles",stats.sentenceFiles());cache.put("sentenceBytes",stats.sentenceBytes());cache.put("unfinishedDirectories",stats.unfinishedDirectories());cache.put("unfinishedBytes",stats.unfinishedBytes());}
     static ObjectNode completionEvent(long previousElapsedSeconds,long runElapsedSeconds,List<String> outputs){long safeRun=Math.max(0,runElapsedSeconds),safePrevious=Math.max(0,previousElapsedSeconds);ObjectNode complete=JSON.createObjectNode();complete.put("type","complete");complete.put("taskElapsedSeconds",safePrevious+safeRun);complete.put("runElapsedSeconds",safeRun);ArrayNode paths=complete.putArray("outputs");outputs.forEach(paths::add);return complete;}
     private static long runElapsedSeconds(long startedNanos){return Math.max(0,Duration.ofNanos(System.nanoTime()-startedNanos).toSeconds());}
