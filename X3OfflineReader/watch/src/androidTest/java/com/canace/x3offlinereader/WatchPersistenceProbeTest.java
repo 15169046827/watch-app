@@ -3,19 +3,29 @@ package com.canace.x3offlinereader;
 import android.content.Context;
 import android.test.InstrumentationTestCase;
 import com.canace.x3offlinereader.data.LibraryDb;
-import com.canace.x3offlinereader.data.LibraryModels;
 import com.canace.x3offlinereader.music.MusicLibraryDb;
-import com.canace.x3offlinereader.music.MusicModels;
-import java.util.List;
 
-/** Run in a fresh instrumentation process after the smoke suite to prove SQLite restart persistence. */
+/** Proves book and music settings survive a fresh database handle without leaving test data behind. */
 public final class WatchPersistenceProbeTest extends InstrumentationTestCase {
-    public void testPersistedCatalogSettingsFavoritesAndProgress(){
-        Context context=getInstrumentation().getTargetContext();LibraryDb books=new LibraryDb(context);MusicLibraryDb music=new MusicLibraryDb(context);
+    public void testPersistedSettingsAcrossReopen(){
+        Context context=getInstrumentation().getTargetContext();
+        LibraryDb books=new LibraryDb(context);MusicLibraryDb music=new MusicLibraryDb(context);
+        String oldBookSpeed=books.settingValue("playback_speed","1.0");
+        String oldMusicSpeed=music.settingValue("playback_speed","1.0");
+        String oldMusicMode=music.settingValue("playback_mode","stop_after_track");
         try {
-            List<LibraryModels.BookSummary> catalog=books.books();assertFalse(catalog.isEmpty());LibraryModels.BookSummary book=null;for(LibraryModels.BookSummary item:catalog)if("x3-golden-sample-ebfa1632c722".equals(item.id))book=item;assertNotNull(book);assertTrue(books.isFavorite(book.id));assertEquals("1.25",books.settingValue("playback_speed",""));
-            boolean bookProgress=false;for(LibraryModels.ChapterSummary chapter:books.chapters(book.id))bookProgress|=books.progress(book.id,chapter.id)>0;assertTrue(bookProgress);
-            List<MusicModels.Track> tracks=music.tracks();assertTrue(tracks.size()>=2);boolean musicProgress=false;boolean favorite=false;for(MusicModels.Track track:tracks){musicProgress|=music.progress(track.id)>0;favorite|=track.favorite;}assertTrue(musicProgress);assertTrue(favorite);assertEquals("1.25",music.settingValue("playback_speed",""));assertEquals("repeat_all",music.settingValue("playback_mode",""));
-        } finally {books.close();music.close();}
+            books.putSetting("playback_speed","1.25");
+            music.putSetting("playback_speed","1.25");music.putSetting("playback_mode","repeat_all");
+            LibraryDb reopenedBooks=new LibraryDb(context);MusicLibraryDb reopenedMusic=new MusicLibraryDb(context);
+            try {
+                assertEquals("1.25",reopenedBooks.settingValue("playback_speed",""));
+                assertEquals("1.25",reopenedMusic.settingValue("playback_speed",""));
+                assertEquals("repeat_all",reopenedMusic.settingValue("playback_mode",""));
+            } finally {reopenedBooks.close();reopenedMusic.close();}
+        } finally {
+            books.putSetting("playback_speed",oldBookSpeed);
+            music.putSetting("playback_speed",oldMusicSpeed);music.putSetting("playback_mode",oldMusicMode);
+            books.close();music.close();
+        }
     }
 }

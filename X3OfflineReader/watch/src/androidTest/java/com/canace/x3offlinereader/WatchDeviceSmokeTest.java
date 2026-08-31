@@ -84,10 +84,10 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
     }
 
     public void test03MusicScanPlaybackLyricsAndSettings() throws Exception {
-        Context context=getInstrumentation().getTargetContext();MusicLibraryDb db=new MusicLibraryDb(context);Activity player=null;
+        Context context=getInstrumentation().getTargetContext();MusicLibraryDb db=new MusicLibraryDb(context);Activity player=null;String oldSpeed=db.settingValue("playback_speed","1.0"),oldMode=db.settingValue("playback_mode","stop_after_track");
         try {
             File dir=MusicScanner.musicDir(context);copyAsset("device-smoke.m4a",new File(dir,"device-smoke.m4a"));copyAsset("device-smoke.mp3",new File(dir,"device-smoke.mp3"));copyAsset("device-smoke.flac",new File(dir,"device-smoke.flac"));copyAsset("device-smoke.lrc",new File(dir,"device-smoke.lrc"));
-            assertTrue(MusicScanner.scan(context,db)>=3);List<MusicModels.Track> tracks=db.tracks();assertTrue(tracks.size()>=3);Activity library=getInstrumentation().startActivitySync(new Intent(context,MusicLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));assertTrue(library.findViewById(R.id.music_list).getHeight()>=180);assertTrue(library.findViewById(R.id.music_list).getWidth()>=360);assertEquals("添加音频",text(library,R.id.add_music_button));assertInsideDisplay(library.findViewById(R.id.add_music_button));assertInsideDisplay(library.findViewById(R.id.scan_button));library.finish();
+            assertTrue(MusicScanner.scan(context,db)>=3);List<MusicModels.Track> tracks=db.tracks();assertTrue(tracks.size()>=3);Activity library=getInstrumentation().startActivitySync(new Intent(context,MusicLibraryActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));assertTrue(library.findViewById(R.id.music_list).getHeight()>=180);assertTrue(library.findViewById(R.id.music_list).getWidth()>=360);assertEquals("添加音乐/歌词",text(library,R.id.add_music_button));assertInsideDisplay(library.findViewById(R.id.add_music_button));assertInsideDisplay(library.findViewById(R.id.scan_button));library.finish();
             MusicModels.Track track=findTrack(tracks,"device-smoke.m4a");MusicModels.Track flac=findTrack(tracks,"device-smoke.flac");assertTrue(track.durationMs>0);assertTrue(flac.durationMs>0);assertNotNull(track.lrcPath);assertNotNull(flac.lrcPath);
             if(track.favorite)db.toggleFavorite(track.id);db.putSetting("playback_speed","1.25");db.putSetting("playback_mode","repeat_all");db.saveProgress(track.id,0);
             Intent intent=new Intent(context,MusicPlayerActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("track_id",track.id);
@@ -101,33 +101,33 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
             getInstrumentation().runOnMainSync(()->active.findViewById(R.id.play_button).performClick());
             getInstrumentation().runOnMainSync(active::finish);getInstrumentation().waitForIdleSync();player=null;
             assertTrue("Music playback must advance and persist",db.progress(track.id)>0);
-        } finally {if(player!=null)player.finish();db.close();}
+        } finally {if(player!=null)player.finish();db.putSetting("playback_speed",oldSpeed);db.putSetting("playback_mode",oldMode);removeMusicFixtures(context,db);db.close();}
     }
 
     public void test04Mp3SystemDecoderAndProgress() throws Exception {
         Context context=getInstrumentation().getTargetContext();MusicLibraryDb db=new MusicLibraryDb(context);Activity player=null;
         try {
-            MusicModels.Track track=findTrack(db.tracks(),"device-smoke.mp3");db.saveProgress(track.id,0);
+            ensureMusicFixtures(context,db);MusicModels.Track track=findTrack(db.tracks(),"device-smoke.mp3");db.saveProgress(track.id,0);
             Intent intent=new Intent(context,MusicPlayerActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("track_id",track.id);
             player=getInstrumentation().startActivitySync(intent);final Activity active=player;
             waitFor(()->active.findViewById(R.id.play_button).isEnabled()&&text(active,R.id.title).length()>0&&text(active,R.id.position).contains(" / "),TIMEOUT_MS);
             getInstrumentation().runOnMainSync(()->active.findViewById(R.id.play_button).performClick());Thread.sleep(1800);
             assertFalse(text(active,R.id.position).startsWith("00:00 /"));getInstrumentation().runOnMainSync(()->active.findViewById(R.id.play_button).performClick());
             getInstrumentation().runOnMainSync(active::finish);getInstrumentation().waitForIdleSync();player=null;assertTrue(db.progress(track.id)>0);
-        } finally {if(player!=null)player.finish();db.close();}
+        } finally {if(player!=null)player.finish();removeMusicFixtures(context,db);db.close();}
     }
 
     public void test04bFlacMedia3DecoderAndProgress() throws Exception {
         Context context=getInstrumentation().getTargetContext();MusicLibraryDb db=new MusicLibraryDb(context);Activity player=null;
         try {
-            MusicModels.Track track=findTrack(db.tracks(),"device-smoke.flac");db.saveProgress(track.id,0);
+            ensureMusicFixtures(context,db);MusicModels.Track track=findTrack(db.tracks(),"device-smoke.flac");db.saveProgress(track.id,0);
             Intent intent=new Intent(context,MusicPlayerActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("track_id",track.id);
             player=getInstrumentation().startActivitySync(intent);final Activity active=player;
             waitFor(()->active.findViewById(R.id.play_button).isEnabled()&&text(active,R.id.title).length()>0&&text(active,R.id.position).contains(" / "),TIMEOUT_MS);
             getInstrumentation().runOnMainSync(()->active.findViewById(R.id.play_button).performClick());Thread.sleep(1800);
             assertFalse(text(active,R.id.position).startsWith("00:00 /"));getInstrumentation().runOnMainSync(()->active.findViewById(R.id.play_button).performClick());
             getInstrumentation().runOnMainSync(active::finish);getInstrumentation().waitForIdleSync();player=null;assertTrue(db.progress(track.id)>0);
-        } finally {if(player!=null)player.finish();db.close();}
+        } finally {if(player!=null)player.finish();removeMusicFixtures(context,db);db.close();}
     }
 
     public void test05RightSwipeExit() throws Exception {
@@ -154,14 +154,14 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
     }
 
     public void test08MusicShuffleMode() throws Exception {
-        Context context=getInstrumentation().getTargetContext();MusicLibraryDb db=new MusicLibraryDb(context);Activity player=null;com.google.common.util.concurrent.ListenableFuture<MediaController> future=null;
+        Context context=getInstrumentation().getTargetContext();MusicLibraryDb db=new MusicLibraryDb(context);Activity player=null;com.google.common.util.concurrent.ListenableFuture<MediaController> future=null;String oldMode=db.settingValue("playback_mode","stop_after_track");
         try {
-            MusicModels.Track track=findTrack(db.tracks(),"device-smoke.m4a");db.putSetting("playback_mode","shuffle");
+            ensureMusicFixtures(context,db);MusicModels.Track track=findTrack(db.tracks(),"device-smoke.m4a");db.putSetting("playback_mode","shuffle");
             player=getInstrumentation().startActivitySync(new Intent(context,MusicPlayerActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("track_id",track.id));final Activity active=player;
             waitFor(()->"列表随机".equals(text(active,R.id.mode_button)),TIMEOUT_MS);
             AtomicReference<com.google.common.util.concurrent.ListenableFuture<MediaController>> pending=new AtomicReference<>();getInstrumentation().runOnMainSync(()->pending.set(new MediaController.Builder(context,new SessionToken(context,new ComponentName(context,PlaybackService.class))).buildAsync()));future=pending.get();MediaController session=future.get(10,TimeUnit.SECONDS);
             AtomicReference<Boolean> shuffle=new AtomicReference<>();AtomicReference<Integer> repeat=new AtomicReference<>();getInstrumentation().runOnMainSync(()->{shuffle.set(session.getShuffleModeEnabled());repeat.set(session.getRepeatMode());});assertTrue(shuffle.get());assertEquals(androidx.media3.common.Player.REPEAT_MODE_ALL,(int)repeat.get());
-        } finally {if(future!=null){com.google.common.util.concurrent.ListenableFuture<MediaController> release=future;getInstrumentation().runOnMainSync(()->MediaController.releaseFuture(release));}db.putSetting("playback_mode","repeat_all");if(player!=null){Activity closing=player;getInstrumentation().runOnMainSync(closing::finish);getInstrumentation().waitForIdleSync();}removeMusicFixtures(context,db);db.close();}
+        } finally {if(future!=null){com.google.common.util.concurrent.ListenableFuture<MediaController> release=future;getInstrumentation().runOnMainSync(()->MediaController.releaseFuture(release));}db.putSetting("playback_mode",oldMode);if(player!=null){Activity closing=player;getInstrumentation().runOnMainSync(closing::finish);getInstrumentation().waitForIdleSync();}removeMusicFixtures(context,db);db.close();}
     }
 
     public void test09BookPlayerExitReturnsToChaptersWithoutLateTaskCrash() throws Exception {
@@ -187,6 +187,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
     private static void assertCompactOutput(Activity activity){String label=text(activity,R.id.output_button);assertTrue("扬声器".equals(label)||"蓝牙".equals(label));}
     private static MusicModels.Track findTrack(List<MusicModels.Track> tracks,String suffix){for(MusicModels.Track track:tracks)if(track.path.endsWith(suffix))return track;fail("Missing music fixture: "+suffix);return null;}
     private static void removeMusicFixtures(Context context,MusicLibraryDb db){File dir=MusicScanner.musicDir(context);for(MusicModels.Track track:db.tracks()){String name=new File(track.path).getName();if("device-smoke.m4a".equals(name)||"device-smoke.mp3".equals(name)||"device-smoke.flac".equals(name))assertTrue(db.removeTrack(track.id,true));}new File(dir,"device-smoke.lrc").delete();for(String name:new String[]{"device-smoke.m4a","device-smoke.mp3","device-smoke.flac","device-smoke.lrc"})assertFalse(new File(dir,name).exists());for(MusicModels.Track track:db.tracks())assertFalse(new File(track.path).getName().startsWith("device-smoke."));}
+    private void ensureMusicFixtures(Context context,MusicLibraryDb db)throws Exception{File dir=MusicScanner.musicDir(context);copyAsset("device-smoke.m4a",new File(dir,"device-smoke.m4a"));copyAsset("device-smoke.mp3",new File(dir,"device-smoke.mp3"));copyAsset("device-smoke.flac",new File(dir,"device-smoke.flac"));copyAsset("device-smoke.lrc",new File(dir,"device-smoke.lrc"));assertTrue(MusicScanner.scan(context,db)>=3);}
     private void ensureBook(Activity activity,LibraryDb db) throws Exception {for(LibraryModels.BookSummary book:db.books())if("x3-golden-sample-ebfa1632c722".equals(book.id))return;File target=new File(activity.getExternalFilesDir("test-packages"),"golden-two-volume.opbook");copyAsset("golden-two-volume.opbook",target);assertTrue(BookImportCoordinator.get().start(activity,java.util.Collections.singletonList(new BookImportCoordinator.Source(Uri.fromFile(target),target.getName()))));waitFor(()->{for(LibraryModels.BookSummary book:db.books())if("x3-golden-sample-ebfa1632c722".equals(book.id))return true;return false;},TIMEOUT_MS);}
     private static LibraryModels.BookSummary goldenBook(LibraryDb db){for(LibraryModels.BookSummary book:db.books())if("x3-golden-sample-ebfa1632c722".equals(book.id))return book;fail("Missing golden book");return null;}
     private void copyAsset(String name,File target) throws Exception {File parent=target.getParentFile();assertTrue(parent.mkdirs()||parent.isDirectory());try(InputStream in=getInstrumentation().getContext().getAssets().open(name);FileOutputStream out=new FileOutputStream(target)){byte[] buffer=new byte[65536];for(int n;(n=in.read(buffer))!=-1;)if(n>0)out.write(buffer,0,n);}}

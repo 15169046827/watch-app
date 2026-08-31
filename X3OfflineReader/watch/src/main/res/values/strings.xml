@@ -28,7 +28,7 @@
     <string name="music">音乐</string>
     <string name="music_library">音乐库</string>
     <string name="scan">扫描</string>
-    <string name="add_music">添加音频</string>
+    <string name="add_music">添加音乐/歌词</string>
     <string name="music_library_status">音乐库 %1$d 首 · 长按管理</string>
     <string name="scan_complete">已扫描 %1$d 首</string>
     <string name="previous">上一首</string>
@@ -45,7 +45,7 @@
     <string name="last_played">上次播放 · %1$s</string>
     <string name="resume_listening">上次听到：%1$s %2$s 续听</string>
     <string name="no_listening_history">暂无续听记录</string>
-    <string name="importing_music">%1$d / %2$d 首歌曲上传中</string>
+    <string name="importing_music">%1$d / %2$d 个音乐文件导入中</string>
     <string name="volume_title">媒体音量</string>
     <string name="volume_value">音量 %1$d%%</string>
     <string name="volume_percent">%1$d%%</string>
