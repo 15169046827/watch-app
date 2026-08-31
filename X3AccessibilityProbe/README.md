@@ -102,7 +102,21 @@ Service 启用后，已从 OPPO Settings 收到并解析：
 
 结论：Accessibility 路线已经证明可稳定获得“支付宝 NFC 支付成功 + 金额 + 渠道 + 时间”；商户名称需要其他来源或由用户补充。公开仓库不包含真实设备日志、支付记录或验收截图。
 
-## 当前本地版本 1.9
+## 上方物理按键结果
+
+2026-08-31 在 OWW261 前台 Activity 上验证：
+
+- Linux input 来源为 `qpnp_pon`，原始键为 `KEY_F1`；短按序列是 `DOWN → SYN_REPORT → UP → SYN_REPORT`。
+- 系统 key-layout 将 scan code `59` 映射为 Android `KEYCODE_F1`（keyCode `131`）。
+- 屏幕点亮且探针 Activity 已恢复时，真实短按在 Linux 层出现，但未进入 `dispatchKeyEvent`；短按后屏幕关闭，系统窗口策略把它按电源键行为处理。
+- 前台长按的可交付阶段会出现 `KEYCODE_F1`：约 401 ms 的首个 repeat 带 `isLongPress=true`，随后产生重复 DOWN；系统策略同时声明长按电源键进入全局电源操作。
+- 探针始终把事件交回 `super.dispatchKeyEvent`，没有拦截或改变电源、返回和安全相关系统行为。
+
+结论：上方物理键虽然在 Linux/Android 映射中名为 F1，但产品行为属于系统电源键，不适合作为普通 App 的必需快捷键。媒体播放应使用 `MediaSession` 的标准媒体按键回调；前台 `KEYCODE_F1` 只能作为不消费系统行为的可选诊断信号，不能依赖其短按或长按一定到达。
+
+## 当前本地版本 1.10
+
+版本 1.10 增加只观察、不消费事件的 `dispatchKeyEvent` 按键探针，用于记录 action、Android keyCode/keyName、Linux scan code、repeat、long-press 标志和按压时长。版本 1.9 的图标与既有 Accessibility/BLE 能力保持不变。
 
 版本 1.9 将启动器图标升级为“日常工具”v2.1 规范：矿物蓝底色完整覆盖正方形画布，暖白雷达/准星严格居中；Android 11 使用标准自适应图标，由系统负责圆形或圆角方形蒙版。实机校准后，自适应前景以中心缩放至 72%，同时消除原先的双重留白并保留清楚的外侧底色边框。API 30 fallback、包名、应用数据和无障碍组件均不变。
 

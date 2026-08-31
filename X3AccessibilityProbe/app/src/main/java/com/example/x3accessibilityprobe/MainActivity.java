@@ -12,7 +12,9 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityManager;
@@ -26,6 +28,7 @@ import java.util.List;
 public final class MainActivity extends Activity {
 
     private static final int LOCATION_REQUEST = 7;
+    private static final String PHYSICAL_KEY_TAG = "X3PhysicalKeyProbe";
     private TextView statusView;
     private TextView actionResultView;
     private TextView bleResultView;
@@ -110,6 +113,26 @@ public final class MainActivity extends Activity {
         if (getIntent().getBooleanExtra("run_ble_probe", false)) {
             runBleProbeWithPermission();
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        long heldMillis = Math.max(0L, event.getEventTime() - event.getDownTime());
+        String action = event.getAction() == KeyEvent.ACTION_DOWN ? "DOWN" : "UP";
+        String evidence = "action=" + action
+                + " keyCode=" + event.getKeyCode()
+                + " keyName=" + KeyEvent.keyCodeToString(event.getKeyCode())
+                + " scanCode=" + event.getScanCode()
+                + " repeat=" + event.getRepeatCount()
+                + " long=" + event.isLongPress()
+                + " heldMs=" + heldMillis;
+        Log.i(PHYSICAL_KEY_TAG, evidence);
+        if (actionResultView != null) {
+            actionResultView.setText(evidence);
+        }
+
+        // This is an observation-only probe. Preserve Android and OPPO default handling.
+        return super.dispatchKeyEvent(event);
     }
 
     @Override
