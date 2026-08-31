@@ -3,7 +3,7 @@
     <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="22dp" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:textColor="@color/text_primary" android:textSize="17sp" android:textStyle="bold" />
     <ScrollView android:id="@+id/reader_scroll" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fadeScrollbars="true"><TextView android:id="@+id/full_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:lineSpacingExtra="4dp" android:textColor="@color/text_secondary" android:textSize="14sp" /></ScrollView>
     <TextView android:id="@+id/position" android:layout_width="match_parent" android:layout_height="14dp" android:gravity="center" android:textColor="@color/text_secondary" android:textSize="10sp" />
-    <LinearLayout android:layout_width="match_parent" android:layout_height="31dp" android:orientation="horizontal">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal">
         <Button android:id="@+id/previous_button" style="@style/CompactGridButton" android:layout_width="0dp" android:layout_weight="0.65" android:text="@string/previous_symbol" />
         <Button android:id="@+id/back_button" style="@style/CompactGridButton" android:layout_width="0dp" android:layout_weight="1" android:text="@string/back_15" />
         <Button android:id="@+id/play_button" style="@style/CompactGridButton" android:layout_width="0dp" android:layout_weight="1" android:text="@string/play" />
