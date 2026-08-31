@@ -140,6 +140,10 @@ public final class PhoneMainActivity extends Activity {
         classificationMode.setOnClickListener(v -> showModeDialog());
         tools.addView(classificationMode, buttonParams(48, 0, 8));
 
+        Button categoryRules = actionButton("已学习分类规则  ·  " + ruleStore.ruleCount() + " 条", false, false);
+        categoryRules.setOnClickListener(v -> showCategoryRulesDialog());
+        tools.addView(categoryRules, buttonParams(48, 0, 8));
+
         Button profile = actionButton("账务配置  ·  " + profileStore.summary(), false, false);
         profile.setOnClickListener(v -> showProfileDialog());
         tools.addView(profile, buttonParams(54, 0, 8));
@@ -539,6 +543,60 @@ public final class PhoneMainActivity extends Activity {
         if (mode == CategoryRuleStore.MODE_ALWAYS) return "每笔确认";
         if (mode == CategoryRuleStore.MODE_AUTO) return "自动分类";
         return "智能确认";
+    }
+
+    private void showCategoryRulesDialog() {
+        List<CategoryRuleStore.Rule> rules = ruleStore.rules();
+        if (rules.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("已学习分类规则")
+                    .setMessage("还没有学习规则。你在分类确认时作出的选择会显示在这里。")
+                    .setPositiveButton("知道了", null)
+                    .show();
+            return;
+        }
+        String[] labels = new String[rules.size()];
+        for (int i = 0; i < rules.size(); i++) labels[i] = categoryRuleLabel(rules.get(i));
+        new AlertDialog.Builder(this)
+                .setTitle("已学习分类规则（" + rules.size() + " 条）")
+                .setItems(labels, (dialog, which) -> confirmDeleteCategoryRule(rules.get(which)))
+                .setNeutralButton("清空全部", (dialog, which) -> confirmClearCategoryRules())
+                .setPositiveButton("关闭", null)
+                .show();
+    }
+
+    private String categoryRuleLabel(CategoryRuleStore.Rule rule) {
+        String category = rule.sourceCategory.isEmpty() ? "未分类" : rule.sourceCategory;
+        String source = rule.sourceText.isEmpty() ? "空白说明" : rule.sourceText;
+        if (source.length() > 22) source = source.substring(0, 22) + "…";
+        return category + " · " + source + "\n→ " + typeAndPath(rule.mapping);
+    }
+
+    private void confirmDeleteCategoryRule(CategoryRuleStore.Rule rule) {
+        new AlertDialog.Builder(this)
+                .setTitle("删除这条学习规则？")
+                .setMessage(categoryRuleLabel(rule))
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除", (dialog, which) -> {
+                    if (ruleStore.delete(rule.storageKey)) {
+                        Toast.makeText(this, "已删除学习规则", Toast.LENGTH_SHORT).show();
+                        render();
+                    }
+                })
+                .show();
+    }
+
+    private void confirmClearCategoryRules() {
+        new AlertDialog.Builder(this)
+                .setTitle("清空全部学习规则？")
+                .setMessage("分类确认方式和一木分类目录不会改变；之后会重新学习你的选择。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("清空", (dialog, which) -> {
+                    int count = ruleStore.clearRules();
+                    Toast.makeText(this, "已清空 " + count + " 条规则", Toast.LENGTH_SHORT).show();
+                    render();
+                })
+                .show();
     }
 
     private static String typeAndPath(YimuCategoryMapper.Mapping mapping) {
