@@ -40,4 +40,12 @@ final class LrcReaderTest {
         assertEquals("repeat",reader.at(1250));
         assertEquals("repeat",reader.at(2250));
     }
+    @Test void collapsesEnhancedInlineWordTimestampsIntoOneVisibleLine() throws Exception {
+        Path lrc=temporary.resolve("enhanced.lrc");
+        Files.write(lrc,"[ti:公开测试]\r\n[ar:X3]\r\n[00:01.00]逐[00:01.20]字[00:01.40]歌词[00:02.00]\r\n".getBytes(StandardCharsets.UTF_8));
+        LrcReader reader=new LrcReader(lrc.toString());
+        assertEquals("",reader.at(999));
+        assertEquals("逐字歌词",reader.at(1000));
+        assertEquals("逐字歌词",reader.at(1999));
+    }
 }

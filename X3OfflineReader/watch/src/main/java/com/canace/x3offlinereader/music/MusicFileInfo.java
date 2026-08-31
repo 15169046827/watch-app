@@ -41,5 +41,7 @@ public final class MusicFileInfo {
 
     public static boolean sameContent(File first,File second){if(!first.isFile()||!second.isFile()||first.length()!=second.length())return false;try{return MessageDigest.isEqual(sha256(first),sha256(second));}catch(Exception ignored){return false;}}
 
+    public static boolean isReadable(File file){if(!file.isFile())return false;try(FileInputStream in=new FileInputStream(file)){return file.length()==0||in.read()!=-1;}catch(Exception ignored){return false;}}
+
     static byte[] sha256(File file)throws Exception{MessageDigest digest=MessageDigest.getInstance("SHA-256");try(FileInputStream in=new FileInputStream(file)){byte[] buffer=new byte[65536];for(int n;(n=in.read(buffer))!=-1;)if(n>0)digest.update(buffer,0,n);}return digest.digest();}
 }
