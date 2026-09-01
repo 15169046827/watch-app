@@ -48,4 +48,12 @@ final class LrcReaderTest {
         assertEquals("逐字歌词",reader.at(1000));
         assertEquals("逐字歌词",reader.at(1999));
     }
+    @Test void returnsDistinctPreviousCurrentAndNextLines() throws Exception {
+        Path lrc=temporary.resolve("window.lrc");
+        Files.write(lrc,"[00:00.00]上一句\n[00:01.00][00:02.00]当前句\n[00:03.00]下一句\n".getBytes(StandardCharsets.UTF_8));
+        LrcReader.Window window=new LrcReader(lrc.toString()).window(2250);
+        assertEquals("上一句",window.previous);
+        assertEquals("当前句",window.current);
+        assertEquals("下一句",window.next);
+    }
 }
