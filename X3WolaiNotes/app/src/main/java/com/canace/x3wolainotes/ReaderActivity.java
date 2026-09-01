@@ -65,6 +65,7 @@ public final class ReaderActivity extends Activity {
     private Map<String, WolaiClient.DatabaseTable> loadedTables = Collections.emptyMap();
     private String activeQuery = "";
     private String token;
+    private NoteStore store;
     private boolean destroyed;
     private int loadGeneration;
     private float downX;
@@ -73,6 +74,7 @@ public final class ReaderActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        store = new NoteStore(this);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         // Favorites can include sensitive notes; keep them out of screenshots and recents previews.
@@ -237,6 +239,11 @@ public final class ReaderActivity extends Activity {
                               Map<String, WolaiClient.DatabaseTable> tables, String query) {
         blockList.removeAllViews();
         int rendered = 0;
+        if (page.directory) {
+            int recentRendered = addRecentPages(query);
+            rendered += recentRendered;
+            if (recentRendered > 0) addSectionHeading("收藏页面");
+        }
         for (WolaiClient.RemoteBlock block : blocks) {
             if (page.directory) {
                 if (!block.isPageLink()) continue;
@@ -264,6 +271,40 @@ public final class ReaderActivity extends Activity {
                     : "当前页面没有匹配结果";
             blockList.addView(messageCard(message));
         }
+    }
+
+    private int addRecentPages(String query) {
+        List<RecentPage> matches = new ArrayList<>();
+        for (RecentPage page : store.recentPages(NoteStore.MAX_RECENT_PAGES)) {
+            if (ReaderFilter.matches(query, page.title)) matches.add(page);
+        }
+        if (matches.isEmpty()) return 0;
+
+        addSectionHeading("最近访问");
+        for (RecentPage page : matches) addRecentPageLink(page);
+        Button clear = button("清除最近", CARD_ALT, WARN);
+        clear.setOnClickListener(v -> {
+            store.clearRecentPages();
+            renderLoadedContent();
+        });
+        blockList.addView(clear, params(-1, dp(36), 0, dp(7)));
+        return matches.size();
+    }
+
+    private void addSectionHeading(String value) {
+        TextView heading = text(value, 13, MUTED, true);
+        heading.setGravity(Gravity.START);
+        heading.setPadding(dp(8), dp(5), dp(8), dp(5));
+        blockList.addView(heading, params(-1, -2, 0, dp(3)));
+    }
+
+    private void addRecentPageLink(RecentPage page) {
+        TextView view = text(page.title + "  ›", 14, Color.WHITE, true);
+        view.setGravity(Gravity.CENTER);
+        view.setPadding(dp(10), dp(9), dp(10), dp(9));
+        view.setBackground(rounded(CARD, 14));
+        view.setOnClickListener(v -> openPage(page.id, page.title));
+        blockList.addView(view, params(-1, -2, 0, dp(4)));
     }
 
     private boolean addDatabase(WolaiClient.RemoteBlock block,
@@ -344,11 +385,7 @@ public final class ReaderActivity extends Activity {
 
         if (!row.pageId.isEmpty()) {
             String pageTitle = rowTitle;
-            card.setOnClickListener(v -> {
-                clearFilterForNavigation();
-                history.push(new PageRef(row.pageId, pageTitle, false));
-                loadCurrent();
-            });
+            card.setOnClickListener(v -> openPage(row.pageId, pageTitle));
         }
         blockList.addView(card, params(-1, -2, 0, dp(4)));
     }
@@ -364,12 +401,15 @@ public final class ReaderActivity extends Activity {
         view.setGravity(Gravity.CENTER);
         view.setPadding(dp(10), dp(11), dp(10), dp(11));
         view.setBackground(rounded(CARD_ALT, 16));
-        view.setOnClickListener(v -> {
-            clearFilterForNavigation();
-            history.push(new PageRef(block.targetPageId, label, false));
-            loadCurrent();
-        });
+        view.setOnClickListener(v -> openPage(block.targetPageId, label));
         blockList.addView(view, params(-1, -2, 0, dp(5)));
+    }
+
+    private void openPage(String pageId, String title) {
+        store.recordRecentPage(pageId, title, System.currentTimeMillis());
+        clearFilterForNavigation();
+        history.push(new PageRef(pageId, title, false));
+        loadCurrent();
     }
 
     private boolean addContentBlock(WolaiClient.RemoteBlock block, String query) {
@@ -563,6 +603,7 @@ public final class ReaderActivity extends Activity {
         loadedBlocks = Collections.emptyList();
         loadedTables = Collections.emptyMap();
         executor.shutdownNow();
+        if (store != null) store.close();
         super.onDestroy();
     }
 }

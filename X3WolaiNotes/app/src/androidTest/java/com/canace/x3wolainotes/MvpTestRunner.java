@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -29,13 +30,14 @@ public final class MvpTestRunner extends Instrumentation {
         try {
             if ("offline-ui".equals(arguments == null ? "" : arguments.getString("mode", ""))) {
                 runOfflineUi();
-                result.putString("stream", "V6_OFFLINE_UI_OK\n");
+                result.putString("stream", "V7_OFFLINE_UI_OK\n");
             } else {
+                verifyRecentPagesStore();
                 runReadWriteRoundTrip();
                 verifyUnknownWriteOutcome();
                 verifyErrorMessages();
                 result.putString("stream",
-                        "V6_READ_WRITE_RECONCILE_FAVORITES_DATABASE_ERRORS_UNKNOWN_WRITE_OK\n");
+                        "V7_RECENTS_READ_WRITE_RECONCILE_FAVORITES_DATABASE_ERRORS_UNKNOWN_WRITE_OK\n");
             }
             finish(Activity.RESULT_OK, result);
         } catch (Throwable error) {
@@ -84,6 +86,51 @@ public final class MvpTestRunner extends Instrumentation {
             require(error.isOutcomeUnknown(), "Unknown write fault was not marked uncertain");
         } finally {
             WolaiClient.resetTestFaults();
+        }
+    }
+
+    private void verifyRecentPagesStore() {
+        Context context = getTargetContext();
+        String databaseName = "x3_wolai_notes_recent_test.db";
+        context.deleteDatabase(databaseName);
+        SQLiteDatabase legacy = context.openOrCreateDatabase(databaseName,
+                Context.MODE_PRIVATE, null);
+        legacy.execSQL("CREATE TABLE local_notes (" +
+                "id TEXT PRIMARY KEY," +
+                "text TEXT NOT NULL," +
+                "kind INTEGER NOT NULL," +
+                "created_at INTEGER NOT NULL," +
+                "state INTEGER NOT NULL," +
+                "error TEXT NOT NULL DEFAULT ''," +
+                "last_attempt_at INTEGER NOT NULL DEFAULT 0)");
+        legacy.execSQL("INSERT INTO local_notes " +
+                "(id, text, kind, created_at, state, error, last_attempt_at) " +
+                "VALUES ('migration-check', 'test', 0, 1, 2, '', 0)");
+        legacy.setVersion(3);
+        legacy.close();
+
+        NoteStore store = new NoteStore(context, databaseName);
+        try {
+            require(store.recentLocal(5).size() == 1,
+                    "SQLite v3 notes were not preserved");
+            for (int index = 0; index < 12; index++) {
+                store.recordRecentPage("page-" + index, "页面 " + index, 1000L + index);
+            }
+            List<RecentPage> recent = store.recentPages(20);
+            require(recent.size() == NoteStore.MAX_RECENT_PAGES,
+                    "Recent page limit failed");
+            require("page-11".equals(recent.get(0).id), "Recent page ordering failed");
+            require("page-2".equals(recent.get(9).id), "Recent page trimming failed");
+
+            store.recordRecentPage("page-5", "更新标题", 2000L);
+            recent = store.recentPages(10);
+            require("page-5".equals(recent.get(0).id), "Recent page refresh failed");
+            require("更新标题".equals(recent.get(0).title), "Recent title update failed");
+            store.clearRecentPages();
+            require(store.recentPages(10).isEmpty(), "Recent page clear failed");
+        } finally {
+            store.close();
+            context.deleteDatabase(databaseName);
         }
     }
 
