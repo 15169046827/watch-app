@@ -64,7 +64,7 @@ public final class AudiobookBuilder {
         if(TtsProviderCatalog.entry(options.tts).online()&&!options.allowOnlineTts)throw new IllegalArgumentException("在线语音需要明确授权；GUI 会在转换前询问，CLI 请添加 --allow-online-tts");
         TtsProvider tts=providerFactory.create(options,projectRoot);if(!tts.isAvailable())throw new IllegalStateException("TTS provider unavailable: "+options.tts);
         ExecutorService synthesisPool=Executors.newFixedThreadPool(tts.parallelism(),task->{Thread thread=new Thread(task,"x3-tts-synthesis");thread.setDaemon(true);return thread;});
-        Path work=projectRoot.resolve("builder/.work/"+book.bookId);Files.createDirectories(work);
+        Path work=BuilderWorkDirectory.resolve(projectRoot).resolve(book.bookId);Files.createDirectories(work);
         try{
             int initiallyCached=0;long cachedCharacters=0,uncachedCharacters=0;
             for(BookModel.Volume volume:book.volumes)for(BookModel.Chapter chapter:volume.chapters)for(SentenceSegmenter.Segment segment:segmenter.segment(chapter)){
@@ -142,7 +142,7 @@ public final class AudiobookBuilder {
         finally{Files.deleteIfExists(temporary);if(!generated.getWavPath().toAbsolutePath().normalize().equals(cache.toAbsolutePath().normalize()))Files.deleteIfExists(generated.getWavPath());}
     }
 
-    private Path cachePath(TtsProvider tts,BuilderOptions options,SentenceSegmenter.Segment segment){String cacheId=Ids.sha256(tts.id()+"\n"+options.voice+"\n"+options.rate+"\n"+segment.text).substring(0,24);return projectRoot.resolve("builder/.work/cache/"+cacheId+".wav");}
+    private Path cachePath(TtsProvider tts,BuilderOptions options,SentenceSegmenter.Segment segment){String cacheId=Ids.sha256(tts.id()+"\n"+options.voice+"\n"+options.rate+"\n"+segment.text).substring(0,24);return BuilderWorkDirectory.resolve(projectRoot).resolve("cache/"+cacheId+".wav");}
     private static String trackSignature(TtsProvider tts,BuilderOptions options,String trackId,List<Path> waves,List<Long> durations){StringBuilder value=new StringBuilder(tts.id()).append('|').append(options.voice).append('|').append(options.rate).append('|').append(options.pauseMs).append('|').append(trackId);for(int i=0;i<waves.size();i++)value.append('|').append(waves.get(i).getFileName()).append(':').append(durations.get(i));return Ids.sha256(value.toString());}
     private static boolean validTrack(Path m4a,Path metadata,String signature){try{if(!Files.isRegularFile(m4a)||Files.size(m4a)<512||!Files.isRegularFile(metadata))return false;Properties values=new Properties();try(InputStream input=Files.newInputStream(metadata)){values.load(input);}return signature.equals(values.getProperty("signature"));}catch(Exception ignored){return false;}}
     private static void writeTrackMetadata(Path metadata,String signature,long duration)throws Exception{Properties values=new Properties();values.setProperty("signature",signature);values.setProperty("durationMs",Long.toString(duration));Path temporary=metadata.resolveSibling(metadata.getFileName()+".tmp-"+UUID.randomUUID());try(OutputStream output=Files.newOutputStream(temporary)){values.store(output,"Reusable encoded Track");}try{moveAtomic(temporary,metadata);}finally{Files.deleteIfExists(temporary);}}

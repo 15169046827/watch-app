@@ -16,12 +16,19 @@ public final class BuilderMain {
         // Keep the additional console launcher usable even if that packaging quirk recurs.
         if(args.length>1&&args[0].equals("gui"))args=Arrays.copyOfRange(args,1,args.length);
         if (args.length == 0 || args[0].equals("--help") || args[0].equals("help")) { usage(); return; }
-        if (args[0].startsWith("bridge-")) { int code=BuilderBridge.run(findProjectRoot(),args);if(code!=0)System.exit(code);return; }
-        if (args[0].equals("gui")) { javax.swing.SwingUtilities.invokeLater(()->new BuilderGui(findProjectRoot()).show()); return; }
         if (args[0].equals("voices")) { listVoices(); return; }
+        Path root=findProjectRoot();
+        if(args[0].equals("migrate-work")){
+            if(args.length!=3||!args[1].equals("--from"))throw new IllegalArgumentException("migrate-work requires --from <legacy-directory>");
+            BuilderWorkDirectory.MigrationResult result=BuilderWorkDirectory.migrate(Path.of(args[2]),BuilderWorkDirectory.resolve(root));
+            System.out.println("Migrated "+result.files()+" files / "+result.bytes()+" bytes; source removed="+result.sourceRemoved());return;
+        }
+        BuilderWorkDirectory.initialize(root);
+        if (args[0].startsWith("bridge-")) { int code=BuilderBridge.run(root,args);if(code!=0)System.exit(code);return; }
+        if (args[0].equals("gui")) { javax.swing.SwingUtilities.invokeLater(()->new BuilderGui(root).show()); return; }
         if (!args[0].equals("build")) throw new IllegalArgumentException("Unknown command: " + args[0]);
         BuilderOptions options = parse(args);
-        AudiobookBuilder builder = new AudiobookBuilder(findProjectRoot());
+        AudiobookBuilder builder = new AudiobookBuilder(root);
         if (options.separate) {
             Files.createDirectories(options.output);
             for (Path input : options.inputs) {
@@ -98,6 +105,7 @@ public final class BuilderMain {
         System.out.println("听读工坊\n"
                 + "  voices\n"
                 + "  gui\n"
+                + "  migrate-work --from <legacy-directory>\n"
                 + "  build --input <epub|txt> [--input ...] --output <book.opbook> [options]\n"
                 + "Options: --title --author --language --tts melo|sherpa-kokoro|sherpa-aishell3|windows|edge|tone --voice --rate --pause-ms --cover --ffmpeg --melo-python --melo-workers 1|2 --sherpa-workers 1..4 --windows-workers 1..12 --edge-workers 1..12 --created-at\n"
                 + "         --allow-online-tts (required for edge; book text is sent to the online service)\n"

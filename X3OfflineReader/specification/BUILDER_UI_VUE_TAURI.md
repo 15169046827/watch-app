@@ -11,11 +11,11 @@
 - `BuilderBridge`：Java 转换核心的 JSON/JSON-lines 边界。状态、预生成试听、缓存整理为一次性请求；转换任务持续输出 `estimate/progress/paused/failed/complete` 事件。
 - `AudiobookBuilder`：唯一转换实现。Vue/Rust 不解析书籍、不生成语音、不编码媒体，也不写 `.opbook` 内容。
 
-正式打包先用 jpackage 生成 Java 运行时与 `X3BuilderCLI.exe`，再用 Tauri EXE 替换同路径主 GUI。这样保持开始菜单、脚本、缓存位置和历史数据兼容。
+正式打包先用 jpackage 生成 Java 运行时与 `X3BuilderCLI.exe`，再用 Tauri EXE 替换同路径主 GUI。这样保持开始菜单和脚本兼容；0.6.4 起缓存、断点与未完成任务迁移到独立用户数据目录，不再依附可替换的 app-image。
 
 ## 断点与进程生命周期
 
-每个 Tauri 转换任务只在 `builder/.work/ui-requests` 创建短期请求 JSON 和控制文件路径。点击“保存进度”、点击“保存并关闭”或在转换中关闭窗口时，Rust 只创建控制文件；Java 在安全检查点停止 TTS/FFmpeg、保存 checkpoint 并关闭 Provider 后，窗口才退出。请求与控制文件结束后删除，私人正文不写入日志。
+每个 Tauri 转换任务只在独立工作根目录的 `ui-requests` 创建短期请求 JSON 和控制文件。Tauri 把同一个绝对工作根目录通过 `X3_BUILDER_WORK_ROOT` 传给 Java，后端拒绝工作目录外的请求/控制文件。点击“保存进度”、点击“保存并关闭”或在转换中关闭窗口时，Rust 只创建控制文件；Java 在安全检查点停止 TTS/FFmpeg、保存 checkpoint 并关闭 Provider 后，窗口才退出。请求与控制文件结束后删除，私人正文不写入日志。
 
 恢复任务从 Java checkpoint 读取原始选项。界面只展示最新未完成任务；现有句子 WAV、已编码 Track 与任务目录继续使用 0.5.0 的原子缓存和 20 GiB/180 天整理规则。
 
@@ -42,6 +42,13 @@
 - Provider 卡统一限制在 420–560px 之间，音色按钮在各卡内部独立纵向滚动，避免大量音色撑高页面。
 - Java 40 项测试、Vue 类型检查/生产构建与 Rust release 测试/构建通过；正式入口仍为 Windows GUI 子系统。
 
+## 0.6.4 数据目录隔离（2026-09-01）
+
+- 默认工作根目录改为 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`；正式包内不得存在 `.work`。
+- Java 统一解析缓存、checkpoint、书籍工作目录、Windows 实时试听和 UI 请求路径；Tauri 使用相同绝对路径启动后端。
+- 旧数据迁移采用临时副本、长度与 SHA-256 双重校验、原子提交和冲突即停。打包脚本在删除旧 app-image 前完成迁移，因此失败不会破坏旧缓存或断点。
+- 正式 0.6.4 验证覆盖 53 项 Java 测试、Vue 生产构建、Rust release 测试/构建、1,105 个既有文件迁移、CLI/bridge、GUI 启停、PE GUI 子系统、源码/正式 JAR 一致性、开始菜单目标和公开 tone `.opbook` 全套格式/攻击校验。
+
 ## 0.6.1 回归修复（2026-08-27）
 
 - 试听播放器是单实例资源。新试听在请求前停止旧音频；Provider/音色变化和窗口销毁也会停止；请求序号阻止较慢的旧请求在新请求之后播放。
@@ -57,7 +64,7 @@
 - Tauri：Windows release profile 构建通过，正式入口使用 GUI 子系统。
 - 公开样例桥接转换成功；21 个事件完成，百分比序列 `0,3,7,8,9,10,78,79,79,85,85,85,85,90,90,91,95,99,100` 单调不回退。
 - 正式 UI 人工检查：主制作页、预生成音色入口、任务续作、存储统计与中文编码通过；可恢复任务能够呈现且不会被验证流程自动启动。
-- 正式升级验证确认 `builder/.work` 完整保留、无临时备份遗留，开始菜单目标路径不变。
+- 正式升级验证确认工作数据完整迁移到独立目录、app-image 内无 `.work`，开始菜单目标路径不变。
 
 ## 已知限制
 

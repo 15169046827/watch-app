@@ -16,7 +16,7 @@ final class BuilderCacheManager {
     record Stats(long sentenceFiles,long sentenceBytes,long unfinishedDirectories,long unfinishedBytes){}
 
     private final Path workRoot,cacheRoot;
-    BuilderCacheManager(Path root){workRoot=root.resolve("builder/.work").toAbsolutePath().normalize();cacheRoot=workRoot.resolve("cache");}
+    BuilderCacheManager(Path root){workRoot=BuilderWorkDirectory.resolve(root);cacheRoot=workRoot.resolve("cache");}
 
     Stats stats(){long cacheFiles=0,cacheBytes=0,workDirs=0,workBytes=0;try(Stream<Path> paths=Files.list(cacheRoot)){for(Path path:paths.filter(Files::isRegularFile).toList()){cacheFiles++;cacheBytes+=size(path);}}catch(Exception ignored){}
         try(Stream<Path> paths=Files.list(workRoot)){for(Path path:paths.filter(Files::isDirectory).filter(this::isBookWork).toList()){workDirs++;workBytes+=treeSize(path);}}catch(Exception ignored){}return new Stats(cacheFiles,cacheBytes,workDirs,workBytes);}

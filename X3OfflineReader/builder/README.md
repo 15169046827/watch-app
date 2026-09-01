@@ -10,6 +10,13 @@
 - 句级 WAV 真实时长生成 Timeline，再拼接并编码 AAC-LC/M4A；章节超过固定 20 分钟时在句子边界自动拆 Track。该内部保护值不在 GUI/CLI 暴露。
 - 512×512 WebP 封面、稳定 ID、完整 SHA-256 和确定顺序 ZIP。
 
+## 0.6.4 独立任务数据目录
+
+- 正式 GUI/CLI 的句子缓存、checkpoint、未完成 Track 和短期控制文件统一位于 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`，不再写入可被 Gradle `clean` 或程序重打包删除的 app-image。
+- 首次启动或正式打包会迁移旧 `builder/.work`。每个文件先复制到随机临时名并对源文件和副本计算 SHA-256；已存在的相同文件直接复用，同名不同内容立即停止。只有整棵目录验证完成后才删除旧副本。
+- 打包脚本在删除旧正式包之前迁移源码侧和旧包侧工作目录；迁移失败、工坊仍运行或目标冲突时拒绝替换。新正式包中明确禁止残留 `builder/.work`。
+- 自定义数据磁盘可设置绝对路径环境变量 `X3_BUILDER_WORK_ROOT`；打包时也可传 `-WorkRoot`。相对路径会被拒绝，避免 GUI 和 Java 后端写入不同目录。
+
 ## 0.6.3 全 Provider 性能优化
 
 - Windows `System.Speech` 改为可复用的 32 位长驻 worker 池，避免每句重启 PowerShell；本机 2 进程长篇端到端实测约 108.3 万字/小时，继续增加进程反而变慢。
@@ -28,7 +35,7 @@
 - Windows 系统语音改用本机已验证的 32 位 `System.Speech`，可在试听页实时生成中文短句；其余 Provider 继续使用随包预生成试听。各页面右上角不再显示与当前页面无关的全局“在线音色/离线处理”标识。
 - Edge 新任务默认 8 个并发请求，可在 GUI 或 `--edge-workers 1..12` 调整；旧断点缺少该字段时仍按 1 个请求恢复。并发只改变调度，不改变音频缓存键、Timeline、章节和包内顺序；重试加入小幅错峰，避免所有请求同时再次冲击在线服务。
 - `builder/voice-previews/` 是由 `generate-voice-previews*.ps1` 生成的本机打包资源，Git 仅保留生成代码与说明；正式包仍嵌入完整索引和 WAV。
-- 正式包继续使用 Windows GUI 子系统和隐藏 Java 子进程；`.opbook` v1、Provider、缓存键、可执行文件名和工作目录保持兼容。
+- 正式包继续使用 Windows GUI 子系统和隐藏 Java 子进程；`.opbook` v1、Provider、缓存键和可执行文件名保持兼容。0.6.4 会把旧工作目录自动迁移到独立用户数据目录。
 
 ## 0.6.1 回归修复
 
@@ -43,7 +50,7 @@
 - Tauri 只负责原生文件选择、窗口生命周期和 Java 子进程事件转发。`BuilderBridge` 提供 JSON/JSON-lines 边界，`.opbook` 仍只由 Java 核心生成。
 - 一级页面为“制作新书 / 音色试听 / 任务与续作 / 存储管理”。设置保存到本机 WebView 配置，输入书目列表不持久化；输入、输出和封面选择器保留上次目录。
 - 点击“保存进度”或转换中关闭窗口时，程序创建安全控制文件并等待 Java 保存 checkpoint、关闭 TTS/FFmpeg 后再退出。
-- 正式打包保留 `X3AudiobookBuilder.exe`、`X3BuilderCLI.exe`、开始菜单路径和 `builder/.work`。完整设计与限制见 [`../specification/BUILDER_UI_VUE_TAURI.md`](../specification/BUILDER_UI_VUE_TAURI.md)。
+- 正式打包保留 `X3AudiobookBuilder.exe`、`X3BuilderCLI.exe` 和开始菜单路径；0.6.4 起工作数据独立于 app-image。完整设计与限制见 [`../specification/BUILDER_UI_VUE_TAURI.md`](../specification/BUILDER_UI_VUE_TAURI.md)。
 
 ## GUI 使用习惯
 
@@ -89,6 +96,6 @@
 .\builder\package-windows.ps1
 ```
 
-便携镜像约 4.14GB，内含 Java、FFmpeg 和 Melo 模型；`-WithoutMelo` 可生成较小的 SAPI/tone 版本。构建缓存位于 `builder\.work`，键包含 provider、声音、语速和规范化句子；不得把私人正文、日志或生成包提交到源码。
+便携镜像约 4.14GB，内含 Java、FFmpeg 和 Melo 模型；`-WithoutMelo` 可生成较小的 SAPI/tone 版本。正式程序的持久数据默认位于 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`，缓存键包含 provider、声音、语速和规范化句子；不得把私人正文、日志或生成包提交到源码。
 
-重建便携镜像时脚本会临时备份并恢复旧镜像的句级 WAV 缓存，避免修复升级后从头合成；若打包中途失败，备份会保留在 `builder\build\windows-cache-preserve-*`，不会静默删除。
+重建便携镜像前，脚本会把旧源码/正式包中的工作数据校验迁移到独立目录；失败会在删除正式包之前终止。迁移后 app-image 只含可重建的程序和模型文件。

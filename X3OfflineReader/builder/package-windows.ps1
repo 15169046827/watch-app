@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$WithoutMelo,[switch]$WithoutAdditionalVoices,[string]$JpackagePath)
+param([switch]$WithoutMelo,[switch]$WithoutAdditionalVoices,[string]$JpackagePath,[string]$WorkRoot)
 $ErrorActionPreference='Stop'
 $project=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $outputRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\windows-package'))
@@ -24,22 +24,36 @@ $tauriExecutable=Join-Path $uiRoot 'src-tauri\target\release\tingdu-workshop.exe
 if(-not(Test-Path -LiteralPath $tauriExecutable -PathType Leaf)){throw 'Tauri executable not found'}
 $running=@(Get-Process -Name 'X3AudiobookBuilder','X3BuilderCLI','tingdu-workshop' -ErrorAction SilentlyContinue)
 if($running.Count -gt 0){throw '请先关闭听读工坊及 X3BuilderCLI，再重新打包便携程序'}
-$oldWork=Join-Path $outputRoot 'X3AudiobookBuilder\builder\.work'
-$workBackup=$null
-if(Test-Path -LiteralPath $oldWork -PathType Container){
-    $workBackup=Join-Path $PSScriptRoot ('build\windows-work-preserve-'+[Guid]::NewGuid().ToString('N'))
-    $resolvedBackup=[IO.Path]::GetFullPath($workBackup)
-    if(-not $resolvedBackup.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe work backup path'}
-    Copy-Tree $oldWork $workBackup
+$persistentWork=if($WorkRoot){[IO.Path]::GetFullPath($WorkRoot)}elseif($env:X3_BUILDER_WORK_ROOT){[IO.Path]::GetFullPath($env:X3_BUILDER_WORK_ROOT)}elseif($env:LOCALAPPDATA){Join-Path $env:LOCALAPPDATA 'Canace\X3AudiobookBuilder\work'}else{throw '无法定位 Windows 用户数据目录；请传入 -WorkRoot'}
+$projectBoundary=[IO.Path]::GetFullPath($project)+[IO.Path]::DirectorySeparatorChar
+if(([IO.Path]::GetFullPath($persistentWork)+[IO.Path]::DirectorySeparatorChar).StartsWith($projectBoundary,[StringComparison]::OrdinalIgnoreCase)){throw '听读工坊数据目录必须位于项目和正式程序目录之外'}
+$builderLauncher=Join-Path $PSScriptRoot 'build\install\builder\bin\builder.bat'
+function Move-LegacyWork([string]$Source){
+    if(-not(Test-Path -LiteralPath $Source -PathType Container)){return}
+    $previousHome=$env:X3_BUILDER_HOME
+    $previousWork=$env:X3_BUILDER_WORK_ROOT
+    try{
+        $env:X3_BUILDER_HOME=$project
+        $env:X3_BUILDER_WORK_ROOT=$persistentWork
+        & $builderLauncher migrate-work --from $Source
+        if($LASTEXITCODE -ne 0){throw "Builder work migration failed: $Source"}
+        if(Test-Path -LiteralPath $Source){throw "Builder work migration did not remove the verified legacy copy: $Source"}
+    }finally{
+        $env:X3_BUILDER_HOME=$previousHome
+        $env:X3_BUILDER_WORK_ROOT=$previousWork
+    }
 }
+$oldWork=Join-Path $outputRoot 'X3AudiobookBuilder\builder\.work'
+Move-LegacyWork (Join-Path $project 'builder\.work')
+Move-LegacyWork $oldWork
 if(Test-Path -LiteralPath $outputRoot){Remove-Item -LiteralPath $outputRoot -Recurse -Force}
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $launcher=Join-Path $outputRoot 'cli.properties'
-@('main-jar=builder-0.6.3.jar','main-class=com.canace.x3offlinereader.builder.BuilderMain','arguments=','win-console=true') | Set-Content -LiteralPath $launcher -Encoding ASCII
+@('main-jar=builder-0.6.4.jar','main-class=com.canace.x3offlinereader.builder.BuilderMain','arguments=','win-console=true') | Set-Content -LiteralPath $launcher -Encoding ASCII
 if(-not $JpackagePath -and $env:JAVA_HOME){$JpackagePath=Join-Path $env:JAVA_HOME 'bin\jpackage.exe'}
 if(-not $JpackagePath){$command=Get-Command jpackage.exe -ErrorAction SilentlyContinue;if($command){$JpackagePath=$command.Source}}
 if(-not $JpackagePath -or -not(Test-Path -LiteralPath $JpackagePath -PathType Leaf)){throw 'JDK 17 jpackage.exe not found. Pass -JpackagePath, set JAVA_HOME, or add jpackage to PATH.'}
-& $JpackagePath --type app-image --name X3AudiobookBuilder --app-version '0.6.3' --dest $outputRoot --input (Join-Path $PSScriptRoot 'build\install\builder\lib') --main-jar 'builder-0.6.3.jar' --main-class 'com.canace.x3offlinereader.builder.BuilderMain' --arguments gui --java-options '-Dfile.encoding=UTF-8' --icon $icon --add-launcher "X3BuilderCLI=$launcher"
+& $JpackagePath --type app-image --name X3AudiobookBuilder --app-version '0.6.4' --dest $outputRoot --input (Join-Path $PSScriptRoot 'build\install\builder\lib') --main-jar 'builder-0.6.4.jar' --main-class 'com.canace.x3offlinereader.builder.BuilderMain' --arguments gui --java-options '-Dfile.encoding=UTF-8' --icon $icon --add-launcher "X3BuilderCLI=$launcher"
 if($LASTEXITCODE -ne 0){throw 'jpackage failed'}
 $app=Join-Path $outputRoot 'X3AudiobookBuilder'
 Copy-Item -LiteralPath $tauriExecutable -Destination (Join-Path $app 'X3AudiobookBuilder.exe') -Force
@@ -62,13 +76,10 @@ if(-not $WithoutAdditionalVoices){
     Copy-Tree (Join-Path $project '.tools\sherpa-onnx\python') (Join-Path $app '.tools\sherpa-onnx\python')
 }
 Copy-Tree (Join-Path $project 'samples\builder-inputs') (Join-Path $app 'builder-inputs')
-if($workBackup){
-    Copy-Tree $workBackup (Join-Path $app 'builder\.work')
-    Remove-Item -LiteralPath $workBackup -Recurse -Force
-}
 if(-not $WithoutMelo){
     & (Join-Path $app '.tools\melo\python.exe') (Join-Path $app 'builder\melo\worker.py') --self-test
     if($LASTEXITCODE -ne 0){throw 'Packaged Melo sanitizer self-test failed'}
 }
 Remove-Item -LiteralPath $launcher -Force
+if(Test-Path -LiteralPath (Join-Path $app 'builder\.work')){throw 'Persistent work must not be stored inside the replaceable app image'}
 Write-Host "Windows app image ready: $app"

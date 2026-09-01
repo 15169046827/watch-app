@@ -32,6 +32,7 @@ Windows 便携应用镜像：
 ```powershell
 .\builder\package-windows.ps1          # 内含 JRE、FFmpeg、离线 TTS 运行环境与模型
 .\builder\package-windows.ps1 -WithoutMelo
+.\builder\package-windows.ps1 -WorkRoot '<absolute-data-directory>' # 可选的绝对数据目录
 ```
 
 产物位于 `builder\build\windows-package\X3AudiobookBuilder`，用户可见名称为“听读工坊”，兼容 GUI 文件名为 `X3AudiobookBuilder.exe`，CLI 为 `X3BuilderCLI.exe`。Debug APK 位于 `watch\build\outputs\apk\debug\watch-debug.apk`，用户可见名称为“听读”，固定使用工作区共享 Debug Key；不得生成替代密钥。
@@ -43,6 +44,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\create-start-m
 ```
 
 ## 当前状态
+
+听读工坊 0.6.4 将句子缓存、断点、未完成 Track 和 GUI 控制文件从可替换的 app-image/构建目录迁移到当前 Windows 用户的独立本机数据目录（默认 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`）。正式 GUI、CLI 和打包脚本使用同一位置；旧源码或正式包内的 `builder/.work` 会逐文件复制并校验 SHA-256，目标冲突或验证失败会中止替换并保留旧数据，全部通过后才移除旧副本。新正式包内不再创建 `.work`，因此 Gradle 清理、程序重打包和升级不会删除转换缓存或断点；需要自定义磁盘时可使用绝对路径环境变量 `X3_BUILDER_WORK_ROOT` 或打包参数 `-WorkRoot`。详见 [`specification/BUILDER_RESUME_CACHE.md`](specification/BUILDER_RESUME_CACHE.md)。
 
 听读 0.5.0 将“导入”改为索引式添加：用户可从任意目录多选 `.opbook`，App 持久保存文件授权并原地完成路径、大小、压缩比、格式、资源关系、元数据 SHA-256 与媒体头校验；音频内容 SHA-256 延迟到首次播放提取时核对。页面切换不会丢失任务状态或解锁重复提交。书籍按 `bookId` 去重，源文件缺失时给出明确提示；书籍和音乐均支持长按管理，书籍可选择仅移出书库或连同源文件删除。播放只缓存前一/当前/下一章节，优先对可寻址 SAF 文件随机读取 ZIP 条目，回退到流式读取。详见 [`specification/WATCH_INDEXED_LIBRARY.md`](specification/WATCH_INDEXED_LIBRARY.md)。
 

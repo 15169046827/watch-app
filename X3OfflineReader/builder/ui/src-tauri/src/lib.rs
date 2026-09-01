@@ -15,6 +15,7 @@ use tauri::{Emitter, Manager, Runtime, WindowEvent};
 use std::os::windows::process::CommandExt;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+const WORK_ROOT_ENV: &str = "X3_BUILDER_WORK_ROOT";
 
 struct ActiveBuild {
     control_file: PathBuf,
@@ -41,6 +42,26 @@ fn project_root() -> Result<PathBuf, String> {
     Err("无法定位听读工坊项目或转换核心".into())
 }
 
+fn persistent_work_root(root: &Path) -> Result<PathBuf, String> {
+    let work = if let Some(configured) = std::env::var_os(WORK_ROOT_ENV).filter(|value| !value.is_empty()) {
+        let path = PathBuf::from(configured);
+        if !path.is_absolute() {
+            return Err("X3_BUILDER_WORK_ROOT 必须是绝对路径".into());
+        }
+        path
+    } else {
+        let base = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join("AppData/Local")))
+            .ok_or("无法定位 Windows 用户数据目录")?;
+        base.join("Canace/X3AudiobookBuilder/work")
+    };
+    if work.starts_with(root) {
+        return Err("听读工坊数据目录必须位于程序目录之外".into());
+    }
+    Ok(work)
+}
+
 fn backend_command(root: &Path, args: &[String]) -> Result<Command, String> {
     let packaged = root.join("X3BuilderCLI.exe");
     let mut command = if packaged.is_file() {
@@ -56,7 +77,7 @@ fn backend_command(root: &Path, args: &[String]) -> Result<Command, String> {
         value.args(["/D", "/S", "/C"]).arg(script).args(args);
         value
     };
-    command.current_dir(root).stdin(Stdio::null());
+    command.current_dir(root).env(WORK_ROOT_ENV, persistent_work_root(root)?).stdin(Stdio::null());
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
     Ok(command)
@@ -102,7 +123,7 @@ fn unique_file(directory: &Path, suffix: &str) -> PathBuf {
 
 fn launch_build<R: Runtime>(app: tauri::AppHandle<R>, state: &RuntimeState, mut request: Value, resume: bool) -> Result<(), String> {
     let root = project_root()?;
-    let request_root = root.join("builder/.work/ui-requests");
+    let request_root = persistent_work_root(&root)?.join("ui-requests");
     fs::create_dir_all(&request_root).map_err(|error| format!("无法创建任务目录：{error}"))?;
     let request_file = unique_file(&request_root, "json");
     let control_file = unique_file(&request_root, "stop");

@@ -39,7 +39,7 @@ public final class VoicePreviewGenerator {
                     index++;if((index-1)%shardCount!=shardIndex)continue;Path target=VoicePreviewLibrary.path(root,entry.id(),voice);
                     if(!overwrite&&VoicePreviewLibrary.available(root,entry.id(),voice)){skipped++;continue;}
                     try{
-                        Path work=root.resolve("builder/.work/preview-generation").resolve(entry.id());Files.createDirectories(work);
+                        Path work=BuilderWorkDirectory.resolve(root).resolve("preview-generation").resolve(entry.id());Files.createDirectories(work);
                         String id="preview-"+VoicePreviewLibrary.key(entry.id(),voice);
                         String sentence=VoicePreviewLibrary.sentence(entry.id());
                         if(!overwrite&&Files.isRegularFile(target))sentence=VoicePreviewLibrary.adjustedSentence(entry.id(),WaveSupport.durationMs(target));

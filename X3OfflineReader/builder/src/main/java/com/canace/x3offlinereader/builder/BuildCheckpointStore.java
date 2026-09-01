@@ -19,7 +19,7 @@ final class BuildCheckpointStore {
 
     private final Path directory;
 
-    BuildCheckpointStore(Path root) { directory=root.resolve("builder/.work/checkpoints").toAbsolutePath().normalize(); }
+    BuildCheckpointStore(Path root) { directory=BuilderWorkDirectory.resolve(root).resolve("checkpoints"); }
 
     synchronized Checkpoint create(BuilderOptions options) throws Exception {
         Files.createDirectories(directory);

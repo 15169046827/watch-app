@@ -38,7 +38,7 @@ final class BuilderBridge {
     }
 
     private static ObjectNode state(Path root){
-        ObjectNode state=JSON.createObjectNode();state.put("version","0.6.3");ArrayNode providers=state.putArray("providers");
+        ObjectNode state=JSON.createObjectNode();state.put("version","0.6.4");ArrayNode providers=state.putArray("providers");
         for(TtsProviderCatalog.Entry entry:TtsProviderCatalog.guiEntries()){
             ObjectNode node=providers.addObject();node.put("id",entry.id());node.put("label",entry.label());node.put("online",entry.online());node.put("defaultVoice",entry.defaultVoice());node.put("throughputLabel",entry.throughputLabel());node.put("benchmarkCharactersPerHour",entry.optimizedCharactersPerHour());node.put("optimizedParallelism",entry.optimizedParallelism());ArrayNode voices=node.putArray("voices");
             boolean livePreview=false;List<String> values=VoicePreviewLibrary.cachedVoices(root,entry.id());
@@ -53,7 +53,7 @@ final class BuilderBridge {
         if(VoicePreviewLibrary.available(root,provider,voice))audio=Files.readAllBytes(VoicePreviewLibrary.path(root,provider,voice));
         else{
             if(!"windows".equalsIgnoreCase(provider))throw new IllegalArgumentException("该音色没有预生成试听");
-            Path workRoot=root.resolve("builder/.work");Files.createDirectories(workRoot);Path work=Files.createTempDirectory(workRoot,"windows-preview-");
+            Path workRoot=BuilderWorkDirectory.resolve(root);Files.createDirectories(workRoot);Path work=Files.createTempDirectory(workRoot,"windows-preview-");
             TtsProvider engine=TtsProviderCatalog.previewProvider(provider,root,null);
             try{
                 if(!engine.isAvailable()||!engine.voices().contains(voice))throw new IllegalArgumentException("该 Windows 音色不可用");
@@ -69,7 +69,7 @@ final class BuilderBridge {
     private static ObjectNode cache(Path root,String action)throws Exception{BuilderCacheManager manager=new BuilderCacheManager(root);BuilderCacheManager.PruneResult result=switch(action){case "prune"->manager.pruneSentenceCache(BuilderCacheManager.DEFAULT_MAX_BYTES,BuilderCacheManager.DEFAULT_MAX_AGE);case "stale"->manager.clearStaleWork(Duration.ofDays(30));case "clear"->manager.clearSentenceCache();default->new BuilderCacheManager.PruneResult(0,0);};ObjectNode response=JSON.createObjectNode();response.put("deletedFiles",result.deletedFiles());response.put("deletedBytes",result.deletedBytes());appendCache(response,manager.stats());return response;}
 
     private static int build(Path root,Path requestFile)throws Exception{
-        Path requestRoot=root.resolve("builder/.work/ui-requests").toAbsolutePath().normalize(),normalized=requestFile.toAbsolutePath().normalize();if(!normalized.startsWith(requestRoot)||!Files.isRegularFile(normalized))throw new IllegalArgumentException("Unsafe or missing bridge request");Request request=JSON.readValue(normalized.toFile(),Request.class);Files.deleteIfExists(normalized);
+        Path requestRoot=BuilderWorkDirectory.resolve(root).resolve("ui-requests"),normalized=requestFile.toAbsolutePath().normalize();if(!normalized.startsWith(requestRoot)||!Files.isRegularFile(normalized))throw new IllegalArgumentException("Unsafe or missing bridge request");Request request=JSON.readValue(normalized.toFile(),Request.class);Files.deleteIfExists(normalized);
         Path control=Path.of(required(request.controlFile,"controlFile")).toAbsolutePath().normalize();if(!control.startsWith(requestRoot))throw new IllegalArgumentException("Unsafe control path");Files.deleteIfExists(control);BuildCheckpointStore checkpoints=new BuildCheckpointStore(root);BuildCheckpointStore.Checkpoint checkpoint;
         BuilderOptions options;long previousElapsedSeconds;if(request.resume){checkpoint=checkpoints.latest().orElseThrow(()->new IllegalStateException("没有可恢复任务"));options=checkpoint.options();previousElapsedSeconds=checkpoint.elapsedSeconds();checkpoint=checkpoints.update(checkpoint,"running",0,"正在重新计算断点进度",previousElapsedSeconds);}else{options=options(request);checkpoint=checkpoints.create(options);previousElapsedSeconds=0;}long sessionStartedNanos=System.nanoTime();
         AtomicReference<BuildCheckpointStore.Checkpoint> active=new AtomicReference<>(checkpoint);AtomicInteger lastPercent=new AtomicInteger(checkpoint.percent());AtomicLong estimate=new AtomicLong(-1);BuildControl buildControl=new BuildControl(control);List<String> outputs=new ArrayList<>();
