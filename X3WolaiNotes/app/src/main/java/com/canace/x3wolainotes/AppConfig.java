@@ -10,6 +10,14 @@ final class AppConfig {
     static final int MAX_READER_BLOCKS = 200;
     static final int MAX_READER_DEPTH = 4;
 
+    static boolean hasTargetPage() {
+        return ConfigValidator.isConfigured(TARGET_PAGE_ID);
+    }
+
+    static boolean hasFavoritesPage() {
+        return ConfigValidator.isConfigured(FAVORITES_PAGE_ID);
+    }
+
     private AppConfig() {
     }
 }

@@ -3,16 +3,22 @@ package com.canace.x3wolainotes;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
 
 import java.util.List;
 import java.util.UUID;
 
 public final class MvpTestRunner extends Instrumentation {
     private static final String TEST_TEXT = "X3_MVP_TEST_20260817";
+    private Bundle arguments;
 
     @Override
     public void onCreate(Bundle arguments) {
+        this.arguments = arguments;
         super.onCreate(arguments);
         start();
     }
@@ -21,8 +27,15 @@ public final class MvpTestRunner extends Instrumentation {
     public void onStart() {
         Bundle result = new Bundle();
         try {
-            runReadWriteRoundTrip();
-            result.putString("stream", "V3_READ_WRITE_FAVORITES_DATABASE_OK\n");
+            if ("offline-ui".equals(arguments == null ? "" : arguments.getString("mode", ""))) {
+                runOfflineUi();
+                result.putString("stream", "V4_OFFLINE_UI_OK\n");
+            } else {
+                runReadWriteRoundTrip();
+                verifyErrorMessages();
+                result.putString("stream",
+                        "V4_READ_WRITE_RECONCILE_FAVORITES_DATABASE_ERRORS_OK\n");
+            }
             finish(Activity.RESULT_OK, result);
         } catch (Throwable error) {
             result.putString("stream", "MVP_READ_WRITE_FAILED: " + safeMessage(error) + "\n");
@@ -30,11 +43,63 @@ public final class MvpTestRunner extends Instrumentation {
         }
     }
 
+    private void runOfflineUi() throws Exception {
+        Context context = getTargetContext();
+        String token = new SecretStore(context).loadToken();
+        require(token != null && token.length() >= 20, "Provisioned token unavailable");
+        Intent intent = new Intent(context, ReaderActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        Activity activity = startActivitySync(intent);
+        try {
+            long deadline = System.currentTimeMillis() + 25_000L;
+            while (System.currentTimeMillis() < deadline) {
+                waitForIdleSync();
+                final String[] visibleText = new String[1];
+                runOnMainSync(() -> visibleText[0] =
+                        collectText(activity.getWindow().getDecorView()));
+                if (visibleText[0].contains("网络不可用 · 请联网后重试")) return;
+                Thread.sleep(1000L);
+            }
+            throw new AssertionError("Offline reader message not observed");
+        } finally {
+            runOnMainSync(activity::finish);
+        }
+    }
+
+    private static String collectText(View view) {
+        StringBuilder result = new StringBuilder();
+        appendText(view, result);
+        return result.toString();
+    }
+
+    private static void appendText(View view, StringBuilder result) {
+        if (view instanceof TextView) {
+            result.append(((TextView) view).getText()).append('\n');
+        }
+        if (!(view instanceof ViewGroup)) return;
+        ViewGroup group = (ViewGroup) view;
+        for (int index = 0; index < group.getChildCount(); index++) {
+            appendText(group.getChildAt(index), result);
+        }
+    }
+
+    private static void verifyErrorMessages() {
+        require(UserErrorMessages.syncStatus(401).startsWith("授权已失效"),
+                "401 message missing");
+        require(UserErrorMessages.syncStatus(403).contains("权限"), "403 message missing");
+        require(UserErrorMessages.syncStatus(404).contains("不可用"), "404 message missing");
+        require(UserErrorMessages.syncStatus(429).contains("请求过快"), "429 message missing");
+        require(UserErrorMessages.readerStatus(503).contains("服务暂时不可用"),
+                "503 message missing");
+    }
+
     private void runReadWriteRoundTrip() throws Exception {
         Context context = getTargetContext();
         SecretStore secrets = new SecretStore(context);
         String token = secrets.loadToken();
         require(token != null && token.length() >= 20, "Provisioned token unavailable");
+        require(AppConfig.hasTargetPage(), "Target page unavailable");
+        require(AppConfig.hasFavoritesPage(), "Favorites page unavailable");
 
         NoteStore store = new NoteStore(context);
         try {
@@ -46,6 +111,12 @@ public final class MvpTestRunner extends Instrumentation {
                     NoteItem.KIND_NOTE, System.currentTimeMillis(), NoteItem.STATE_PENDING, "");
             store.insertPending(local);
             require(containsId(store.pending(100), local.id), "Local queue insert failed");
+            long attemptedAt = System.currentTimeMillis();
+            store.markAttempting(local.id, attemptedAt);
+            NoteItem attempting = findById(store.pending(100), local.id);
+            require(attempting != null && attempting.state == NoteItem.STATE_UNCERTAIN,
+                    "Attempt was not persisted as uncertain");
+            require(attempting.lastAttemptAt == attemptedAt, "Attempt timestamp was not persisted");
 
             if (!alreadyPresent) {
                 client.createTextBlock(AppConfig.TARGET_PAGE_ID,
@@ -111,10 +182,14 @@ public final class MvpTestRunner extends Instrumentation {
     }
 
     private static boolean containsId(List<NoteItem> items, String expectedId) {
+        return findById(items, expectedId) != null;
+    }
+
+    private static NoteItem findById(List<NoteItem> items, String expectedId) {
         for (NoteItem item : items) {
-            if (expectedId.equals(item.id)) return true;
+            if (expectedId.equals(item.id)) return item;
         }
-        return false;
+        return null;
     }
 
     private static boolean contains(List<WolaiClient.RemoteBlock> blocks, String expected) {

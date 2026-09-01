@@ -24,9 +24,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -198,29 +201,75 @@ public final class MainActivity extends Activity {
         executor.execute(() -> {
             String finalMessage;
             try {
-                String token = secretStore.loadToken();
-                if (token == null || token.trim().isEmpty()) {
+                if (!AppConfig.hasTargetPage()) {
+                    finalMessage = "未配置同步页面 · 本地可用";
+                } else {
+                    String token = secretStore.loadToken();
+                    if (token == null || token.trim().isEmpty()) {
                     authorized = false;
                     finalMessage = "等待安装时配置授权";
-                } else {
-                    authorized = true;
-                    WolaiClient client = new WolaiClient(token);
-                    List<NoteItem> pending = store.pending(20);
-                    for (NoteItem item : pending) {
-                        try {
-                            client.createTextBlock(AppConfig.TARGET_PAGE_ID,
-                                    NoteFormatter.forWolai(item.kind, item.text));
-                            store.markSynced(item.id);
-                        } catch (WolaiClient.ApiException error) {
-                            store.markFailed(item.id, error.getMessage());
-                            break;
+                    } else {
+                        authorized = true;
+                        WolaiClient client = new WolaiClient(token);
+                        List<NoteItem> pending = store.pending(20);
+                        List<SyncReconciler.Candidate> remoteCandidates = null;
+                        Set<String> consumedRemoteIds = new HashSet<>();
+                        String syncMessage = "";
+                        for (NoteItem item : pending) {
+                            String expected = NoteFormatter.forWolai(item.kind, item.text);
+                            long now = System.currentTimeMillis();
+                            if (item.state == NoteItem.STATE_UNCERTAIN) {
+                                try {
+                                    if (remoteCandidates == null) {
+                                        remoteCandidates = toCandidates(
+                                                client.fetchChildren(AppConfig.TARGET_PAGE_ID));
+                                    }
+                                    String match = SyncReconciler.findMatch(item, expected,
+                                            remoteCandidates, consumedRemoteIds, now);
+                                    if (!match.isEmpty()) {
+                                        consumedRemoteIds.add(match);
+                                        store.markSynced(item.id);
+                                        continue;
+                                    }
+                                } catch (WolaiClient.ApiException error) {
+                                    syncMessage = UserErrorMessages.syncStatus(
+                                            WolaiClient.statusOf(error));
+                                    break;
+                                }
+                                if (SyncReconciler.shouldWaitBeforeRetry(item, now)) {
+                                    syncMessage = "写入结果待确认 · 稍后自动核对";
+                                    break;
+                                }
+                            }
+                            try {
+                                store.markAttempting(item.id, now);
+                                client.createTextBlock(AppConfig.TARGET_PAGE_ID, expected);
+                                store.markSynced(item.id);
+                            } catch (WolaiClient.ApiException error) {
+                                if (error.isOutcomeUnknown()) {
+                                    store.markUncertain(item.id, error.getMessage());
+                                    syncMessage = "写入结果待确认 · 稍后自动核对";
+                                } else {
+                                    store.markFailed(item.id, error.getMessage());
+                                    syncMessage = UserErrorMessages.syncStatus(
+                                            WolaiClient.statusOf(error));
+                                }
+                                break;
+                            }
+                        }
+                        int uncertain = store.uncertainCount();
+                        int remaining = store.pendingCount();
+                        if (!syncMessage.isEmpty()) {
+                            finalMessage = syncMessage;
+                        } else if (uncertain > 0) {
+                            finalMessage = uncertain + " 条写入结果待确认";
+                        } else {
+                            finalMessage = remaining == 0 ? "同步完成" : remaining + " 条等待重试";
                         }
                     }
-                    int remaining = store.pendingCount();
-                    finalMessage = remaining == 0 ? "同步完成" : remaining + " 条等待重试";
                 }
             } catch (Exception error) {
-                finalMessage = shortError(error);
+                finalMessage = UserErrorMessages.syncStatus(WolaiClient.statusOf(error));
             }
             syncing.set(false);
             final String result = finalMessage;
@@ -241,6 +290,9 @@ public final class MainActivity extends Activity {
         if (syncing.get()) {
             label = "正在同步…";
             color = PRIMARY;
+        } else if (!AppConfig.hasTargetPage()) {
+            label = "未配置同步页面 · 本地可用";
+            color = WARN;
         } else if (!authorized) {
             label = "未配置授权 · 本地可用";
             color = WARN;
@@ -269,7 +321,8 @@ public final class MainActivity extends Activity {
         SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA);
         for (NoteItem item : items) {
             String state = item.state == NoteItem.STATE_SYNCED ? "已同步" :
-                    item.state == NoteItem.STATE_FAILED ? "待重试" : "待同步";
+                    item.state == NoteItem.STATE_FAILED ? "待重试" :
+                            item.state == NoteItem.STATE_UNCERTAIN ? "待确认" : "待同步";
             String prefix = item.kind == NoteItem.KIND_TODO ? "☐ " : "";
             addCard(localList, prefix + item.text,
                     format.format(new Date(item.createdAt)) + " · " + state,
@@ -367,11 +420,14 @@ public final class MainActivity extends Activity {
         focus.clearFocus();
     }
 
-    private static String shortError(Exception error) {
-        String message = error.getMessage();
-        if (message == null || message.trim().isEmpty()) return "同步失败，请重试";
-        message = message.trim();
-        return message.length() > 40 ? message.substring(0, 40) : message;
+    private static List<SyncReconciler.Candidate> toCandidates(
+            List<WolaiClient.RemoteBlock> blocks) {
+        List<SyncReconciler.Candidate> result = new ArrayList<>();
+        for (WolaiClient.RemoteBlock block : blocks) {
+            if (!"text".equals(block.type)) continue;
+            result.add(new SyncReconciler.Candidate(block.id, block.text, block.createdAt));
+        }
+        return result;
     }
 
     @Override

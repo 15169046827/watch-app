@@ -11,7 +11,7 @@ import java.util.List;
 
 final class NoteStore extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "x3_wolai_notes.db";
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
 
     NoteStore(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -25,12 +25,16 @@ final class NoteStore extends SQLiteOpenHelper {
                 "kind INTEGER NOT NULL," +
                 "created_at INTEGER NOT NULL," +
                 "state INTEGER NOT NULL," +
-                "error TEXT NOT NULL DEFAULT '')");
+                "error TEXT NOT NULL DEFAULT ''," +
+                "last_attempt_at INTEGER NOT NULL DEFAULT 0)");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) db.execSQL("DROP TABLE IF EXISTS remote_cache");
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE local_notes ADD COLUMN last_attempt_at INTEGER NOT NULL DEFAULT 0");
+        }
     }
 
     void insertPending(NoteItem item) {
@@ -41,7 +45,18 @@ final class NoteStore extends SQLiteOpenHelper {
         values.put("created_at", item.createdAt);
         values.put("state", NoteItem.STATE_PENDING);
         values.put("error", "");
+        values.put("last_attempt_at", 0L);
         getWritableDatabase().insertOrThrow("local_notes", null, values);
+    }
+
+    void markAttempting(String id, long attemptedAt) {
+        ContentValues values = new ContentValues();
+        // Persist the uncertain state before the network write. If the process is interrupted
+        // after Wolai accepts the request, the next launch reconciles instead of posting again.
+        values.put("state", NoteItem.STATE_UNCERTAIN);
+        values.put("error", "");
+        values.put("last_attempt_at", attemptedAt);
+        getWritableDatabase().update("local_notes", values, "id = ?", new String[]{id});
     }
 
     void markSynced(String id) {
@@ -54,6 +69,13 @@ final class NoteStore extends SQLiteOpenHelper {
     void markFailed(String id, String error) {
         ContentValues values = new ContentValues();
         values.put("state", NoteItem.STATE_FAILED);
+        values.put("error", safeError(error));
+        getWritableDatabase().update("local_notes", values, "id = ?", new String[]{id});
+    }
+
+    void markUncertain(String id, String error) {
+        ContentValues values = new ContentValues();
+        values.put("state", NoteItem.STATE_UNCERTAIN);
         values.put("error", safeError(error));
         getWritableDatabase().update("local_notes", values, "id = ?", new String[]{id});
     }
@@ -75,14 +97,24 @@ final class NoteStore extends SQLiteOpenHelper {
         }
     }
 
+    int uncertainCount() {
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM local_notes WHERE state = ?",
+                new String[]{String.valueOf(NoteItem.STATE_UNCERTAIN)})) {
+            return cursor.moveToFirst() ? cursor.getInt(0) : 0;
+        }
+    }
+
     private List<NoteItem> queryLocal(String selection, String[] args, String order, int limit) {
         List<NoteItem> result = new ArrayList<>();
         try (Cursor cursor = getReadableDatabase().query("local_notes",
-                new String[]{"id", "text", "kind", "created_at", "state", "error"},
+                new String[]{"id", "text", "kind", "created_at", "state", "error",
+                        "last_attempt_at"},
                 selection, args, null, null, order, String.valueOf(limit))) {
             while (cursor.moveToNext()) {
                 result.add(new NoteItem(cursor.getString(0), cursor.getString(1), cursor.getInt(2),
-                        cursor.getLong(3), cursor.getInt(4), cursor.getString(5)));
+                        cursor.getLong(3), cursor.getInt(4), cursor.getString(5),
+                        cursor.getLong(6)));
             }
         }
         return result;

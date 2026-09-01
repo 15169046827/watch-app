@@ -6,6 +6,7 @@ final class NoteItem {
     static final int STATE_PENDING = 0;
     static final int STATE_SYNCED = 1;
     static final int STATE_FAILED = 2;
+    static final int STATE_UNCERTAIN = 3;
 
     final String id;
     final String text;
@@ -13,14 +14,20 @@ final class NoteItem {
     final long createdAt;
     final int state;
     final String error;
+    final long lastAttemptAt;
 
     NoteItem(String id, String text, int kind, long createdAt, int state, String error) {
+        this(id, text, kind, createdAt, state, error, 0L);
+    }
+
+    NoteItem(String id, String text, int kind, long createdAt, int state, String error,
+             long lastAttemptAt) {
         this.id = id;
         this.text = text;
         this.kind = kind;
         this.createdAt = createdAt;
         this.state = state;
         this.error = error;
+        this.lastAttemptAt = lastAttemptAt;
     }
 }
-

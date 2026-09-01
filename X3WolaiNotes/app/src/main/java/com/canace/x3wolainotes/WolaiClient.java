@@ -20,17 +20,19 @@ final class WolaiClient {
         final String id;
         final String type;
         final String text;
+        final long createdAt;
         final long editedAt;
         final String targetPageId;
         final boolean hasChildren;
         final boolean checked;
         final int depth;
 
-        RemoteBlock(String id, String type, String text, long editedAt,
+        RemoteBlock(String id, String type, String text, long createdAt, long editedAt,
                     String targetPageId, boolean hasChildren, boolean checked, int depth) {
             this.id = id;
             this.type = type;
             this.text = text;
+            this.createdAt = createdAt;
             this.editedAt = editedAt;
             this.targetPageId = targetPageId;
             this.hasChildren = hasChildren;
@@ -43,7 +45,8 @@ final class WolaiClient {
         }
 
         RemoteBlock atDepth(int value) {
-            return new RemoteBlock(id, type, text, editedAt, targetPageId, hasChildren, checked, value);
+            return new RemoteBlock(id, type, text, createdAt, editedAt, targetPageId,
+                    hasChildren, checked, value);
         }
     }
 
@@ -89,12 +92,30 @@ final class WolaiClient {
     }
 
     static final class ApiException extends Exception {
+        private final int statusCode;
+        private final boolean outcomeUnknown;
+
         ApiException(String message) {
-            super(message);
+            this(message, null, 0, false);
         }
 
         ApiException(String message, Throwable cause) {
+            this(message, cause, 0, false);
+        }
+
+        private ApiException(String message, Throwable cause, int statusCode,
+                             boolean outcomeUnknown) {
             super(message, cause);
+            this.statusCode = statusCode;
+            this.outcomeUnknown = outcomeUnknown;
+        }
+
+        int statusCode() {
+            return statusCode;
+        }
+
+        boolean isOutcomeUnknown() {
+            return outcomeUnknown;
         }
     }
 
@@ -102,6 +123,10 @@ final class WolaiClient {
 
     WolaiClient(String token) {
         this.token = token;
+    }
+
+    static int statusOf(Exception error) {
+        return error instanceof ApiException ? ((ApiException) error).statusCode() : 0;
     }
 
     List<RemoteBlock> fetchChildren(String pageId) throws ApiException {
@@ -123,8 +148,9 @@ final class WolaiClient {
                 Object content = block.opt("content");
                 String targetPageId = "page".equals(type) ? id : extractPageReference(content);
                 result.add(new RemoteBlock(id, type, extractText(content),
-                        block.optLong("edited_at", 0L), targetPageId, hasChildren(block),
-                        block.optBoolean("checked", false), 0));
+                        epochMillis(block.optLong("created_at", 0L)),
+                        epochMillis(block.optLong("edited_at", 0L)),
+                        targetPageId, hasChildren(block), block.optBoolean("checked", false), 0));
             }
             return result;
         } catch (IOException | JSONException error) {
@@ -202,6 +228,7 @@ final class WolaiClient {
 
     void createTextBlock(String pageId, String text) throws ApiException {
         HttpURLConnection connection = null;
+        boolean requestMayHaveReachedServer = false;
         try {
             JSONObject block = new JSONObject();
             block.put("type", "text");
@@ -217,13 +244,20 @@ final class WolaiClient {
             byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
             connection.setFixedLengthStreamingMode(bytes.length);
             try (OutputStream output = connection.getOutputStream()) {
+                requestMayHaveReachedServer = true;
                 output.write(bytes);
+                output.flush();
             }
             int status = connection.getResponseCode();
             String body = readBody(connection, status);
-            if (status < 200 || status >= 300) throw apiError(status, body);
-        } catch (IOException | JSONException error) {
-            throw new ApiException("写入 Wolai 失败", error);
+            if (status < 200 || status >= 300) {
+                throw apiError(status, body, status >= 500);
+            }
+        } catch (JSONException error) {
+            throw new ApiException("无法生成写入内容", error);
+        } catch (IOException error) {
+            throw new ApiException("写入结果无法确认", error, 0,
+                    requestMayHaveReachedServer);
         } finally {
             if (connection != null) connection.disconnect();
         }
@@ -238,7 +272,8 @@ final class WolaiClient {
         connection.setRequestProperty("Authorization", token);
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-        connection.setRequestProperty("User-Agent", "X3WolaiNotes/0.3 Android");
+        connection.setRequestProperty("User-Agent",
+                "X3WolaiNotes/" + BuildConfig.VERSION_NAME + " Android");
         return connection;
     }
 
@@ -258,6 +293,10 @@ final class WolaiClient {
     }
 
     private static ApiException apiError(int status, String body) {
+        return apiError(status, body, false);
+    }
+
+    private static ApiException apiError(int status, String body, boolean outcomeUnknown) {
         String message = "Wolai 返回 " + status;
         try {
             String remote = new JSONObject(body).optString("message", "").trim();
@@ -265,7 +304,7 @@ final class WolaiClient {
         } catch (JSONException ignored) {
             // Keep the status-only error; never expose a full HTML error body.
         }
-        return new ApiException(message);
+        return new ApiException(message, null, status, outcomeUnknown);
     }
 
     private static String extractText(Object content) {
@@ -350,5 +389,10 @@ final class WolaiClient {
             return result.toString();
         }
         return String.valueOf(value).trim();
+    }
+
+    private static long epochMillis(long value) {
+        if (value <= 0L) return 0L;
+        return value < 100_000_000_000L ? value * 1000L : value;
     }
 }

@@ -67,6 +67,10 @@ public final class ReaderActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         token = new SecretStore(this).loadToken();
         buildScreen();
+        if (!AppConfig.hasFavoritesPage()) {
+            showError("未配置收藏页面");
+            return;
+        }
         history.push(new PageRef(AppConfig.FAVORITES_PAGE_ID, AppConfig.FAVORITES_PAGE_LABEL, true));
         if (token == null || token.trim().isEmpty()) {
             showError("未配置 Wolai 授权");
@@ -148,7 +152,8 @@ public final class ReaderActivity extends Activity {
                             tables.put(block.id, client.fetchDatabase(block.id));
                         } catch (WolaiClient.ApiException error) {
                             tables.put(block.id,
-                                    WolaiClient.DatabaseTable.failed(readableError(error)));
+                                    WolaiClient.DatabaseTable.failed(UserErrorMessages.readerStatus(
+                                            WolaiClient.statusOf(error))));
                         }
                     }
                 }
@@ -165,7 +170,7 @@ public final class ReaderActivity extends Activity {
                     if (destroyed || generation != loadGeneration) return;
                     refreshButton.setEnabled(true);
                     refreshButton.setAlpha(1f);
-                    showError(readableError(error));
+                    showError(UserErrorMessages.readerStatus(WolaiClient.statusOf(error)));
                 });
             }
         });
@@ -338,16 +343,6 @@ public final class ReaderActivity extends Activity {
         statusView.setTextColor(WARN);
         blockList.removeAllViews();
         blockList.addView(messageCard("需要联网后重试"));
-    }
-
-    private static String readableError(Exception error) {
-        String message = error.getMessage();
-        if (message == null || message.trim().isEmpty()) return "在线读取失败";
-        message = message.trim();
-        if (message.contains("权限") || message.contains("403")) {
-            return "没有页面权限 · 请在 Wolai 授权 X3 Wolai";
-        }
-        return message.length() > 42 ? message.substring(0, 42) : message;
     }
 
     private void navigateBack() {
