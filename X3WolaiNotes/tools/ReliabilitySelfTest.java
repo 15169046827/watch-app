@@ -14,6 +14,7 @@ public final class ReliabilitySelfTest {
         verifyRemoteReconciliation();
         verifyRetryDelay();
         verifyErrorMessages();
+        verifyReaderFilter();
         System.out.println("RELIABILITY_SELF_TEST_OK");
     }
 
@@ -65,6 +66,20 @@ public final class ReliabilitySelfTest {
                 "reader service message missing");
         require(UserErrorMessages.readerStatus(0).startsWith("网络不可用"),
                 "reader network message missing");
+    }
+
+    private static void verifyReaderFilter() {
+        require(ReaderFilter.matches("", "anything"), "blank filter rejected content");
+        require(ReaderFilter.matches("WOLAI", "wolai notes"), "case-insensitive match failed");
+        require(ReaderFilter.matches("项目 进行", "项目名称", "正在进行"),
+                "multi-term row match failed");
+        require(!ReaderFilter.matches("项目 完成", "项目名称", "正在进行"),
+                "missing term was accepted");
+        require("a b".equals(ReaderFilter.normalize("  a   b  ")),
+                "filter whitespace normalization failed");
+        require(ReaderFilter.normalize("12345678901234567890123456789012345678901")
+                        .length() == ReaderFilter.MAX_QUERY_LENGTH,
+                "filter length limit failed");
     }
 
     private static NoteItem uncertain(String id, long attemptAt) {

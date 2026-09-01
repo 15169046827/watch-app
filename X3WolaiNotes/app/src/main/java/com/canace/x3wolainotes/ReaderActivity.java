@@ -6,17 +6,23 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,6 +58,12 @@ public final class ReaderActivity extends Activity {
     private TextView statusView;
     private LinearLayout blockList;
     private Button refreshButton;
+    private Button filterButton;
+    private EditText filterInput;
+    private PageRef loadedPage;
+    private List<WolaiClient.RemoteBlock> loadedBlocks = Collections.emptyList();
+    private Map<String, WolaiClient.DatabaseTable> loadedTables = Collections.emptyMap();
+    private String activeQuery = "";
     private String token;
     private boolean destroyed;
     private int loadGeneration;
@@ -107,6 +119,43 @@ public final class ReaderActivity extends Activity {
         statusView.setPadding(dp(8), dp(4), dp(8), dp(4));
         content.addView(statusView, params(-1, -2, 0, dp(5)));
 
+        LinearLayout filterRow = new LinearLayout(this);
+        filterRow.setOrientation(LinearLayout.HORIZONTAL);
+        filterRow.setGravity(Gravity.CENTER_VERTICAL);
+        filterInput = new EditText(this);
+        filterInput.setHint("筛选当前页…");
+        filterInput.setHintTextColor(MUTED);
+        filterInput.setTextColor(Color.WHITE);
+        filterInput.setTextSize(13);
+        filterInput.setSingleLine(true);
+        filterInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        filterInput.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        filterInput.setFilters(new InputFilter[]{
+                new InputFilter.LengthFilter(ReaderFilter.MAX_QUERY_LENGTH)
+        });
+        filterInput.setBackground(rounded(CARD, 16));
+        filterInput.setPadding(dp(10), 0, dp(10), 0);
+        filterInput.setOnEditorActionListener((view, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH
+                    || actionId == EditorInfo.IME_ACTION_DONE) {
+                applyFilter(false);
+                return true;
+            }
+            return false;
+        });
+        filterRow.addView(filterInput, new LinearLayout.LayoutParams(0, dp(40), 1f));
+        filterButton = button("筛选", CARD_ALT, Color.WHITE);
+        filterButton.setOnClickListener(v -> {
+            String input = ReaderFilter.normalize(filterInput.getText().toString());
+            boolean clear = !activeQuery.isEmpty() && activeQuery.equals(input);
+            applyFilter(clear);
+        });
+        LinearLayout.LayoutParams filterButtonParams =
+                new LinearLayout.LayoutParams(dp(70), dp(40));
+        filterButtonParams.setMargins(dp(5), 0, 0, 0);
+        filterRow.addView(filterButton, filterButtonParams);
+        content.addView(filterRow, params(-1, dp(40), 0, dp(5)));
+
         refreshButton = button("在线刷新", CARD_ALT, Color.WHITE);
         refreshButton.setOnClickListener(v -> loadCurrent());
         content.addView(refreshButton, params(-1, dp(40), 0, dp(6)));
@@ -125,17 +174,22 @@ public final class ReaderActivity extends Activity {
         scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         scroll.addView(content, new ScrollView.LayoutParams(-1, -2));
         setContentView(scroll);
+        setFilterEnabled(false);
     }
 
     private void loadCurrent() {
         if (token == null || token.trim().isEmpty() || history.isEmpty()) return;
         PageRef page = history.peek();
         int generation = ++loadGeneration;
+        loadedPage = null;
+        loadedBlocks = Collections.emptyList();
+        loadedTables = Collections.emptyMap();
         titleView.setText(page.title);
         statusView.setText("在线读取中…");
         statusView.setTextColor(PRIMARY);
         refreshButton.setEnabled(false);
         refreshButton.setAlpha(0.55f);
+        setFilterEnabled(false);
         blockList.removeAllViews();
         blockList.addView(messageCard("正在加载"));
 
@@ -161,15 +215,18 @@ public final class ReaderActivity extends Activity {
                     if (destroyed || generation != loadGeneration) return;
                     refreshButton.setEnabled(true);
                     refreshButton.setAlpha(1f);
-                    statusView.setText("在线内容 · 不保存到手表");
-                    statusView.setTextColor(MUTED);
-                    renderBlocks(page, blocks, tables);
+                    loadedPage = page;
+                    loadedBlocks = blocks;
+                    loadedTables = tables;
+                    setFilterEnabled(true);
+                    renderLoadedContent();
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> {
                     if (destroyed || generation != loadGeneration) return;
                     refreshButton.setEnabled(true);
                     refreshButton.setAlpha(1f);
+                    setFilterEnabled(false);
                     showError(UserErrorMessages.readerStatus(WolaiClient.statusOf(error)));
                 });
             }
@@ -177,35 +234,50 @@ public final class ReaderActivity extends Activity {
     }
 
     private void renderBlocks(PageRef page, List<WolaiClient.RemoteBlock> blocks,
-                              Map<String, WolaiClient.DatabaseTable> tables) {
+                              Map<String, WolaiClient.DatabaseTable> tables, String query) {
         blockList.removeAllViews();
         int rendered = 0;
         for (WolaiClient.RemoteBlock block : blocks) {
             if (page.directory) {
                 if (!block.isPageLink()) continue;
+                String label = block.text.isEmpty() ? "未命名页面" : block.text;
+                if (!ReaderFilter.matches(query, label)) continue;
                 addPageLink(block);
                 rendered++;
                 continue;
             }
             if (block.isPageLink()) {
+                String label = block.text.isEmpty() ? "未命名页面" : block.text;
+                if (!ReaderFilter.matches(query, label)) continue;
                 addPageLink(block);
                 rendered++;
             } else if ("database".equals(block.type)) {
-                addDatabase(block, tables.get(block.id));
-                rendered++;
-            } else if (addContentBlock(block)) {
+                if (addDatabase(block, tables.get(block.id), query)) rendered++;
+            } else if (addContentBlock(block, query)) {
                 rendered++;
             }
         }
         if (rendered == 0) {
-            blockList.addView(messageCard(page.directory
-                    ? "请在 Wolai 的“手表收藏”页面添加页面引用"
-                    : "这个页面暂时没有可显示的文字内容"));
+            String message = query.isEmpty()
+                    ? (page.directory ? "请在 Wolai 的“手表收藏”页面添加页面引用"
+                    : "这个页面暂时没有可显示的文字内容")
+                    : "当前页面没有匹配结果";
+            blockList.addView(messageCard(message));
         }
     }
 
-    private void addDatabase(WolaiClient.RemoteBlock block, WolaiClient.DatabaseTable table) {
+    private boolean addDatabase(WolaiClient.RemoteBlock block,
+                                WolaiClient.DatabaseTable table, String query) {
         String label = block.text.isEmpty() ? "数据表格" : block.text;
+        boolean headingMatches = ReaderFilter.matches(query, label);
+        List<WolaiClient.DatabaseRow> rows = new ArrayList<>();
+        if (table != null && table.error.isEmpty()) {
+            for (WolaiClient.DatabaseRow row : table.rows) {
+                if (headingMatches || databaseRowMatches(row, query)) rows.add(row);
+            }
+        }
+        if (!query.isEmpty() && !headingMatches && rows.isEmpty()) return false;
+
         TextView heading = text(label, 15, Color.WHITE, true);
         heading.setPadding(dp(9), dp(9), dp(9), dp(7));
         heading.setBackground(rounded(CARD_ALT, 14));
@@ -214,22 +286,24 @@ public final class ReaderActivity extends Activity {
         if (table == null || !table.error.isEmpty()) {
             blockList.addView(messageCard(table == null ? "表格暂时无法读取" : table.error),
                     params(-1, -2, 0, dp(5)));
-            return;
+            return true;
         }
         if (table.rows.isEmpty()) {
             blockList.addView(messageCard("表格暂无数据"), params(-1, -2, 0, dp(5)));
-            return;
+            return true;
         }
 
-        int rowNumber = 0;
-        for (WolaiClient.DatabaseRow row : table.rows) {
-            addDatabaseRow(row, ++rowNumber);
+        for (WolaiClient.DatabaseRow row : rows) {
+            addDatabaseRow(row, table.rows.indexOf(row) + 1);
         }
         if (table.hasMore) {
-            TextView more = text("接口还有更多数据，在线刷新后查看", 10, WARN, false);
+            TextView more = text(query.isEmpty()
+                    ? "接口还有更多数据，在线刷新后查看"
+                    : "筛选仅覆盖本次接口返回的数据", 10, WARN, false);
             more.setPadding(dp(8), dp(5), dp(8), dp(7));
             blockList.addView(more);
         }
+        return true;
     }
 
     private void addDatabaseRow(WolaiClient.DatabaseRow row, int rowNumber) {
@@ -271,6 +345,7 @@ public final class ReaderActivity extends Activity {
         if (!row.pageId.isEmpty()) {
             String pageTitle = rowTitle;
             card.setOnClickListener(v -> {
+                clearFilterForNavigation();
                 history.push(new PageRef(row.pageId, pageTitle, false));
                 loadCurrent();
             });
@@ -290,14 +365,16 @@ public final class ReaderActivity extends Activity {
         view.setPadding(dp(10), dp(11), dp(10), dp(11));
         view.setBackground(rounded(CARD_ALT, 16));
         view.setOnClickListener(v -> {
+            clearFilterForNavigation();
             history.push(new PageRef(block.targetPageId, label, false));
             loadCurrent();
         });
         blockList.addView(view, params(-1, -2, 0, dp(5)));
     }
 
-    private boolean addContentBlock(WolaiClient.RemoteBlock block) {
+    private boolean addContentBlock(WolaiClient.RemoteBlock block, String query) {
         if ("divider".equals(block.type)) {
+            if (!query.isEmpty()) return false;
             View divider = new View(this);
             divider.setBackgroundColor(CARD_ALT);
             blockList.addView(divider, params(-1, dp(1), 4, 4));
@@ -307,6 +384,7 @@ public final class ReaderActivity extends Activity {
         String value = block.text;
         if (value.isEmpty()) value = mediaPlaceholder(block.type);
         if (value.isEmpty()) return false;
+        if (!ReaderFilter.matches(query, value)) return false;
         if ("todo_list".equals(block.type) || "todo_list_pro".equals(block.type)) {
             value = (block.checked ? "☑ " : "☐ ") + value;
         } else if ("bull_list".equals(block.type)) {
@@ -339,6 +417,9 @@ public final class ReaderActivity extends Activity {
     }
 
     private void showError(String message) {
+        loadedPage = null;
+        loadedBlocks = Collections.emptyList();
+        loadedTables = Collections.emptyMap();
         statusView.setText(message);
         statusView.setTextColor(WARN);
         blockList.removeAllViews();
@@ -351,7 +432,53 @@ public final class ReaderActivity extends Activity {
             return;
         }
         history.pop();
+        clearFilterForNavigation();
         loadCurrent();
+    }
+
+    private void applyFilter(boolean clear) {
+        if (loadedPage == null) return;
+        if (clear) {
+            activeQuery = "";
+            filterInput.setText("");
+        } else {
+            activeQuery = ReaderFilter.normalize(filterInput.getText().toString());
+            filterInput.setText(activeQuery);
+            filterInput.setSelection(activeQuery.length());
+        }
+        renderLoadedContent();
+    }
+
+    private void renderLoadedContent() {
+        if (loadedPage == null) return;
+        filterButton.setText(activeQuery.isEmpty() ? "筛选" : "清除");
+        statusView.setText(activeQuery.isEmpty()
+                ? "在线内容 · 不保存到手表"
+                : "筛选当前页 · 不发起新请求");
+        statusView.setTextColor(MUTED);
+        renderBlocks(loadedPage, loadedBlocks, loadedTables, activeQuery);
+    }
+
+    private void clearFilterForNavigation() {
+        activeQuery = "";
+        if (filterInput != null) filterInput.setText("");
+        if (filterButton != null) filterButton.setText("筛选");
+    }
+
+    private void setFilterEnabled(boolean enabled) {
+        filterInput.setEnabled(enabled);
+        filterInput.setAlpha(enabled ? 1f : 0.55f);
+        filterButton.setEnabled(enabled);
+        filterButton.setAlpha(enabled ? 1f : 0.55f);
+    }
+
+    private static boolean databaseRowMatches(WolaiClient.DatabaseRow row, String query) {
+        List<String> values = new ArrayList<>();
+        for (WolaiClient.DatabaseCell cell : row.cells) {
+            values.add(cell.column);
+            values.add(cell.value);
+        }
+        return ReaderFilter.matches(query, values.toArray(new String[0]));
     }
 
     private TextView messageCard(String value) {
@@ -432,6 +559,9 @@ public final class ReaderActivity extends Activity {
     protected void onDestroy() {
         destroyed = true;
         loadGeneration++;
+        loadedPage = null;
+        loadedBlocks = Collections.emptyList();
+        loadedTables = Collections.emptyMap();
         executor.shutdownNow();
         super.onDestroy();
     }

@@ -19,8 +19,8 @@ android {
         applicationId 'com.canace.x3wolainotes'
         minSdk 26
         targetSdk 30
-        versionCode 4
-        versionName '0.3.1'
+        versionCode 5
+        versionName '0.3.2'
         testInstrumentationRunner 'com.canace.x3wolainotes.MvpTestRunner'
         buildConfigField 'String', 'WOLAI_TARGET_PAGE_ID', "\"${wolaiTargetPageId}\""
         buildConfigField 'String', 'WOLAI_FAVORITES_PAGE_ID', "\"${wolaiFavoritesPageId}\""
