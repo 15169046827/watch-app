@@ -22,6 +22,7 @@ OPPO Watch X3（OWW261）端的轻量 Wolai 速记应用。项目独立于同目
 
 ## 版本
 
+- 0.3.3（versionCode 6）：增加仅 Debug 构建可启用的确定性断网界面与不确定写入故障注入回归；Release 构建无法启用测试故障。
 - 0.3.2（versionCode 5）：增加当前在线页面的内存筛选，覆盖收藏页、正文块和数据库行。
 - 0.3.1（versionCode 4）：增加不确定写入对账、配置校验和分类错误提示。
 - 对账是基于官方开放 API 返回的近期文本块做的本地保护，并非服务端幂等保证；相同文本在非常接近的时间内重复提交时仍应进行人工核对。
@@ -39,6 +40,13 @@ OPPO Watch X3（OWW261）端的轻量 Wolai 速记应用。项目独立于同目
 ```powershell
 .\scripts\check_device.ps1
 .\scripts\install_and_provision.ps1
+```
+
+安装 Debug 主 APK 和 Android 测试 APK 后，可运行不输出私人内容的自动回归：
+
+```powershell
+adb shell am instrument -w -e mode offline-ui com.canace.x3wolainotes.test/com.canace.x3wolainotes.MvpTestRunner
+adb shell am instrument -w com.canace.x3wolainotes.test/com.canace.x3wolainotes.MvpTestRunner
 ```
 
 脚本从 `ANDROID_SERIAL` 读取设备序列号，并从 `ANDROID_SDK_ROOT`、`ANDROID_HOME` 或 `PATH` 查找 ADB；也可显式传入 `-Serial` 和 `-AndroidSdk`。仓库不保存具体设备编号。

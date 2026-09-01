@@ -29,12 +29,13 @@ public final class MvpTestRunner extends Instrumentation {
         try {
             if ("offline-ui".equals(arguments == null ? "" : arguments.getString("mode", ""))) {
                 runOfflineUi();
-                result.putString("stream", "V4_OFFLINE_UI_OK\n");
+                result.putString("stream", "V6_OFFLINE_UI_OK\n");
             } else {
                 runReadWriteRoundTrip();
+                verifyUnknownWriteOutcome();
                 verifyErrorMessages();
                 result.putString("stream",
-                        "V4_READ_WRITE_RECONCILE_FAVORITES_DATABASE_ERRORS_OK\n");
+                        "V6_READ_WRITE_RECONCILE_FAVORITES_DATABASE_ERRORS_UNKNOWN_WRITE_OK\n");
             }
             finish(Activity.RESULT_OK, result);
         } catch (Throwable error) {
@@ -48,10 +49,11 @@ public final class MvpTestRunner extends Instrumentation {
         String token = new SecretStore(context).loadToken();
         require(token != null && token.length() >= 20, "Provisioned token unavailable");
         Intent intent = new Intent(context, ReaderActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        WolaiClient.setForceOfflineForTest(true);
         Activity activity = startActivitySync(intent);
         try {
-            long deadline = System.currentTimeMillis() + 25_000L;
+            long deadline = System.currentTimeMillis() + 10_000L;
             while (System.currentTimeMillis() < deadline) {
                 waitForIdleSync();
                 final String[] visibleText = new String[1];
@@ -62,7 +64,26 @@ public final class MvpTestRunner extends Instrumentation {
             }
             throw new AssertionError("Offline reader message not observed");
         } finally {
+            WolaiClient.resetTestFaults();
             runOnMainSync(activity::finish);
+        }
+    }
+
+    private void verifyUnknownWriteOutcome() throws Exception {
+        Context context = getTargetContext();
+        String token = new SecretStore(context).loadToken();
+        require(token != null && token.length() >= 20, "Provisioned token unavailable");
+        require(AppConfig.hasTargetPage(), "Target page unavailable");
+        WolaiClient client = new WolaiClient(token);
+        WolaiClient.setForceUnknownWriteForTest(true);
+        try {
+            client.createTextBlock(AppConfig.TARGET_PAGE_ID, "X3_FAULT_INJECTION_NO_SEND");
+            throw new AssertionError("Unknown write fault was not raised");
+        } catch (WolaiClient.ApiException error) {
+            require(error.statusCode() == 0, "Unknown write fault had HTTP status");
+            require(error.isOutcomeUnknown(), "Unknown write fault was not marked uncertain");
+        } finally {
+            WolaiClient.resetTestFaults();
         }
     }
 

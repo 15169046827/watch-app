@@ -16,6 +16,22 @@ import java.util.Collections;
 import java.util.List;
 
 final class WolaiClient {
+    private static volatile boolean forceOfflineForTest;
+    private static volatile boolean forceUnknownWriteForTest;
+
+    static void setForceOfflineForTest(boolean enabled) {
+        forceOfflineForTest = BuildConfig.DEBUG && enabled;
+    }
+
+    static void setForceUnknownWriteForTest(boolean enabled) {
+        forceUnknownWriteForTest = BuildConfig.DEBUG && enabled;
+    }
+
+    static void resetTestFaults() {
+        forceOfflineForTest = false;
+        forceUnknownWriteForTest = false;
+    }
+
     static final class RemoteBlock {
         final String id;
         final String type;
@@ -239,6 +255,11 @@ final class WolaiClient {
             payload.put("parent_id", pageId);
             payload.put("blocks", blocks);
 
+            if (BuildConfig.DEBUG && forceUnknownWriteForTest) {
+                requestMayHaveReachedServer = true;
+                throw new IOException("Simulated unknown write outcome");
+            }
+
             connection = open("POST", "/blocks");
             connection.setDoOutput(true);
             byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
@@ -264,6 +285,9 @@ final class WolaiClient {
     }
 
     private HttpURLConnection open(String method, String path) throws IOException {
+        if (BuildConfig.DEBUG && forceOfflineForTest) {
+            throw new IOException("Simulated offline network");
+        }
         HttpURLConnection connection = (HttpURLConnection) new URL(AppConfig.API_BASE_URL + path).openConnection();
         connection.setRequestMethod(method);
         connection.setConnectTimeout(12000);
