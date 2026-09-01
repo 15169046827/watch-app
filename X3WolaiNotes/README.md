@@ -55,6 +55,7 @@ adb shell am instrument -w com.canace.x3wolainotes.test/com.canace.x3wolainotes.
 
 - 不 Root、不解锁 Bootloader、不修改系统分区。
 - Debug APK 不包含 Wolai App Secret 或 Token。
+- Release APK 在本地保持未签名；正式发布必须使用单独、安全备份的 Release Key，不使用共享 Debug Key。
 - 卸载应用会删除设备端加密 Token 和本地缓存。
 - 当前是单用户自建应用 MVP；若未来面向其他 Wolai 用户发布，应改用正式用户授权流程或手机中转。
 - 数据表格要求自建应用具备所需的数据表格权限；接口异常通过 Wolai 官方开发者文档底部的问题反馈入口提交。
