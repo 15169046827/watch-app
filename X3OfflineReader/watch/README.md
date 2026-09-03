@@ -1,6 +1,6 @@
 # Watch Offline Reader
 
-包名 `com.canace.x3offlinereader`，版本 0.5.1（versionCode 7）。技术栈为 Java、Android Views、Media3 ExoPlayer/MediaSessionService 和 SQLite；minSdk 26、targetSdk 30、compileSdk 35，不依赖 Wear OS、Compose 或 Native 库。
+包名 `com.canace.x3offlinereader`，版本 0.5.4（versionCode 10）。技术栈为 Java、Android Views、Media3 ExoPlayer/MediaSessionService 和 SQLite；minSdk 26、targetSdk 30、compileSdk 35，不依赖 Wear OS、Compose 或 Native 库。
 
 ## 已实现
 
