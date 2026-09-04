@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
@@ -29,6 +30,7 @@ public final class MainActivity extends Activity {
 
     private static final int LOCATION_REQUEST = 7;
     private static final String PHYSICAL_KEY_TAG = "X3PhysicalKeyProbe";
+    private static final String ROTARY_TAG = "X3RotaryProbe";
     private TextView statusView;
     private TextView actionResultView;
     private TextView bleResultView;
@@ -133,6 +135,26 @@ public final class MainActivity extends Activity {
 
         // This is an observation-only probe. Preserve Android and OPPO default handling.
         return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        int source = event.getSource();
+        String evidence = "action=" + MotionEvent.actionToString(event.getAction())
+                + " source=0x" + Integer.toHexString(source)
+                + " rotary=" + ((source & InputDevice.SOURCE_ROTARY_ENCODER)
+                == InputDevice.SOURCE_ROTARY_ENCODER)
+                + " axisScroll=" + event.getAxisValue(MotionEvent.AXIS_SCROLL)
+                + " axisVScroll=" + event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+                + " axisHScroll=" + event.getAxisValue(MotionEvent.AXIS_HSCROLL)
+                + " deviceId=" + event.getDeviceId();
+        Log.i(ROTARY_TAG, evidence);
+        if (actionResultView != null) {
+            actionResultView.setText(evidence);
+        }
+
+        // Observation only: retain Android's default focus and scrolling behavior.
+        return super.dispatchGenericMotionEvent(event);
     }
 
     @Override

@@ -114,7 +114,21 @@ Service 启用后，已从 OPPO Settings 收到并解析：
 
 结论：上方物理键虽然在 Linux/Android 映射中名为 F1，但产品行为属于系统电源键，不适合作为普通 App 的必需快捷键。媒体播放应使用 `MediaSession` 的标准媒体按键回调；前台 `KEYCODE_F1` 只能作为不消费系统行为的可选诊断信号，不能依赖其短按或长按一定到达。
 
-## 当前本地版本 1.10
+## 旋转表冠结果
+
+2026-09-04 在 OWW261 的普通前台 Activity 上验证：
+
+- Linux 输入设备为 `/dev/input/event3`（`oplus_crown`），事件类型为 `REL_WHEEL`。
+- Android InputReader 将它声明为 `source=0x2002` 的鼠标类指针设备，并暴露 `VSCROLL`；它不是 `SOURCE_ROTARY_ENCODER`。
+- Activity 的 `dispatchGenericMotionEvent` 能收到 `ACTION_SCROLL`。有效值位于 `AXIS_VSCROLL`；`AXIS_SCROLL` 和 `AXIS_HSCROLL` 保持为 0。
+- 顺时针的主方向为负值，逆时针为正值。连续转动会产生多帧整数和小数增量，并随速度改变；停止附近还可能出现小幅反向回摆。
+- 表冠不是“一刻度对应一个固定事件/固定 delta”的离散编码器，不能把每个 MotionEvent 直接换算成一次音量变化。
+
+播放器应先支持标准 `SOURCE_ROTARY_ENCODER + AXIS_SCROLL`，再为 OWW261 增加 `oplus_crown + SOURCE_MOUSE + AXIS_VSCROLL` 回退。只处理 `ACTION_SCROLL`；顺时针负值映射为音量增加，逆时针正值映射为音量降低。实现时使用方向锁定、累计阈值和约 80–120 ms 的步进限速，并在约 150 ms 无事件后结束本次旋转，避免高速事件和停止回摆导致音量跳变。只有播放器明确接管表冠时返回 `true`；其他页面调用 `super`，保留系统滚动与焦点行为。
+
+## 当前本地版本 1.11
+
+版本 1.11 增加只观察、不消费事件的 `dispatchGenericMotionEvent` 表冠探针，记录 action、source、三个滚动轴和 deviceId，并完成 OWW261 顺逆时针实机标定。版本 1.10 的物理按键探针及既有 Accessibility/BLE 能力保持不变。
 
 版本 1.10 增加只观察、不消费事件的 `dispatchKeyEvent` 按键探针，用于记录 action、Android keyCode/keyName、Linux scan code、repeat、long-press 标志和按压时长。版本 1.9 的图标与既有 Accessibility/BLE 能力保持不变。
 
