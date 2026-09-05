@@ -53,6 +53,12 @@ adb shell am instrument -w com.canace.x3wolainotes.test/com.canace.x3wolainotes.
 
 脚本从 `ANDROID_SERIAL` 读取设备序列号，并从 `ANDROID_SDK_ROOT`、`ANDROID_HOME` 或 `PATH` 查找 ADB；也可显式传入 `-Serial` 和 `-AndroidSdk`。仓库不保存具体设备编号。
 
+## 离线测试安全规则
+
+离线回归只允许使用上述 Debug 进程内故障注入。永久禁止使用全局代理、飞行模式、Wi-Fi、蓝牙或移动数据开关制造本项目的自动断网条件。提交前运行 scripts\verify_network_test_policy.ps1。
+
+2026-09-05 事故更正：早期人工断网测试曾将系统全局代理指向本机无效端口，恢复时只删除组合键并只检查该键为 null，未清除拆分代理字段或刷新 ConnectivityService 的 ProxyTracker，导致遵循系统代理的其他 App 长期无法联网。此前“代理已恢复”的结论错误。系统认可的直接代理清除入口是 settings put global http_proxy :0；若未来其他诊断任务确需临时修改系统状态，必须完整快照、在 finally 恢复，并核验所有代理字段、ProxyTracker 更新和独立第三方 HTTPS，不能用本 App 自身联网作为恢复证据。
+
 ## 安全边界
 
 - 不 Root、不解锁 Bootloader、不修改系统分区。
@@ -61,3 +67,4 @@ adb shell am instrument -w com.canace.x3wolainotes.test/com.canace.x3wolainotes.
 - 卸载应用会删除设备端加密 Token 和本地缓存。
 - 当前是单用户自建应用 MVP；若未来面向其他 Wolai 用户发布，应改用正式用户授权流程或手机中转。
 - 数据表格要求自建应用具备所需的数据表格权限；接口异常通过 Wolai 官方开发者文档底部的问题反馈入口提交。
+- 离线测试不得修改设备级网络状态；本项目只使用 Release 无法启用的 Debug 进程内故障注入。
