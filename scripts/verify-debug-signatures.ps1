@@ -112,14 +112,32 @@ foreach ($apk in $apks) {
         throw "APK signature verification failed: $($apk.FullName)`n$certificateOutput"
     }
 
-    $digestLine = $certificateOutput |
-        Where-Object { $_ -match 'Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F]+)' } |
-        Select-Object -First 1
-    if (-not $digestLine -or $digestLine -notmatch '([0-9a-fA-F]{64})') {
-        throw "SHA-256 certificate digest was not found: $($apk.FullName)"
+    $certificateText = ($certificateOutput | ForEach-Object { [string]$_ }) -join "`n"
+    $digestMatch = [regex]::Match(
+        $certificateText,
+        '(?im)SHA-?256[^:\r\n]*:\s*([0-9a-f:\s-]{64,})')
+    $actualDigest = if ($digestMatch.Success) {
+        ($digestMatch.Groups[1].Value -replace '[^0-9a-fA-F]', '').ToLowerInvariant()
+    } else {
+        $pemOutput = & $apksigner verify --print-certs-pem $apk.FullName 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "APK PEM certificate verification failed: $($apk.FullName)`n$pemOutput"
+        }
+        $pemText = ($pemOutput | ForEach-Object { [string]$_ }) -join "`n"
+        $pemMatch = [regex]::Match(
+            $pemText,
+            '(?s)-----BEGIN CERTIFICATE-----\s*(.*?)\s*-----END CERTIFICATE-----')
+        if (-not $pemMatch.Success) {
+            throw "Signing certificate was not found: $($apk.FullName)"
+        }
+        $certificateBytes = [Convert]::FromBase64String(
+            ($pemMatch.Groups[1].Value -replace '\s', ''))
+        ([BitConverter]::ToString(
+            [Security.Cryptography.SHA256]::HashData($certificateBytes)) -replace '-', '').ToLowerInvariant()
     }
-
-    $actualDigest = $Matches[1].ToLowerInvariant()
+    if ($actualDigest.Length -ne 64) {
+        throw "Invalid SHA-256 certificate digest: $($apk.FullName)"
+    }
     if ($actualDigest -ne $expectedDigest) {
         throw "Unexpected signer for $($apk.FullName). Expected $expectedDigest, got $actualDigest"
     }
