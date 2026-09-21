@@ -13,7 +13,7 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 
 public final class WaveSupport {
-    private WaveSupport() {}
+    private WaveSupport() { }
 
     public static long durationMs(Path wave) throws Exception {
         try (AudioInputStream input = AudioSystem.getAudioInputStream(wave.toFile())) {
@@ -22,7 +22,9 @@ public final class WaveSupport {
     }
 
     public static long concatenate(List<Path> waves, int pauseMs, Path output) throws Exception {
-        if (waves.isEmpty()) throw new IllegalArgumentException("No sentence WAV files");
+        if (waves.isEmpty()) {
+            throw new IllegalArgumentException("No sentence WAV files");
+        }
         List<AudioInputStream> opened = new ArrayList<>();
         List<InputStream> streams = new ArrayList<>();
         AudioFormat format;
@@ -36,20 +38,31 @@ public final class WaveSupport {
             long pauseFrames = Math.round(format.getFrameRate() * pauseMs / 1000.0);
             int pauseBytes = Math.toIntExact(pauseFrames * format.getFrameSize());
             for (int i = 1; i < waves.size(); i++) {
-                if (pauseBytes > 0) { streams.add(new ByteArrayInputStream(new byte[pauseBytes])); frames += pauseFrames; }
+                if (pauseBytes > 0) {
+                    streams.add(new ByteArrayInputStream(new byte[pauseBytes]));
+                    frames += pauseFrames;
+                }
                 AudioInputStream next = AudioSystem.getAudioInputStream(waves.get(i).toFile());
                 opened.add(next);
-                if (!format.matches(next.getFormat())) throw new IllegalArgumentException("TTS WAV formats differ");
+                if (!format.matches(next.getFormat())) {
+                    throw new IllegalArgumentException("TTS WAV formats differ");
+                }
                 streams.add(next);
                 frames += next.getFrameLength();
             }
-            try (SequenceInputStream sequence = new SequenceInputStream(Collections.enumeration(streams));
-                 AudioInputStream combined = new AudioInputStream(sequence, format, frames)) {
+            try (SequenceInputStream sequence =
+                            new SequenceInputStream(Collections.enumeration(streams));
+                    AudioInputStream combined = new AudioInputStream(sequence, format, frames)) {
                 AudioSystem.write(combined, AudioFileFormat.Type.WAVE, output.toFile());
             }
             return Math.round(frames * 1000.0 / format.getFrameRate());
         } finally {
-            for (AudioInputStream stream : opened) try { stream.close(); } catch (Exception ignored) {}
+            for (AudioInputStream stream : opened) {
+                try {
+                    stream.close();
+                } catch (Exception ignored) {
+                }
+            }
         }
     }
 }

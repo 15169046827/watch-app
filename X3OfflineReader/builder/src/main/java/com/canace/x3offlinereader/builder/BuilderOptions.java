@@ -20,7 +20,7 @@ public final class BuilderOptions {
     public int windowsWorkers = 2;
     public double rate = 1.0;
     public int pauseMs = 250;
-    public int maxTrackMinutes=20;
+    public int maxTrackMinutes = 20;
     public Path ffmpeg;
     public Path cover;
     public Instant createdAt = Instant.now();

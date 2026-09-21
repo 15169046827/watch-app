@@ -1,10 +1,31 @@
-[CmdletBinding()]
-param([switch]$WithoutMelo,[switch]$WithoutAdditionalVoices,[string]$JpackagePath,[string]$WorkRoot)
+﻿[CmdletBinding()]
+param(
+    [switch]$WithoutMelo,
+    [switch]$WithoutAdditionalVoices,
+    [string]$JpackagePath,
+    [string]$WorkRoot,
+    [string]$SignToolPath = $env:X3_WINDOWS_SIGNTOOL_PATH,
+    [string]$TimestampUrl = $env:X3_WINDOWS_TIMESTAMP_URL,
+    [string]$ExpectedCertificateSha256 = $env:X3_WINDOWS_SIGNING_CERT_SHA256
+)
 $ErrorActionPreference='Stop'
 $project=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $outputRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\windows-package'))
+$stagingRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\windows-package-next'))
+$backupRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\windows-package-previous'))
 $allowed=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build'))+[IO.Path]::DirectorySeparatorChar
-if(-not $outputRoot.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe package output path'}
+foreach($candidate in @($outputRoot,$stagingRoot,$backupRoot)){
+    if(-not $candidate.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe package output path'}
+}
+$expectedCertificate=($ExpectedCertificateSha256 -replace '[^0-9A-Fa-f]','').ToUpperInvariant()
+if($expectedCertificate.Length -ne 64){throw '正式打包需要 64 位 X3_WINDOWS_SIGNING_CERT_SHA256。'}
+if(-not $TimestampUrl -or -not [Uri]::IsWellFormedUriString($TimestampUrl,[UriKind]::Absolute) -or -not $TimestampUrl.StartsWith('https://',[StringComparison]::OrdinalIgnoreCase)){throw '正式打包需要 HTTPS X3_WINDOWS_TIMESTAMP_URL。'}
+if(-not $SignToolPath){$signToolCommand=Get-Command signtool.exe -ErrorAction SilentlyContinue;if($signToolCommand){$SignToolPath=$signToolCommand.Source}}
+if(-not $SignToolPath -or -not(Test-Path -LiteralPath $SignToolPath -PathType Leaf)){throw '正式打包需要 signtool.exe；请传入 -SignToolPath 或设置 X3_WINDOWS_SIGNTOOL_PATH。'}
+$signingCertificate=Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object {
+    $_.HasPrivateKey -and $_.GetCertHashString([Security.Cryptography.HashAlgorithmName]::SHA256).ToUpperInvariant() -eq $expectedCertificate
+} | Select-Object -First 1
+if(-not $signingCertificate){throw '当前用户证书库中未找到指定 SHA-256 且含私钥的 Authenticode 证书。'}
 function Copy-Tree([string]$Source,[string]$Destination){
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /NFL /NDL /NJH /NJS /NP | Out-Null
@@ -46,16 +67,16 @@ function Move-LegacyWork([string]$Source){
 $oldWork=Join-Path $outputRoot 'X3AudiobookBuilder\builder\.work'
 Move-LegacyWork (Join-Path $project 'builder\.work')
 Move-LegacyWork $oldWork
-if(Test-Path -LiteralPath $outputRoot){Remove-Item -LiteralPath $outputRoot -Recurse -Force}
-New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
-$launcher=Join-Path $outputRoot 'cli.properties'
-@('main-jar=builder-0.6.4.jar','main-class=com.canace.x3offlinereader.builder.BuilderMain','arguments=','win-console=true') | Set-Content -LiteralPath $launcher -Encoding ASCII
+if(Test-Path -LiteralPath $stagingRoot){Remove-Item -LiteralPath $stagingRoot -Recurse -Force}
+New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
+$launcher=Join-Path $stagingRoot 'cli.properties'
+@('main-jar=builder-0.7.0.jar','main-class=com.canace.x3offlinereader.builder.BuilderMain','arguments=','win-console=true') | Set-Content -LiteralPath $launcher -Encoding ASCII
 if(-not $JpackagePath -and $env:JAVA_HOME){$JpackagePath=Join-Path $env:JAVA_HOME 'bin\jpackage.exe'}
 if(-not $JpackagePath){$command=Get-Command jpackage.exe -ErrorAction SilentlyContinue;if($command){$JpackagePath=$command.Source}}
 if(-not $JpackagePath -or -not(Test-Path -LiteralPath $JpackagePath -PathType Leaf)){throw 'JDK 17 jpackage.exe not found. Pass -JpackagePath, set JAVA_HOME, or add jpackage to PATH.'}
-& $JpackagePath --type app-image --name X3AudiobookBuilder --app-version '0.6.4' --dest $outputRoot --input (Join-Path $PSScriptRoot 'build\install\builder\lib') --main-jar 'builder-0.6.4.jar' --main-class 'com.canace.x3offlinereader.builder.BuilderMain' --arguments gui --java-options '-Dfile.encoding=UTF-8' --icon $icon --add-launcher "X3BuilderCLI=$launcher"
+& $JpackagePath --type app-image --name X3AudiobookBuilder --app-version '0.7.0' --dest $stagingRoot --input (Join-Path $PSScriptRoot 'build\install\builder\lib') --main-jar 'builder-0.7.0.jar' --main-class 'com.canace.x3offlinereader.builder.BuilderMain' --arguments gui --java-options '-Dfile.encoding=UTF-8' --icon $icon --add-launcher "X3BuilderCLI=$launcher"
 if($LASTEXITCODE -ne 0){throw 'jpackage failed'}
-$app=Join-Path $outputRoot 'X3AudiobookBuilder'
+$app=Join-Path $stagingRoot 'X3AudiobookBuilder'
 Copy-Item -LiteralPath $tauriExecutable -Destination (Join-Path $app 'X3AudiobookBuilder.exe') -Force
 Copy-Tree (Join-Path $project 'specification') (Join-Path $app 'specification')
 New-Item -ItemType Directory -Force -Path (Join-Path $app 'builder') | Out-Null
@@ -80,6 +101,43 @@ if(-not $WithoutMelo){
     & (Join-Path $app '.tools\melo\python.exe') (Join-Path $app 'builder\melo\worker.py') --self-test
     if($LASTEXITCODE -ne 0){throw 'Packaged Melo sanitizer self-test failed'}
 }
+$signedLaunchers=@(
+    (Join-Path $app 'X3AudiobookBuilder.exe'),
+    (Join-Path $app 'X3BuilderCLI.exe')
+)
+foreach($artifact in $signedLaunchers){
+    if(-not(Test-Path -LiteralPath $artifact -PathType Leaf)){throw "待签名启动程序不存在：$artifact"}
+    & $SignToolPath sign /sha1 $signingCertificate.Thumbprint /fd SHA256 /tr $TimestampUrl /td SHA256 $artifact
+    if($LASTEXITCODE -ne 0){throw "Authenticode 签名失败：$artifact"}
+}
+& (Join-Path $project '..\scripts\verify-authenticode.ps1') -Artifact $signedLaunchers -ExpectedCertificateSha256 $expectedCertificate
+if($LASTEXITCODE -ne 0){throw 'Authenticode 独立验签失败'}
+foreach($artifact in $signedLaunchers){
+    if(-not (Get-AuthenticodeSignature -LiteralPath $artifact).TimeStamperCertificate){throw "Authenticode 时间戳缺失：$artifact"}
+}
 Remove-Item -LiteralPath $launcher -Force
 if(Test-Path -LiteralPath (Join-Path $app 'builder\.work')){throw 'Persistent work must not be stored inside the replaceable app image'}
+if(Test-Path -LiteralPath $backupRoot){Remove-Item -LiteralPath $backupRoot -Recurse -Force}
+$hadPrevious=Test-Path -LiteralPath $outputRoot -PathType Container
+$previousMoved=$false
+try{
+    if($hadPrevious){
+        Move-Item -LiteralPath $outputRoot -Destination $backupRoot
+        $previousMoved=$true
+    }
+    Move-Item -LiteralPath $stagingRoot -Destination $outputRoot
+    $app=Join-Path $outputRoot 'X3AudiobookBuilder'
+    $finalLaunchers=@((Join-Path $app 'X3AudiobookBuilder.exe'),(Join-Path $app 'X3BuilderCLI.exe'))
+    & (Join-Path $project '..\scripts\verify-authenticode.ps1') -Artifact $finalLaunchers -ExpectedCertificateSha256 $expectedCertificate
+    if($LASTEXITCODE -ne 0){throw '正式目录 Authenticode 复验失败'}
+}catch{
+    if($previousMoved){
+        if(Test-Path -LiteralPath $outputRoot){Remove-Item -LiteralPath $outputRoot -Recurse -Force}
+        if(Test-Path -LiteralPath $backupRoot){Move-Item -LiteralPath $backupRoot -Destination $outputRoot}
+    }elseif(-not $hadPrevious -and (Test-Path -LiteralPath $outputRoot)){
+        Remove-Item -LiteralPath $outputRoot -Recurse -Force
+    }
+    throw
+}
+if(Test-Path -LiteralPath $backupRoot){Remove-Item -LiteralPath $backupRoot -Recurse -Force}
 Write-Host "Windows app image ready: $app"

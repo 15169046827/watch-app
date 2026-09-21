@@ -2,7 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
-def stableDebugKey = rootProject.file('../.signing/x3-debug.keystore')
+apply from: rootProject.file('../gradle/shared-debug-signing-v1.gradle')
+apply from: rootProject.file('../gradle/shared-release-signing-v1.gradle')
+apply from: rootProject.file('../gradle/android-java-quality.gradle')
 def localConfig = new Properties()
 def localConfigFile = rootProject.file('local.properties')
 if (localConfigFile.isFile()) {
@@ -19,29 +21,19 @@ android {
         applicationId 'com.canace.x3wolainotes'
         minSdk 26
         targetSdk 30
-        versionCode 7
-        versionName '0.4.0'
+        versionCode 10
+        versionName '0.6.1'
         testInstrumentationRunner 'com.canace.x3wolainotes.MvpTestRunner'
-        buildConfigField 'String', 'WOLAI_TARGET_PAGE_ID', "\"${wolaiTargetPageId}\""
-        buildConfigField 'String', 'WOLAI_FAVORITES_PAGE_ID', "\"${wolaiFavoritesPageId}\""
-    }
-
-    signingConfigs {
-        if (stableDebugKey.isFile()) {
-            debug {
-                storeFile stableDebugKey
-                storePassword 'android'
-                keyAlias 'androiddebugkey'
-                keyPassword 'android'
-            }
-        }
     }
 
     buildTypes {
         debug {
-            if (stableDebugKey.isFile()) { signingConfig signingConfigs.debug }
+            buildConfigField 'String', 'WOLAI_TARGET_PAGE_ID', "\"${wolaiTargetPageId}\""
+            buildConfigField 'String', 'WOLAI_FAVORITES_PAGE_ID', "\"${wolaiFavoritesPageId}\""
         }
         release {
+            buildConfigField 'String', 'WOLAI_TARGET_PAGE_ID', '""'
+            buildConfigField 'String', 'WOLAI_FAVORITES_PAGE_ID', '""'
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -61,4 +53,32 @@ android {
         // This APK is sideloaded to a customized Android 11 watch, not distributed on Google Play.
         disable 'ExpiredTargetSdkVersion', 'GradleDependency'
     }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
+
+def registerAdditionalCheckstyle = { String taskName, Object sourcePath, String descriptionText ->
+    tasks.register(taskName, org.gradle.api.plugins.quality.Checkstyle) {
+        description = descriptionText
+        group = 'verification'
+        source = fileTree(sourcePath) {
+            include '**/*.java'
+        }
+        classpath = files()
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+}
+
+registerAdditionalCheckstyle(
+        'checkstyleTools',
+        rootProject.file('tools'),
+        'Checks standalone Java self-tests against the workspace conventions.')
+
+tasks.named('check').configure {
+    dependsOn tasks.named('checkstyleTools')
 }

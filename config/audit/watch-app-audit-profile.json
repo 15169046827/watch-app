@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "profileId": "WATCH-APP-UPARS",
+  "version": "1.1.0",
+  "baseStandard": {
+    "id": "UPARS",
+    "version": "1.0.0",
+    "codexSkill": "universal-project-audit"
+  },
+  "projects": [
+    "shared_probe",
+    "voice_ledger",
+    "wolai_notes",
+    "x3_offline_reader",
+    "windows_audiobook_builder"
+  ],
+  "productClassification": {
+    "publicProducts": [
+      "x3_voice_ledger",
+      "x3_wolai_notes",
+      "x3_offline_reader",
+      "windows_audiobook_builder"
+    ],
+    "internalDiagnosticTools": [
+      "x3_accessibility_probe"
+    ]
+  },
+  "standardTracks": {
+    "auditAndRemediation": "WACAS 1.1",
+    "publicReleaseStandardization": "WARS 1.1",
+    "parallelWithSeparateVerdicts": true,
+    "releaseChangesMayEnterIncompleteAuditWork": false,
+    "standardChangesOwnedByCoordinationTask": true
+  },
+  "auditOrder": [
+    "repository_shared_controls_and_probe",
+    "x3_voice_ledger",
+    "x3_wolai_notes",
+    "x3_offline_reader"
+  ],
+  "requiredRiskAreas": [
+    "round_screen_and_wear_input",
+    "android_lifecycle_and_resources",
+    "offline_and_explicit_network_consent",
+    "permissions_and_exported_components",
+    "data_import_export_and_recovery",
+    "battery_memory_storage_and_background_work",
+    "device_builder_package_compatibility",
+    "signing_install_upgrade_and_rollback"
+  ],
+  "requiredRepositoryGates": [
+    "code_conventions",
+    "unit_tests",
+    "android_lint",
+    "debug_build",
+    "production_build",
+    "network_safety_positive_and_negative",
+    "public_release_standard_positive_and_negative",
+    "signature_identity_when_applicable"
+  ],
+  "productionReleaseRequires": [
+    "real_device_acceptance",
+    "release_signature_verification",
+    "windows_authenticode_verification",
+    "install_and_upgrade_validation",
+    "offline_and_permission_denial_paths",
+    "rollback_or_recovery_validation"
+  ],
+  "usageGate": {
+    "checkBeforeIntensivePhase": true,
+    "checkAfterMaterialMilestone": true,
+    "doNotStartNewModificationAtOrBelowRemainingPercent": 5,
+    "recoverableCheckpointRequiredAtThreshold": true,
+    "usageResetRequiresExplicitUserAuthorization": true,
+    "mustPropagateToProductTasks": true
+  },
+  "mayTightenBaseStandard": true,
+  "maySilentlyWeakenBaseStandard": false
+}

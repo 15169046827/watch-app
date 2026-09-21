@@ -17,7 +17,8 @@ public final class YimuCategoryMapperSelfTest {
     private static void expect(String category, String note, String parent, String child) {
         YimuCategoryMapper.Mapping actual = YimuCategoryMapper.map(category, note);
         if (!parent.equals(actual.parent) || !child.equals(actual.child)) {
-            throw new AssertionError(category + "/" + note + " => " + actual.parent + "/" + actual.child);
+            throw new AssertionError(
+                    category + "/" + note + " => " + actual.parent + "/" + actual.child);
         }
     }
 }

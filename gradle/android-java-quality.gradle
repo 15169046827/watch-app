@@ -1,0 +1,50 @@
+import org.gradle.api.plugins.quality.Checkstyle
+
+apply plugin: 'checkstyle'
+
+checkstyle {
+    toolVersion = '10.21.4'
+    configFile = rootProject.file('../config/checkstyle/checkstyle.xml')
+    ignoreFailures = false
+    maxWarnings = 0
+    showViolations = true
+}
+
+def configureSourceCheck = { String taskName, String sourceDirectory, String taskDescription ->
+    def configureTask = {
+        description = taskDescription
+        group = 'verification'
+        source = fileTree(sourceDirectory) {
+            include '**/*.java'
+        }
+        classpath = files()
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+    if (tasks.findByName(taskName) == null) {
+        tasks.register(taskName, Checkstyle, configureTask)
+    } else {
+        tasks.named(taskName, Checkstyle).configure(configureTask)
+    }
+}
+
+configureSourceCheck(
+        'checkstyleMain',
+        'src/main/java',
+        'Checks main Java sources against the workspace conventions.')
+configureSourceCheck(
+        'checkstyleTest',
+        'src/test/java',
+        'Checks unit-test Java sources against the workspace conventions.')
+configureSourceCheck(
+        'checkstyleAndroidTest',
+        'src/androidTest/java',
+        'Checks Android instrumentation-test Java sources against the workspace conventions.')
+
+tasks.matching { task -> task.name == 'check' }.configureEach {
+    dependsOn tasks.named('checkstyleMain')
+    dependsOn tasks.named('checkstyleTest')
+    dependsOn tasks.named('checkstyleAndroidTest')
+}

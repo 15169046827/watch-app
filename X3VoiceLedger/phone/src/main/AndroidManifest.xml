@@ -26,6 +26,8 @@
 
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_phone_ledger"
         android:label="记账"
         android:roundIcon="@mipmap/ic_phone_ledger"

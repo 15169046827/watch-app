@@ -9,7 +9,7 @@ import org.w3c.dom.DocumentType;
 import org.xml.sax.InputSource;
 
 final class XmlSupport {
-    private XmlSupport() {}
+    private XmlSupport() { }
 
     static Document parse(InputStream input) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -27,8 +27,11 @@ final class XmlSupport {
         builder.setEntityResolver((publicId, systemId) -> new InputSource(new StringReader("")));
         Document document = builder.parse(input);
         DocumentType doctype = document.getDoctype();
-        if (doctype != null && doctype.getInternalSubset() != null && !doctype.getInternalSubset().isBlank()) {
-            throw new IllegalArgumentException("EPUB XML internal DOCTYPE subsets are not supported");
+        if (doctype != null
+                && doctype.getInternalSubset() != null
+                && !doctype.getInternalSubset().isBlank()) {
+            throw new IllegalArgumentException(
+                    "EPUB XML internal DOCTYPE subsets are not supported");
         }
         return document;
     }

@@ -43,7 +43,9 @@ fn project_root() -> Result<PathBuf, String> {
 }
 
 fn persistent_work_root(root: &Path) -> Result<PathBuf, String> {
-    let work = if let Some(configured) = std::env::var_os(WORK_ROOT_ENV).filter(|value| !value.is_empty()) {
+    let work = if let Some(configured) =
+        std::env::var_os(WORK_ROOT_ENV).filter(|value| !value.is_empty())
+    {
         let path = PathBuf::from(configured);
         if !path.is_absolute() {
             return Err("X3_BUILDER_WORK_ROOT 必须是绝对路径".into());
@@ -52,7 +54,10 @@ fn persistent_work_root(root: &Path) -> Result<PathBuf, String> {
     } else {
         let base = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
-            .or_else(|| std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join("AppData/Local")))
+            .or_else(|| {
+                std::env::var_os("USERPROFILE")
+                    .map(|home| PathBuf::from(home).join("AppData/Local"))
+            })
             .ok_or("无法定位 Windows 用户数据目录")?;
         base.join("Canace/X3AudiobookBuilder/work")
     };
@@ -77,7 +82,10 @@ fn backend_command(root: &Path, args: &[String]) -> Result<Command, String> {
         value.args(["/D", "/S", "/C"]).arg(script).args(args);
         value
     };
-    command.current_dir(root).env(WORK_ROOT_ENV, persistent_work_root(root)?).stdin(Stdio::null());
+    command
+        .current_dir(root)
+        .env(WORK_ROOT_ENV, persistent_work_root(root)?)
+        .stdin(Stdio::null());
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
     Ok(command)
@@ -91,10 +99,17 @@ fn capture(args: Vec<String>) -> Result<Value, String> {
         .output()
         .map_err(|error| format!("无法启动转换核心：{error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let line = stdout.lines().rev().find(|line| !line.trim().is_empty()).ok_or_else(|| {
-        let diagnostic = String::from_utf8_lossy(&output.stderr);
-        format!("转换核心没有返回结果：{}", diagnostic.chars().take(240).collect::<String>())
-    })?;
+    let line = stdout
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .ok_or_else(|| {
+            let diagnostic = String::from_utf8_lossy(&output.stderr);
+            format!(
+                "转换核心没有返回结果：{}",
+                diagnostic.chars().take(240).collect::<String>()
+            )
+        })?;
     serde_json::from_str(line).map_err(|error| format!("转换核心返回了无效结果：{error}"))
 }
 
@@ -117,11 +132,24 @@ fn cache_action(action: String) -> Result<Value, String> {
 }
 
 fn unique_file(directory: &Path, suffix: &str) -> PathBuf {
-    let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
-    directory.join(format!("{}-{millis}-{}.{}", std::process::id(), std::thread::current().name().unwrap_or("ui"), suffix))
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    directory.join(format!(
+        "{}-{millis}-{}.{}",
+        std::process::id(),
+        std::thread::current().name().unwrap_or("ui"),
+        suffix
+    ))
 }
 
-fn launch_build<R: Runtime>(app: tauri::AppHandle<R>, state: &RuntimeState, mut request: Value, resume: bool) -> Result<(), String> {
+fn launch_build<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    state: &RuntimeState,
+    mut request: Value,
+    resume: bool,
+) -> Result<(), String> {
     let root = project_root()?;
     let request_root = persistent_work_root(&root)?.join("ui-requests");
     fs::create_dir_all(&request_root).map_err(|error| format!("无法创建任务目录：{error}"))?;
@@ -129,59 +157,91 @@ fn launch_build<R: Runtime>(app: tauri::AppHandle<R>, state: &RuntimeState, mut 
     let control_file = unique_file(&request_root, "stop");
     let object = request.as_object_mut().ok_or("任务参数无效")?;
     object.insert("resume".into(), Value::Bool(resume));
-    object.insert("controlFile".into(), Value::String(control_file.to_string_lossy().to_string()));
-    fs::write(&request_file, serde_json::to_vec(&request).map_err(|error| error.to_string())?)
-        .map_err(|error| format!("无法保存任务请求：{error}"))?;
+    object.insert(
+        "controlFile".into(),
+        Value::String(control_file.to_string_lossy().to_string()),
+    );
+    fs::write(
+        &request_file,
+        serde_json::to_vec(&request).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| format!("无法保存任务请求：{error}"))?;
 
     let mut active = state.0.lock().map_err(|_| "任务状态不可用")?;
     if active.is_some() {
         return Err("已有转换任务正在运行".into());
     }
-    let args = vec!["bridge-build".into(), request_file.to_string_lossy().to_string()];
+    let args = vec![
+        "bridge-build".into(),
+        request_file.to_string_lossy().to_string(),
+    ];
     let mut child = backend_command(&root, &args)?
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|error| format!("无法启动转换任务：{error}"))?;
     let stdout = child.stdout.take().ok_or("无法读取转换进度")?;
-    *active = Some(ActiveBuild { control_file: control_file.clone(), request_file: request_file.clone(), close_after_stop: false });
+    *active = Some(ActiveBuild {
+        control_file: control_file.clone(),
+        request_file: request_file.clone(),
+        close_after_stop: false,
+    });
     drop(active);
 
-    std::thread::Builder::new().name("builder-events".into()).spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            if let Ok(value) = serde_json::from_str::<Value>(&line) {
-                let _ = app.emit("builder-event", value);
+    std::thread::Builder::new()
+        .name("builder-events".into())
+        .spawn(move || {
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                if let Ok(value) = serde_json::from_str::<Value>(&line) {
+                    let _ = app.emit("builder-event", value);
+                }
             }
-        }
-        let result = child.wait();
-        let (close_after, cleanup_request, cleanup_control) = {
-            let state = app.state::<RuntimeState>();
-            let mut guard = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            let finished = guard.take();
-            finished.map(|task| (task.close_after_stop, task.request_file, task.control_file))
-                .unwrap_or((false, request_file, control_file))
-        };
-        let _ = fs::remove_file(cleanup_request);
-        let _ = fs::remove_file(cleanup_control);
-        if let Ok(status) = result {
-            if !status.success() {
-                let _ = app.emit("builder-event", json!({"type":"backend-exit","message":"转换核心已停止"}));
+            let result = child.wait();
+            let (close_after, cleanup_request, cleanup_control) = {
+                let state = app.state::<RuntimeState>();
+                let mut guard = state
+                    .0
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let finished = guard.take();
+                finished
+                    .map(|task| (task.close_after_stop, task.request_file, task.control_file))
+                    .unwrap_or((false, request_file, control_file))
+            };
+            let _ = fs::remove_file(cleanup_request);
+            let _ = fs::remove_file(cleanup_control);
+            if let Ok(status) = result {
+                if !status.success() {
+                    let _ = app.emit(
+                        "builder-event",
+                        json!({"type":"backend-exit","message":"转换核心已停止"}),
+                    );
+                }
             }
-        }
-        if close_after {
-            if let Some(window) = app.get_webview_window("main") { let _ = window.close(); }
-        }
-    }).map_err(|error| format!("无法启动进度监听：{error}"))?;
+            if close_after {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.close();
+                }
+            }
+        })
+        .map_err(|error| format!("无法启动进度监听：{error}"))?;
     Ok(())
 }
 
 #[tauri::command]
-fn start_build(app: tauri::AppHandle, state: tauri::State<'_, RuntimeState>, request: Value) -> Result<(), String> {
+fn start_build(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, RuntimeState>,
+    request: Value,
+) -> Result<(), String> {
     launch_build(app, &state, request, false)
 }
 
 #[tauri::command]
-fn resume_build(app: tauri::AppHandle, state: tauri::State<'_, RuntimeState>) -> Result<(), String> {
+fn resume_build(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
     launch_build(app, &state, json!({}), true)
 }
 
@@ -197,16 +257,29 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(RuntimeState::default())
-        .invoke_handler(tauri::generate_handler![bridge_state, preview_audio, cache_action, start_build, resume_build, pause_build])
+        .invoke_handler(tauri::generate_handler![
+            bridge_state,
+            preview_audio,
+            cache_action,
+            start_build,
+            resume_build,
+            pause_build
+        ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<RuntimeState>();
-                let mut guard = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                let mut guard = state
+                    .0
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 if let Some(active) = guard.as_mut() {
                     api.prevent_close();
                     active.close_after_stop = true;
                     let _ = fs::write(&active.control_file, b"pause");
-                    let _ = window.emit("builder-event", json!({"type":"closing","message":"正在保存转换进度，完成后自动关闭…"}));
+                    let _ = window.emit(
+                        "builder-event",
+                        json!({"type":"closing","message":"正在保存转换进度，完成后自动关闭…"}),
+                    );
                 }
             }
         })

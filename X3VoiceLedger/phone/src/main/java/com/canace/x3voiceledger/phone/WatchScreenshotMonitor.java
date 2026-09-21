@@ -14,22 +14,23 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 final class WatchScreenshotMonitor {
     interface Callback {
         void onRecognized(long amountCents, String account);
+
         void onMessage(String message);
     }
 
     private static final String PREFS = "watch_screenshot_monitor";
     private static final String LAST_ID = "last_media_id";
+    private static final String RETRY_ID = "retry_media_id";
+    private static final String RETRY_ATTEMPTS = "retry_attempts";
     private static final String WATCH_PATH = "Pictures/com.heytap.health/screenshots/";
     private static final int MAX_SCAN_COUNT = 50;
     private final Context context;
@@ -39,8 +40,11 @@ final class WatchScreenshotMonitor {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private ContentObserver observer;
 
-    WatchScreenshotMonitor(Context context, PhoneLedgerStore store,
-                           LedgerProfileStore profileStore, Callback callback) {
+    WatchScreenshotMonitor(
+            Context context,
+            PhoneLedgerStore store,
+            LedgerProfileStore profileStore,
+            Callback callback) {
         this.context = context;
         this.store = store;
         this.profileStore = profileStore;
@@ -48,98 +52,206 @@ final class WatchScreenshotMonitor {
     }
 
     void start() {
-        if (!hasImagePermission(context)) return;
+        if (!hasImagePermission(context)) {
+            return;
+        }
         if (observer == null) {
-            observer = new ContentObserver(handler) {
-                @Override public void onChange(boolean selfChange, Uri uri) {
-                    handler.removeCallbacksAndMessages(null);
-                    handler.postDelayed(WatchScreenshotMonitor.this::scanLatest, 1000L);
-                }
-            };
-            context.getContentResolver().registerContentObserver(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer);
+            observer =
+                    new ContentObserver(handler) {
+                        @Override
+                        public void onChange(boolean selfChange, Uri uri) {
+                            handler.removeCallbacksAndMessages(null);
+                            handler.postDelayed(WatchScreenshotMonitor.this::scanLatest, 1000L);
+                        }
+                    };
+            context.getContentResolver()
+                    .registerContentObserver(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer);
         }
         scanLatest();
     }
 
     void close() {
         handler.removeCallbacksAndMessages(null);
-        if (observer != null) context.getContentResolver().unregisterContentObserver(observer);
+        if (observer != null) {
+            context.getContentResolver().unregisterContentObserver(observer);
+        }
         observer = null;
     }
 
     static boolean hasImagePermission(Context context) {
-        String permission = Build.VERSION.SDK_INT >= 33
-                ? "android.permission.READ_MEDIA_IMAGES" : Manifest.permission.READ_EXTERNAL_STORAGE;
+        String permission =
+                Build.VERSION.SDK_INT >= 33
+                        ? "android.permission.READ_MEDIA_IMAGES"
+                        : Manifest.permission.READ_EXTERNAL_STORAGE;
         return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
     }
 
     static String requiredPermission() {
         return Build.VERSION.SDK_INT >= 33
-                ? "android.permission.READ_MEDIA_IMAGES" : Manifest.permission.READ_EXTERNAL_STORAGE;
+                ? "android.permission.READ_MEDIA_IMAGES"
+                : Manifest.permission.READ_EXTERNAL_STORAGE;
     }
 
     static void rescanLatest(Context context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong(LAST_ID, 0L).apply();
+        clearState(context);
         PhoneSyncService.start(context);
     }
 
+    static void clearState(Context context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply();
+    }
+
     private void scanLatest() {
-        ContentResolver resolver = context.getContentResolver();
-        String[] projection = Build.VERSION.SDK_INT >= 29
-                ? new String[]{MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_TAKEN,
-                MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media.DISPLAY_NAME,
-                MediaStore.Images.Media.RELATIVE_PATH}
-                : new String[]{MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_TAKEN,
-                MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media.DISPLAY_NAME,
-                MediaStore.Images.Media.DATA};
-        String selection = Build.VERSION.SDK_INT >= 29
-                ? MediaStore.Images.Media.RELATIVE_PATH + " = ?"
-                : MediaStore.Images.Media.DATA + " LIKE ?";
-        String[] args = Build.VERSION.SDK_INT >= 29
-                ? new String[]{WATCH_PATH} : new String[]{"%/Pictures/com.heytap.health/screenshots/%"};
-        try (Cursor cursor = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection,
-                selection, args, MediaStore.Images.Media.DATE_ADDED + " DESC")) {
-            if (cursor == null || !cursor.moveToFirst()) return;
-            SharedPreferences preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            long previousId = preferences.getLong(LAST_ID, 0L);
-            long newestId = previousId;
-            List<Screenshot> screenshots = new ArrayList<>();
-            do {
-                long id = cursor.getLong(0);
-                if (id <= previousId) break;
-                newestId = Math.max(newestId, id);
-                long taken = cursor.getLong(1);
-                if (taken <= 0) taken = cursor.getLong(2) * 1000L;
-                screenshots.add(new Screenshot(id, taken));
-            } while (screenshots.size() < MAX_SCAN_COUNT && cursor.moveToNext());
-            if (screenshots.isEmpty()) return;
-            preferences.edit().putLong(LAST_ID, newestId).apply();
-            boolean recognized = false;
-            for (Screenshot screenshot : screenshots) {
-                Uri uri = Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                        Long.toString(screenshot.id));
-                recognized |= recognize(uri, screenshot.id, screenshot.transactionTime);
+        try (Cursor cursor = queryLatest()) {
+            if (cursor == null || !cursor.moveToFirst()) {
+                return;
             }
-            if (!recognized) callback.onMessage("发现手表截图，但未发现可确认的付款金额");
+            processLatest(cursor);
         } catch (RuntimeException error) {
             callback.onMessage("无法读取手表截图，请检查照片权限");
         }
     }
 
-    private boolean recognize(Uri uri, long mediaId, long transactionTime) {
-        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
-            Bitmap bitmap = BitmapFactory.decodeStream(input);
-            long amountCents = PaymentScreenshotRecognizer.recognizeAlipayAmount(bitmap);
-            if (amountCents <= 0) return false;
-            saveResult(mediaId, transactionTime, amountCents);
-            return true;
-        } catch (Exception error) {
-            return false;
+    private Cursor queryLatest() {
+        ContentResolver resolver = context.getContentResolver();
+        long previousId =
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(LAST_ID, 0L);
+        return resolver.query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                screenshotProjection(),
+                screenshotSelection(),
+                screenshotSelectionArgs(previousId),
+                MediaStore.Images.Media._ID + " ASC");
+    }
+
+    private static String[] screenshotProjection() {
+        if (Build.VERSION.SDK_INT >= 29) {
+            return new String[] {
+                MediaStore.Images.Media._ID,
+                MediaStore.Images.Media.DATE_TAKEN,
+                MediaStore.Images.Media.DATE_ADDED,
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.RELATIVE_PATH
+            };
+        }
+        return new String[] {
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DATE_TAKEN,
+            MediaStore.Images.Media.DATE_ADDED,
+            MediaStore.Images.Media.DISPLAY_NAME,
+            MediaStore.Images.Media.DATA
+        };
+    }
+
+    private static String screenshotSelection() {
+        String path =
+                Build.VERSION.SDK_INT >= 29
+                        ? MediaStore.Images.Media.RELATIVE_PATH + " = ?"
+                        : MediaStore.Images.Media.DATA + " LIKE ?";
+        return path + " AND " + MediaStore.Images.Media._ID + " > ?";
+    }
+
+    private static String[] screenshotSelectionArgs(long previousId) {
+        String path =
+                Build.VERSION.SDK_INT >= 29
+                        ? WATCH_PATH
+                        : "%/Pictures/com.heytap.health/screenshots/%";
+        return new String[] {path, Long.toString(previousId)};
+    }
+
+    private void processLatest(Cursor cursor) {
+        SharedPreferences preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        ScreenshotBatch batch = readBatch(cursor, preferences.getLong(LAST_ID, 0L));
+        if (batch.screenshots.isEmpty()) {
+            return;
+        }
+        boolean recognized = false;
+        for (Screenshot screenshot : batch.screenshots) {
+            RecognitionResult result = recognize(screenshot);
+            if (result == RecognitionResult.RETRY) {
+                handleRetry(preferences, screenshot.id);
+                return;
+            }
+            recognized |= result == RecognitionResult.RECOGNIZED;
+            commitProcessed(preferences, screenshot.id);
+        }
+        if (!recognized) {
+            callback.onMessage("发现手表截图，但未发现可确认的付款金额");
+        }
+        if (batch.screenshots.size() == MAX_SCAN_COUNT) {
+            handler.postDelayed(this::scanLatest, 250L);
         }
     }
 
-    private void saveResult(long mediaId, long transactionTime, long amountCents) {
+    private void handleRetry(SharedPreferences preferences, long mediaId) {
+        long previousRetryId = preferences.getLong(RETRY_ID, 0L);
+        int previousAttempts = preferences.getInt(RETRY_ATTEMPTS, 0);
+        int attempts =
+                ScreenshotRetryPolicy.nextAttempt(mediaId, previousRetryId, previousAttempts);
+        if (ScreenshotRetryPolicy.shouldRetry(attempts)) {
+            preferences
+                    .edit()
+                    .putLong(RETRY_ID, mediaId)
+                    .putInt(RETRY_ATTEMPTS, attempts)
+                    .commit();
+            callback.onMessage("手表截图暂时不可读，将自动重试");
+            handler.postDelayed(this::scanLatest, 5000L);
+            return;
+        }
+        commitProcessed(preferences, mediaId);
+        callback.onMessage("一张手表截图连续读取失败，已跳过并继续扫描");
+        handler.postDelayed(this::scanLatest, 250L);
+    }
+
+    private static void commitProcessed(SharedPreferences preferences, long mediaId) {
+        preferences
+                .edit()
+                .putLong(LAST_ID, mediaId)
+                .remove(RETRY_ID)
+                .remove(RETRY_ATTEMPTS)
+                .commit();
+    }
+
+    private static ScreenshotBatch readBatch(Cursor cursor, long previousId) {
+        List<Screenshot> screenshots = new ArrayList<>();
+        do {
+            long id = cursor.getLong(0);
+            if (id > previousId) {
+                screenshots.add(new Screenshot(id, transactionTime(cursor)));
+            }
+        } while (screenshots.size() < MAX_SCAN_COUNT && cursor.moveToNext());
+        return new ScreenshotBatch(screenshots);
+    }
+
+    private static long transactionTime(Cursor cursor) {
+        long taken = cursor.getLong(1);
+        return taken > 0 ? taken : cursor.getLong(2) * 1000L;
+    }
+
+    private RecognitionResult recognize(Screenshot screenshot) {
+        Uri uri =
+                Uri.withAppendedPath(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        Long.toString(screenshot.id));
+        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
+            Bitmap bitmap = BitmapFactory.decodeStream(input);
+            if (bitmap == null) {
+                return RecognitionResult.RETRY;
+            }
+            long amountCents = PaymentScreenshotRecognizer.recognizeAlipayAmount(bitmap);
+            if (amountCents <= 0) {
+                return RecognitionResult.IGNORED;
+            }
+            return saveResult(screenshot.id, screenshot.transactionTime, amountCents)
+                    ? RecognitionResult.RECOGNIZED
+                    : RecognitionResult.RETRY;
+        } catch (Exception error) {
+            return RecognitionResult.RETRY;
+        }
+    }
+
+    private boolean saveResult(long mediaId, long transactionTime, long amountCents) {
         String account = profileStore.accountForChannel("支付宝");
         try {
             JSONObject payload = new JSONObject();
@@ -158,8 +270,24 @@ final class WatchScreenshotMonitor {
             payload.put("source", "watch_screenshot");
             store.upsert(payload);
             callback.onRecognized(amountCents, account);
-        } catch (JSONException ignored) {
-            callback.onMessage("无法保存手表付款草稿");
+            return true;
+        } catch (JSONException | RuntimeException error) {
+            callback.onMessage("无法保存手表付款草稿，将自动重试");
+            return false;
+        }
+    }
+
+    private enum RecognitionResult {
+        RECOGNIZED,
+        IGNORED,
+        RETRY
+    }
+
+    private static final class ScreenshotBatch {
+        final List<Screenshot> screenshots;
+
+        ScreenshotBatch(List<Screenshot> screenshots) {
+            this.screenshots = screenshots;
         }
     }
 

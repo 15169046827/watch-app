@@ -3,7 +3,7 @@ package com.canace.x3offlinereader.builder.text;
 import java.text.Normalizer;
 
 public final class TextNormalizer {
-    private TextNormalizer() {}
+    private TextNormalizer() { }
 
     public static String normalize(String value) {
         return Normalizer.normalize(value, Normalizer.Form.NFC)

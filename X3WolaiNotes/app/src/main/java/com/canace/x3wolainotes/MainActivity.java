@@ -1,6 +1,7 @@
 package com.canace.x3wolainotes;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -14,6 +15,7 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -22,7 +24,6 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -49,6 +50,7 @@ public final class MainActivity extends Activity {
 
     private NoteStore store;
     private SecretStore secretStore;
+    private PageConfigStore pageConfig;
     private EditText noteInput;
     private TextView statusView;
     private LinearLayout localList;
@@ -65,25 +67,45 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Local notes are private content and must not appear in screenshots or recents previews.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         store = new NoteStore(this);
         secretStore = new SecretStore(this);
-        importProvisionedToken();
+        pageConfig = new PageConfigStore(this);
+        loadAuthorization();
         buildScreen();
+        showPrivacyNoticeIfNeeded();
         renderState();
-        if (authorized) syncAll(false);
+        if (authorized) {
+            syncAll(false);
+        }
     }
 
-    private void importProvisionedToken() {
+    private void loadAuthorization() {
         try {
-            boolean imported = secretStore.importProvisionedToken();
+            boolean imported = BuildConfig.DEBUG && secretStore.importProvisionedToken();
             authorized = imported || secretStore.loadToken() != null;
-            if (imported) statusMessage = "授权已安全保存";
+            if (imported) {
+                statusMessage = "调试授权已安全保存";
+            }
         } catch (Exception error) {
             authorized = secretStore.loadToken() != null;
-            statusMessage = "授权导入失败";
+            statusMessage = "授权读取失败 · 仅本地可用";
         }
+    }
+
+    private void showPrivacyNoticeIfNeeded() {
+        if (pageConfig.hasAcceptedPrivacyNotice()) {
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("本地与 Wolai 数据")
+                .setMessage("笔记先保存在手表；授权并配置页面后才发送到 Wolai。在线阅读内容不落盘。导出文件未加密且不含授权，可在“数据与授权”中分类清除。")
+                .setCancelable(false)
+                .setPositiveButton("知道了", (dialog, which) -> pageConfig.acceptPrivacyNotice())
+                .show();
     }
 
     private void buildScreen() {
@@ -147,7 +169,12 @@ public final class MainActivity extends Activity {
 
         Button favoritesButton = button("查看收藏 · 在线", CARD_ALT, Color.WHITE);
         favoritesButton.setOnClickListener(v -> startActivity(new Intent(this, ReaderActivity.class)));
-        content.addView(favoritesButton, params(-1, dp(44), 0, dp(7)));
+        content.addView(favoritesButton, params(-1, dp(44), 0, dp(4)));
+
+        Button dataButton = button("数据与授权", CARD_ALT, Color.WHITE);
+        dataButton.setOnClickListener(v -> startActivity(
+                new Intent(this, DataManagementActivity.class)));
+        content.addView(dataButton, params(-1, dp(40), 0, dp(7)));
 
         content.addView(sectionTitle("本地记录"));
         localList = new LinearLayout(this);
@@ -196,101 +223,131 @@ public final class MainActivity extends Activity {
     }
 
     private void syncAll(boolean notify) {
-        if (!syncing.compareAndSet(false, true)) return;
+        if (!syncing.compareAndSet(false, true)) {
+            return;
+        }
         renderState();
-        executor.execute(() -> {
-            String finalMessage;
-            try {
-                if (!AppConfig.hasTargetPage()) {
-                    finalMessage = "未配置同步页面 · 本地可用";
-                } else {
-                    String token = secretStore.loadToken();
-                    if (token == null || token.trim().isEmpty()) {
-                    authorized = false;
-                    finalMessage = "等待安装时配置授权";
-                    } else {
-                        authorized = true;
-                        WolaiClient client = new WolaiClient(token);
-                        List<NoteItem> pending = store.pending(20);
-                        List<SyncReconciler.Candidate> remoteCandidates = null;
-                        Set<String> consumedRemoteIds = new HashSet<>();
-                        String syncMessage = "";
-                        for (NoteItem item : pending) {
-                            String expected = NoteFormatter.forWolai(item.kind, item.text);
-                            long now = System.currentTimeMillis();
-                            if (item.state == NoteItem.STATE_UNCERTAIN) {
-                                try {
-                                    if (remoteCandidates == null) {
-                                        remoteCandidates = toCandidates(
-                                                client.fetchChildren(AppConfig.TARGET_PAGE_ID));
-                                    }
-                                    String match = SyncReconciler.findMatch(item, expected,
-                                            remoteCandidates, consumedRemoteIds, now);
-                                    if (!match.isEmpty()) {
-                                        consumedRemoteIds.add(match);
-                                        store.markSynced(item.id);
-                                        continue;
-                                    }
-                                } catch (WolaiClient.ApiException error) {
-                                    syncMessage = UserErrorMessages.syncStatus(
-                                            WolaiClient.statusOf(error));
-                                    break;
-                                }
-                                if (SyncReconciler.shouldWaitBeforeRetry(item, now)) {
-                                    syncMessage = "写入结果待确认 · 稍后自动核对";
-                                    break;
-                                }
-                            }
-                            try {
-                                store.markAttempting(item.id, now);
-                                client.createTextBlock(AppConfig.TARGET_PAGE_ID, expected);
-                                store.markSynced(item.id);
-                            } catch (WolaiClient.ApiException error) {
-                                if (error.isOutcomeUnknown()) {
-                                    store.markUncertain(item.id, error.getMessage());
-                                    syncMessage = "写入结果待确认 · 稍后自动核对";
-                                } else {
-                                    store.markFailed(item.id, error.getMessage());
-                                    syncMessage = UserErrorMessages.syncStatus(
-                                            WolaiClient.statusOf(error));
-                                }
-                                break;
-                            }
-                        }
-                        int uncertain = store.uncertainCount();
-                        int remaining = store.pendingCount();
-                        if (!syncMessage.isEmpty()) {
-                            finalMessage = syncMessage;
-                        } else if (uncertain > 0) {
-                            finalMessage = uncertain + " 条写入结果待确认";
-                        } else {
-                            finalMessage = remaining == 0 ? "同步完成" : remaining + " 条等待重试";
-                        }
-                    }
-                }
-            } catch (Exception error) {
-                finalMessage = UserErrorMessages.syncStatus(WolaiClient.statusOf(error));
+        executor.execute(() -> finishSync(runSync(), notify));
+    }
+
+    private String runSync() {
+        try {
+            String targetPageId = pageConfig.targetPageId();
+            if (!AppConfig.isConfiguredPage(targetPageId)) {
+                return "未配置同步页面 · 本地可用";
             }
-            syncing.set(false);
-            final String result = finalMessage;
-            runOnUiThread(() -> {
-                if (destroyed) return;
-                statusMessage = result;
-                renderState();
-                if (notify) Toast.makeText(this, result, Toast.LENGTH_SHORT).show();
-            });
+            String token = secretStore.loadToken();
+            if (token == null || token.trim().isEmpty()) {
+                authorized = false;
+                return "未配置个人 Token · 本地可用";
+            }
+            authorized = true;
+            return syncPending(new WolaiClient(token), store.pending(20), targetPageId);
+        } catch (Exception error) {
+            return UserErrorMessages.syncStatus(WolaiClient.statusOf(error));
+        }
+    }
+
+    private String syncPending(WolaiClient client, List<NoteItem> pending, String targetPageId)
+            throws WolaiClient.ApiException {
+        List<SyncReconciler.Candidate> remoteCandidates =
+                fetchCandidatesIfNeeded(client, pending, targetPageId);
+        Set<String> consumedRemoteIds = new HashSet<>();
+        for (NoteItem item : pending) {
+            String expected = NoteFormatter.forWolai(item.kind, item.text);
+            long now = System.currentTimeMillis();
+            if (reconcileUncertain(item, expected, remoteCandidates, consumedRemoteIds, now)) {
+                continue;
+            }
+            if (item.state == NoteItem.STATE_UNCERTAIN
+                    && SyncReconciler.shouldWaitBeforeRetry(item, now)) {
+                return "写入结果待确认 · 稍后自动核对";
+            }
+            String failure = uploadItem(client, item, expected, now, targetPageId);
+            if (!failure.isEmpty()) {
+                return failure;
+            }
+        }
+        return completedSyncMessage();
+    }
+
+    private List<SyncReconciler.Candidate> fetchCandidatesIfNeeded(
+            WolaiClient client, List<NoteItem> pending, String targetPageId)
+            throws WolaiClient.ApiException {
+        for (NoteItem item : pending) {
+            if (item.state == NoteItem.STATE_UNCERTAIN) {
+                return toCandidates(client.fetchChildren(targetPageId));
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    private boolean reconcileUncertain(NoteItem item, String expected,
+                                       List<SyncReconciler.Candidate> candidates,
+                                       Set<String> consumedRemoteIds, long now) {
+        if (item.state != NoteItem.STATE_UNCERTAIN) {
+            return false;
+        }
+        String match = SyncReconciler.findMatch(item, expected, candidates, consumedRemoteIds, now);
+        if (match.isEmpty()) {
+            return false;
+        }
+        consumedRemoteIds.add(match);
+        store.markSynced(item.id);
+        return true;
+    }
+
+    private String uploadItem(WolaiClient client, NoteItem item, String expected, long now,
+                              String targetPageId) {
+        try {
+            store.markAttempting(item.id, now);
+            client.createTextBlock(targetPageId, expected);
+            store.markSynced(item.id);
+            return "";
+        } catch (WolaiClient.ApiException error) {
+            if (error.isOutcomeUnknown()) {
+                store.markUncertain(item.id, error.getMessage());
+                return "写入结果待确认 · 稍后自动核对";
+            }
+            store.markFailed(item.id, error.getMessage());
+            return UserErrorMessages.syncStatus(WolaiClient.statusOf(error));
+        }
+    }
+
+    private String completedSyncMessage() {
+        int uncertain = store.uncertainCount();
+        if (uncertain > 0) {
+            return uncertain + " 条写入结果待确认";
+        }
+        int remaining = store.pendingCount();
+        return remaining == 0 ? "同步完成" : remaining + " 条等待重试";
+    }
+
+    private void finishSync(String result, boolean notify) {
+        syncing.set(false);
+        runOnUiThread(() -> {
+            if (destroyed) {
+                return;
+            }
+            statusMessage = result;
+            renderState();
+            if (notify) {
+                Toast.makeText(this, result, Toast.LENGTH_SHORT).show();
+            }
         });
     }
 
     private void renderState() {
-        if (statusView == null) return;
+        if (statusView == null) {
+            return;
+        }
         int pending = store.pendingCount();
         String label;
         int color;
         if (syncing.get()) {
             label = "正在同步…";
             color = PRIMARY;
-        } else if (!AppConfig.hasTargetPage()) {
+        } else if (!AppConfig.isConfiguredPage(pageConfig.targetPageId())) {
             label = "未配置同步页面 · 本地可用";
             color = WARN;
         } else if (!authorized) {
@@ -320,9 +377,9 @@ public final class MainActivity extends Activity {
         }
         SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA);
         for (NoteItem item : items) {
-            String state = item.state == NoteItem.STATE_SYNCED ? "已同步" :
-                    item.state == NoteItem.STATE_FAILED ? "待重试" :
-                            item.state == NoteItem.STATE_UNCERTAIN ? "待确认" : "待同步";
+            String state = item.state == NoteItem.STATE_SYNCED ? "已同步"
+                    : item.state == NoteItem.STATE_FAILED ? "待重试"
+                    : item.state == NoteItem.STATE_UNCERTAIN ? "待确认" : "待同步";
             String prefix = item.kind == NoteItem.KIND_TODO ? "☐ " : "";
             addCard(localList, prefix + item.text,
                     format.format(new Date(item.createdAt)) + " · " + state,
@@ -366,7 +423,9 @@ public final class MainActivity extends Activity {
         view.setTextSize(sp);
         view.setTextColor(color);
         view.setGravity(Gravity.CENTER);
-        if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        if (bold) {
+            view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        }
         return view;
     }
 
@@ -414,9 +473,13 @@ public final class MainActivity extends Activity {
 
     private void hideKeyboard() {
         View focus = getCurrentFocus();
-        if (focus == null) return;
+        if (focus == null) {
+            return;
+        }
         InputMethodManager manager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (manager != null) manager.hideSoftInputFromWindow(focus.getWindowToken(), 0);
+        if (manager != null) {
+            manager.hideSoftInputFromWindow(focus.getWindowToken(), 0);
+        }
         focus.clearFocus();
     }
 
@@ -424,10 +487,21 @@ public final class MainActivity extends Activity {
             List<WolaiClient.RemoteBlock> blocks) {
         List<SyncReconciler.Candidate> result = new ArrayList<>();
         for (WolaiClient.RemoteBlock block : blocks) {
-            if (!"text".equals(block.type)) continue;
+            if (!"text".equals(block.type)) {
+                continue;
+            }
             result.add(new SyncReconciler.Candidate(block.id, block.text, block.createdAt));
         }
         return result;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (secretStore != null) {
+            authorized = secretStore.loadToken() != null;
+        }
+        renderState();
     }
 
     @Override
@@ -455,8 +529,9 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         destroyed = true;
-        executor.shutdownNow();
-        store.close();
+        // Close SQLite after any in-flight network work to avoid a cross-thread close race.
+        executor.execute(store::close);
+        executor.shutdown();
         super.onDestroy();
     }
 }

@@ -1,0 +1,140 @@
+name: Android quality and safety
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      X3_DEBUG_KEYSTORE_BASE64: ${{ secrets.X3_DEBUG_KEYSTORE_BASE64 }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "8.9"
+
+      - name: Validate watch-app audit profile
+        shell: pwsh
+        run: ./scripts/verify-watch-app-audit-profile.ps1
+
+      - name: Validate public release standard and fixtures
+        shell: pwsh
+        run: |
+          ./scripts/verify-public-release-standard.ps1
+          ./scripts/test-public-release-standard.ps1
+
+      - name: Run repository network safety gate and fixtures
+        shell: pwsh
+        run: |
+          ./scripts/verify-network-safety.ps1
+          ./scripts/test-network-safety.ps1
+
+      - name: Materialize validated Debug signing input
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:X3_DEBUG_KEYSTORE_BASE64)) {
+            throw 'Required encrypted secret X3_DEBUG_KEYSTORE_BASE64 is unavailable.'
+          }
+          New-Item -ItemType Directory -Path .signing -Force | Out-Null
+          $bytes = [Convert]::FromBase64String(
+            ($env:X3_DEBUG_KEYSTORE_BASE64 -replace '\s', ''))
+          [System.IO.File]::WriteAllBytes(
+            (Join-Path $PWD '.signing\x3-debug.keystore'),
+            $bytes)
+
+      - name: Check Probe style, tests, Lint, and build
+        shell: pwsh
+        run: >-
+          gradle --no-daemon -p X3AccessibilityProbe
+          :app:checkstyleMain :app:checkstyleTest :app:testDebugUnitTest
+          :app:lintDebug :app:assembleDebug
+
+      - name: Check style, test, Lint, and build Voice Ledger applications
+        shell: pwsh
+        run: >-
+          gradle --no-daemon -p X3VoiceLedger
+          :app:checkstyleMain :app:checkstyleTest
+          :common:checkstyleMain :common:checkstyleTest
+          :phone:checkstyleMain :phone:checkstyleTest
+          :app:testDebugUnitTest :phone:testDebugUnitTest
+          :app:lintDebug :phone:lintDebug
+          :app:assembleDebug :phone:assembleDebug
+
+      - name: Check style, test, Lint, and build Wolai Notes
+        shell: pwsh
+        run: >-
+          gradle --no-daemon -p X3WolaiNotes
+          :app:checkstyleMain :app:checkstyleTest
+          :app:checkstyleAndroidTest :app:checkstyleTools
+          :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+
+      - name: Check style, test, Lint, and build Offline Reader Watch
+        shell: pwsh
+        run: >-
+          gradle --no-daemon -p X3OfflineReader
+          :watch:checkstyleMain :watch:checkstyleTest
+          :watch:checkstyleAndroidTest
+          :watch:testDebugUnitTest :watch:lintDebug
+          :watch:assembleDebug :watch:assembleAndroidTest
+          :builder:checkstyleMain :builder:checkstyleTest
+          :builder:test :builder:installDist
+
+      - name: Check Offline Reader desktop UI conventions and build
+        shell: pwsh
+        run: |
+          npm --prefix X3OfflineReader/builder/ui ci
+          npm --prefix X3OfflineReader/builder/ui run lint
+          npm --prefix X3OfflineReader/builder/ui run build
+
+      - name: Check Offline Reader Tauri conventions and tests
+        shell: pwsh
+        working-directory: X3OfflineReader/builder/ui/src-tauri
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo test --all-targets --all-features
+
+      - name: Check Offline Reader script syntax
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem X3OfflineReader -Recurse -File -Filter '*.ps1' |
+            Where-Object { $_.FullName -notmatch '[\\/](node_modules|target)[\\/]' }
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $script.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors) {
+              throw "$($script.FullName): $($errors.Message -join '; ')"
+            }
+          }
+          python -m compileall -q X3OfflineReader/builder X3OfflineReader/specification/tools
+
+      - name: Verify every Debug APK signer
+        shell: pwsh
+        run: ./scripts/verify-debug-signatures.ps1 -RequireAllApplications
+
+      - name: Remove temporary signing input
+        if: always()
+        shell: pwsh
+        run: |
+          $key = Join-Path $PWD '.signing\x3-debug.keystore'
+          if (Test-Path -LiteralPath $key) {
+            Remove-Item -LiteralPath $key -Force
+          }
+          if (Test-Path -LiteralPath .signing) {
+            Remove-Item -LiteralPath .signing -Force
+          }

@@ -10,7 +10,8 @@ public final class SyncWakeReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())
                 || (BluetoothAdapter.ACTION_STATE_CHANGED.equals(intent.getAction())
-                && intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_ON)) {
+                        && intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)
+                                == BluetoothAdapter.STATE_ON)) {
             PhoneSyncService.start(context);
         }
     }

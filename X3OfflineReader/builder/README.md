@@ -4,6 +4,13 @@
 
 已实现：
 
+## 0.7.0 公共安装版数据与签名
+
+- 首次启动明确说明本机断点、缓存、界面偏好和最近 50 项来源识别历史；在线 Edge 仍对每个新任务单独确认，离线 Provider 不发送正文。
+- “存储管理”可清除界面设置与来源识别历史；清理超过 30 天的未完成任务新增明确确认。缓存、断点、源文件和输出文件的影响分别标示，完整边界见 [`../specification/DATA_LIFECYCLE.md`](../specification/DATA_LIFECYCLE.md)。
+- 正式 Windows 打包在任何构建或包替换前检查 Authenticode 证书 SHA-256、HTTPS 时间戳和 `signtool.exe`。GUI 与 CLI 启动程序签名后必须独立验签；缺少正式材料时失败关闭，不覆盖现有包。
+- WARS 1.1 个人 GitHub 预览使用独立 `package-windows-preview.ps1`：只接受干净的 X3OfflineReader 工作树，确认 GUI/CLI 均为未签名，写入源提交和未知发布者说明，输出带 `UNSIGNED-PREVIEW` 的便携 ZIP 与 SHA-256；不生成安装器，也不覆盖正式包。
+
 - 多选、排序并合并 EPUB/TXT 为多卷 `.opbook`，或 `--separate` 分别导出。
 - UTF-8/BOM、UTF-16LE、GB18030 TXT；安全 EPUB 2/3 spine 解析；允许常见 XHTML `DOCTYPE`，`&nbsp;` 等命名实体从 JDK 内置安全表本地转换，但禁止加载外部 DTD/外部实体并拒绝内部实体子集；明确拒绝加密/DRM 及超限 XML。
 - 默认 MeloTTS（自适应本地长驻 worker 池），Windows `System.Speech` 保底，以及只供确定性测试的 tone provider。
@@ -94,9 +101,12 @@
 脚本把 Python 3.9、官方 MeloTTS、中文模型、Hugging Face 与 NLTK 缓存固定在被忽略的 `.tools\melo`。安装/预取需要网络，之后转换不需要网络、API Key 或账号。详情见 [`melo/README.md`](melo/README.md)。
 
 ```powershell
+.\builder\package-windows-preview.ps1
 .\builder\package-windows.ps1
 ```
 
-便携镜像约 4.14GB，内含 Java、FFmpeg 和 Melo 模型；`-WithoutMelo` 可生成较小的 SAPI/tone 版本。正式程序的持久数据默认位于 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`，缓存键包含 provider、声音、语速和规范化句子；不得把私人正文、日志或生成包提交到源码。
+便携镜像内含 Java、FFmpeg 和所选离线模型；`-WithoutMelo` 可生成较小版本。预览脚本输出 `build\X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.zip` 及 `.sha256`，结论只能写 LIMITED_PREVIEW。正式程序的持久数据默认位于 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`，缓存键包含 provider、声音、语速和规范化句子；不得把私人正文、日志或生成包提交到源码。
 
-重建便携镜像前，脚本会把旧源码/正式包中的工作数据校验迁移到独立目录；失败会在删除正式包之前终止。迁移后 app-image 只含可重建的程序和模型文件。
+重建便携镜像前，脚本会先验证 `X3_WINDOWS_SIGNING_CERT_SHA256`、`X3_WINDOWS_TIMESTAMP_URL`（HTTPS）和 `X3_WINDOWS_SIGNTOOL_PATH`，并确认当前用户证书库内有匹配 SHA-256 且含私钥的证书；条件不足时在构建和删除旧包前停止。成功构建后会签署并独立验证 `X3AudiobookBuilder.exe` 与 `X3BuilderCLI.exe`。
+
+脚本随后把旧源码/正式包中的工作数据校验迁移到独立目录；失败会在删除正式包之前终止。迁移后 app-image 只含可重建的程序和模型文件。

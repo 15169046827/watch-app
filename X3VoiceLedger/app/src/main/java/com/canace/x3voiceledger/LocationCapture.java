@@ -9,12 +9,12 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-
 import java.util.List;
 
 final class LocationCapture {
     interface Callback {
         void onLocation(LocationSnapshot snapshot);
+
         void onUnavailable(String reason);
     }
 
@@ -31,43 +31,60 @@ final class LocationCapture {
     }
 
     boolean hasPermission() {
-        return context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                || context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        return context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED
+                || context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED;
     }
 
     boolean start(Callback callback) {
         stop();
-        if (!hasPermission() || manager == null) return false;
+        if (!hasPermission() || manager == null) {
+            return false;
+        }
         receivedFreshLocation = false;
 
         try {
             List<String> providers = manager.getProviders(true);
             for (String provider : providers) {
                 Location known = manager.getLastKnownLocation(provider);
-                if (isBetter(known, best)) best = known;
-            }
-            if (best != null) callback.onLocation(new LocationSnapshot(best));
-
-            listener = new LocationListener() {
-                @Override
-                public void onLocationChanged(Location location) {
-                    receivedFreshLocation = true;
-                    if (isBetter(location, best)) {
-                        best = location;
-                        callback.onLocation(new LocationSnapshot(location));
-                    }
-                    if (location.hasAccuracy() && location.getAccuracy() <= 80f) stop();
+                if (isBetter(known, best)) {
+                    best = known;
                 }
+            }
+            if (best != null) {
+                callback.onLocation(new LocationSnapshot(best));
+            }
 
-                @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
-                @Override public void onProviderEnabled(String provider) { }
-                @Override public void onProviderDisabled(String provider) { }
-            };
+            listener =
+                    new LocationListener() {
+                        @Override
+                        public void onLocationChanged(Location location) {
+                            receivedFreshLocation = true;
+                            if (isBetter(location, best)) {
+                                best = location;
+                                callback.onLocation(new LocationSnapshot(location));
+                            }
+                            if (location.hasAccuracy() && location.getAccuracy() <= 80f) {
+                                stop();
+                            }
+                        }
+
+                        @Override
+                        public void onStatusChanged(String provider, int status, Bundle extras) { }
+
+                        @Override
+                        public void onProviderEnabled(String provider) { }
+
+                        @Override
+                        public void onProviderDisabled(String provider) { }
+                    };
             boolean requested = false;
             for (String provider : providers) {
                 if (LocationManager.GPS_PROVIDER.equals(provider)
                         || LocationManager.NETWORK_PROVIDER.equals(provider)) {
-                    manager.requestLocationUpdates(provider, 1000L, 0f, listener, Looper.getMainLooper());
+                    manager.requestLocationUpdates(
+                            provider, 1000L, 0f, listener, Looper.getMainLooper());
                     requested = true;
                 }
             }
@@ -76,14 +93,16 @@ final class LocationCapture {
                 stop();
                 return false;
             }
-            handler.postDelayed(() -> {
-                if (!receivedFreshLocation && best == null) {
-                    callback.onUnavailable("未取得 GPS 定位，请到室外重试或手动填写");
-                } else if (!receivedFreshLocation) {
-                    callback.onUnavailable("仅有上次定位，可更新或手动修改地点");
-                }
-                stop();
-            }, 30_000L);
+            handler.postDelayed(
+                    () -> {
+                        if (!receivedFreshLocation && best == null) {
+                            callback.onUnavailable("未取得 GPS 定位，请到室外重试或手动填写");
+                        } else if (!receivedFreshLocation) {
+                            callback.onUnavailable("仅有上次定位，可更新或手动修改地点");
+                        }
+                        stop();
+                    },
+                    30_000L);
             return true;
         } catch (SecurityException | IllegalArgumentException ignored) {
             stop();
@@ -104,12 +123,22 @@ final class LocationCapture {
     }
 
     private static boolean isBetter(Location candidate, Location current) {
-        if (candidate == null) return false;
-        if (current == null) return true;
+        if (candidate == null) {
+            return false;
+        }
+        if (current == null) {
+            return true;
+        }
         long timeDelta = candidate.getTime() - current.getTime();
-        if (timeDelta > 120_000L) return true;
-        if (timeDelta < -120_000L) return false;
-        if (!candidate.hasAccuracy()) return false;
+        if (timeDelta > 120_000L) {
+            return true;
+        }
+        if (timeDelta < -120_000L) {
+            return false;
+        }
+        if (!candidate.hasAccuracy()) {
+            return false;
+        }
         return !current.hasAccuracy() || candidate.getAccuracy() < current.getAccuracy();
     }
 }

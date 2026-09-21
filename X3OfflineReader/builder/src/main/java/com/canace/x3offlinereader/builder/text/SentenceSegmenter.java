@@ -36,40 +36,76 @@ public final class SentenceSegmenter {
                     int end = offset + 1;
                     while (end < codePointCount) {
                         int trailingIndex = text.offsetByCodePoints(0, end);
-                        if (!isClosingPunctuation(text.codePointAt(trailingIndex))) break;
+                        if (!isClosingPunctuation(text.codePointAt(trailingIndex))) {
+                            break;
+                        }
                         end++;
                     }
-                    sequence = append(result, chapter.chapterId, block.blockId, text, start, end, sequence);
+                    sequence =
+                            append(
+                                    result,
+                                    chapter.chapterId,
+                                    block.blockId,
+                                    text,
+                                    start,
+                                    end,
+                                    sequence);
                     start = end;
                     offset = end - 1;
                 }
             }
-            if (start < codePointCount) append(result, chapter.chapterId, block.blockId, text, start, codePointCount, sequence++);
+            if (start < codePointCount) {
+                append(
+                        result,
+                        chapter.chapterId,
+                        block.blockId,
+                        text,
+                        start,
+                        codePointCount,
+                        sequence++);
+            }
         }
         return result;
     }
 
-    private int append(List<Segment> output, String chapterId, String blockId, String text,
-                       int startCp, int endCp, int sequence) {
+    private int append(
+            List<Segment> output,
+            String chapterId,
+            String blockId,
+            String text,
+            int startCp,
+            int endCp,
+            int sequence) {
         int trimStart = startCp;
         while (trimStart < endCp) {
             int ci = text.offsetByCodePoints(0, trimStart);
-            if (!Character.isWhitespace(text.codePointAt(ci))) break;
+            if (!Character.isWhitespace(text.codePointAt(ci))) {
+                break;
+            }
             trimStart++;
         }
         int trimEnd = endCp;
         while (trimEnd > trimStart) {
             int ci = text.offsetByCodePoints(0, trimEnd - 1);
-            if (!Character.isWhitespace(text.codePointAt(ci))) break;
+            if (!Character.isWhitespace(text.codePointAt(ci))) {
+                break;
+            }
             trimEnd--;
         }
         if (trimStart < trimEnd) {
             int startUtf16 = text.offsetByCodePoints(0, trimStart);
             int endUtf16 = text.offsetByCodePoints(0, trimEnd);
             String slice = text.substring(startUtf16, endUtf16);
-            if (!hasSpeakableContent(slice)) return sequence;
-            output.add(new Segment(chapterId + "-s" + String.format("%04d", sequence), blockId,
-                    trimStart, trimEnd, slice));
+            if (!hasSpeakableContent(slice)) {
+                return sequence;
+            }
+            output.add(
+                    new Segment(
+                            chapterId + "-s" + String.format("%04d", sequence),
+                            blockId,
+                            trimStart,
+                            trimEnd,
+                            slice));
             return sequence + 1;
         }
         return sequence;
@@ -81,9 +117,12 @@ public final class SentenceSegmenter {
     }
 
     private static boolean hasSpeakableContent(String text) {
-        return text.codePoints().anyMatch(cp -> Character.isLetterOrDigit(cp)
-                || Character.isIdeographic(cp)
-                || Character.getType(cp) == Character.LETTER_NUMBER
-                || Character.getType(cp) == Character.OTHER_NUMBER);
+        return text.codePoints()
+                .anyMatch(
+                        cp ->
+                                Character.isLetterOrDigit(cp)
+                                        || Character.isIdeographic(cp)
+                                        || Character.getType(cp) == Character.LETTER_NUMBER
+                                        || Character.getType(cp) == Character.OTHER_NUMBER);
     }
 }

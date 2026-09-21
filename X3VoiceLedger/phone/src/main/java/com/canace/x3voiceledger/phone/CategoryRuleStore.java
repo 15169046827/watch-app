@@ -2,12 +2,15 @@ package com.canace.x3voiceledger.phone;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 final class CategoryRuleStore {
     static final int MODE_SMART = 0;
@@ -35,25 +38,79 @@ final class CategoryRuleStore {
     }
 
     void remember(PhoneLedgerStore.Entry entry, YimuCategoryMapper.Mapping mapping) {
-        preferences.edit().putString(ruleKey(entry), mapping.parent + SEPARATOR + mapping.child).apply();
+        preferences
+                .edit()
+                .putString(ruleKey(entry), mapping.parent + SEPARATOR + mapping.child)
+                .apply();
     }
 
     List<Rule> rules() {
         List<Rule> result = new ArrayList<>();
         for (Map.Entry<String, ?> item : preferences.getAll().entrySet()) {
             String key = item.getKey();
-            if (!key.startsWith(RULE_PREFIX) || !(item.getValue() instanceof String)) continue;
+            if (!key.startsWith(RULE_PREFIX) || !(item.getValue() instanceof String)) {
+                continue;
+            }
             YimuCategoryMapper.Mapping mapping = decodeMapping((String) item.getValue());
-            if (mapping == null) continue;
+            if (mapping == null) {
+                continue;
+            }
             String source = key.substring(RULE_PREFIX.length());
             int split = source.indexOf(':');
             String category = split < 0 ? source : source.substring(0, split);
             String text = split < 0 ? "" : source.substring(split + 1);
             result.add(new Rule(key, category, text, mapping));
         }
-        Collections.sort(result, Comparator.comparing((Rule value) -> value.sourceCategory)
-                .thenComparing(value -> value.sourceText));
+        Collections.sort(
+                result,
+                Comparator.comparing((Rule value) -> value.sourceCategory)
+                        .thenComparing(value -> value.sourceText));
         return result;
+    }
+
+    JSONObject exportData() throws JSONException {
+        JSONObject result = new JSONObject();
+        result.put("schema", 1);
+        result.put("confirmationMode", mode());
+        JSONArray values = new JSONArray();
+        for (Rule rule : rules()) {
+            JSONObject item = new JSONObject();
+            item.put("storageKey", rule.storageKey);
+            item.put("parent", rule.mapping.parent);
+            item.put("child", rule.mapping.child);
+            values.put(item);
+        }
+        result.put("rules", values);
+        return result;
+    }
+
+    void restore(JSONObject object) {
+        int restoredMode = object.optInt("confirmationMode", MODE_SMART);
+        if (restoredMode < MODE_SMART || restoredMode > MODE_AUTO) {
+            restoredMode = MODE_SMART;
+        }
+        SharedPreferences.Editor editor = preferences.edit().clear();
+        editor.putInt("confirmation_mode", restoredMode);
+        JSONArray values = object.optJSONArray("rules");
+        if (values != null) {
+            for (int i = 0; i < values.length(); i++) {
+                JSONObject item = values.optJSONObject(i);
+                String key = item == null ? "" : item.optString("storageKey");
+                if (!key.startsWith(RULE_PREFIX) || key.length() > 8192) {
+                    continue;
+                }
+                String parent = item.optString("parent");
+                String child = item.optString("child");
+                editor.putString(key, parent + SEPARATOR + child);
+            }
+        }
+        editor.apply();
+    }
+
+    int clearAll() {
+        int count = preferences.getAll().size();
+        preferences.edit().clear().apply();
+        return count;
     }
 
     int ruleCount() {
@@ -61,8 +118,11 @@ final class CategoryRuleStore {
     }
 
     boolean delete(String storageKey) {
-        if (storageKey == null || !storageKey.startsWith(RULE_PREFIX)
-                || !preferences.contains(storageKey)) return false;
+        if (storageKey == null
+                || !storageKey.startsWith(RULE_PREFIX)
+                || !preferences.contains(storageKey)) {
+            return false;
+        }
         preferences.edit().remove(storageKey).apply();
         return true;
     }
@@ -71,23 +131,32 @@ final class CategoryRuleStore {
         SharedPreferences.Editor editor = preferences.edit();
         int count = 0;
         for (String key : preferences.getAll().keySet()) {
-            if (!key.startsWith(RULE_PREFIX)) continue;
+            if (!key.startsWith(RULE_PREFIX)) {
+                continue;
+            }
             editor.remove(key);
             count++;
         }
-        if (count > 0) editor.apply();
+        if (count > 0) {
+            editor.apply();
+        }
         return count;
     }
 
     private static YimuCategoryMapper.Mapping decodeMapping(String stored) {
-        if (stored == null) return null;
+        if (stored == null) {
+            return null;
+        }
         int split = stored.indexOf(SEPARATOR);
-        if (split < 0) return null;
-        return new YimuCategoryMapper.Mapping(stored.substring(0, split), stored.substring(split + 1));
+        if (split < 0) {
+            return null;
+        }
+        return new YimuCategoryMapper.Mapping(
+                stored.substring(0, split), stored.substring(split + 1));
     }
 
     private static String ruleKey(PhoneLedgerStore.Entry entry) {
-        String normalized = entry.note.toLowerCase().replaceAll("[\\s，,。.!！?？:：;；]", "");
+        String normalized = entry.note.toLowerCase(Locale.ROOT).replaceAll("[\\s，,。.!！?？:：;；]", "");
         return RULE_PREFIX + entry.category.trim() + ":" + normalized;
     }
 
@@ -97,8 +166,11 @@ final class CategoryRuleStore {
         final String sourceText;
         final YimuCategoryMapper.Mapping mapping;
 
-        Rule(String storageKey, String sourceCategory, String sourceText,
-             YimuCategoryMapper.Mapping mapping) {
+        Rule(
+                String storageKey,
+                String sourceCategory,
+                String sourceText,
+                YimuCategoryMapper.Mapping mapping) {
             this.storageKey = storageKey;
             this.sourceCategory = sourceCategory;
             this.sourceText = sourceText;

@@ -1,5 +1,13 @@
 param(
-    [string]$AndroidSdk = $env:ANDROID_SDK_ROOT
+    [string]$AndroidSdk = $env:ANDROID_SDK_ROOT,
+    [switch]$RequireAllApplications,
+    [ValidateSet(
+        'X3AccessibilityProbe',
+        'X3VoiceLedger',
+        'X3WolaiNotes',
+        'X3OfflineReader',
+        'X3Schedule')]
+    [string]$Product
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,12 +28,55 @@ if (-not $apksigner) {
 }
 
 $workspace = Split-Path -Parent $PSScriptRoot
-$apks = Get-ChildItem -LiteralPath $workspace -Recurse -File -Filter '*.apk' |
-    Where-Object {
-        $_.FullName -match '\\(?:build|\.build)\\(?:[^\\]+\\)*outputs\\apk\\' -and
-        $_.Name -match 'debug'
-    } |
-    Sort-Object FullName
+$requiredRelativePaths = @(
+    'X3AccessibilityProbe\.build\app\outputs\apk\debug\app-debug.apk',
+    'X3VoiceLedger\app\build\outputs\apk\debug\app-debug.apk',
+    'X3VoiceLedger\phone\build\outputs\apk\debug\phone-debug.apk',
+    'X3WolaiNotes\app\build\outputs\apk\debug\app-debug.apk',
+    'X3OfflineReader\watch\build\outputs\apk\debug\watch-debug.apk',
+    'X3Schedule\phone\build\outputs\apk\debug\phone-debug.apk',
+    'X3Schedule\watch\build\outputs\apk\debug\watch-debug.apk'
+)
+
+$productRelativePaths = @{
+    X3AccessibilityProbe = @($requiredRelativePaths[0])
+    X3VoiceLedger = @($requiredRelativePaths[1], $requiredRelativePaths[2])
+    X3WolaiNotes = @($requiredRelativePaths[3])
+    X3OfflineReader = @($requiredRelativePaths[4])
+    X3Schedule = @($requiredRelativePaths[5], $requiredRelativePaths[6])
+}
+
+if ($RequireAllApplications -and $Product) {
+    throw 'Pass either -RequireAllApplications or -Product, not both.'
+}
+
+if ($RequireAllApplications -or $Product) {
+    $selectedRelativePaths = if ($Product) {
+        $productRelativePaths[$Product]
+    } else {
+        $requiredRelativePaths
+    }
+    $missing = @(
+        foreach ($relativePath in $selectedRelativePaths) {
+            $candidate = Join-Path $workspace $relativePath
+            if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+                $relativePath
+            }
+        }
+    )
+    if ($missing.Count -gt 0) {
+        throw "Required Debug APKs are missing:`n$($missing -join "`n")"
+    }
+    $apks = $selectedRelativePaths |
+        ForEach-Object { Get-Item -LiteralPath (Join-Path $workspace $_) }
+} else {
+    $apks = Get-ChildItem -LiteralPath $workspace -Recurse -File -Filter '*.apk' |
+        Where-Object {
+            $_.FullName -match '\\(?:build|\.build)\\(?:[^\\]+\\)*outputs\\apk\\' -and
+            $_.Name -match 'debug'
+        } |
+        Sort-Object FullName
+}
 
 if (-not $apks) {
     throw "No Debug APKs were found below $workspace"

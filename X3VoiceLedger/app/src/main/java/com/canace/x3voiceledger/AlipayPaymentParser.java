@@ -10,30 +10,43 @@ import java.util.regex.Pattern;
 final class AlipayPaymentParser {
     private static final String SUCCESS_ID = "nfc_pay_text";
     private static final String AMOUNT_ID = "tv_amount";
-    private static final Pattern AMOUNT = Pattern.compile("(?:[￥¥]\\s*)?(\\d{1,9}(?:\\.\\d{1,2})?)");
+    private static final Pattern AMOUNT =
+            Pattern.compile("(?:[￥¥]\\s*)?(\\d{1,9}(?:\\.\\d{1,2})?)");
 
     static Result parse(List<Node> nodes) {
-        if (nodes == null) return null;
+        if (nodes == null) {
+            return null;
+        }
         boolean success = false;
         String amountText = null;
         for (Node node : nodes) {
-            if (node == null) continue;
+            if (node == null) {
+                continue;
+            }
             if (matchesId(node.viewId, SUCCESS_ID) && normalize(node.text).contains("付款成功")) {
                 success = true;
             }
-            // Deliberately exact: never fall back to success_money_reduce_amount or other money nodes.
-            if (matchesId(node.viewId, AMOUNT_ID)) amountText = node.text;
+            // Deliberately exact: never fall back to success_money_reduce_amount or other money
+            // nodes.
+            if (matchesId(node.viewId, AMOUNT_ID)) {
+                amountText = node.text;
+            }
         }
-        if (!success || amountText == null) return null;
+        if (!success || amountText == null) {
+            return null;
+        }
         long cents = parseCents(amountText);
         return cents > 0 ? new Result(cents) : null;
     }
 
     private static long parseCents(String value) {
         Matcher matcher = AMOUNT.matcher(normalize(value));
-        if (!matcher.find()) return -1L;
+        if (!matcher.find()) {
+            return -1L;
+        }
         try {
-            BigDecimal amount = new BigDecimal(matcher.group(1)).setScale(2, RoundingMode.UNNECESSARY);
+            BigDecimal amount =
+                    new BigDecimal(matcher.group(1)).setScale(2, RoundingMode.UNNECESSARY);
             long cents = amount.movePointRight(2).longValueExact();
             return cents <= 99_999_999L ? cents : -1L;
         } catch (ArithmeticException | NumberFormatException ignored) {
@@ -42,17 +55,24 @@ final class AlipayPaymentParser {
     }
 
     private static boolean matchesId(String value, String id) {
-        if (value == null) return false;
+        if (value == null) {
+            return false;
+        }
         return value.equals(id) || value.endsWith(":id/" + id) || value.endsWith("/" + id);
     }
 
     private static String normalize(String value) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
         StringBuilder result = new StringBuilder(value.length());
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
-            if (c >= '０' && c <= '９') c = (char) ('0' + c - '０');
-            else if (c == '．') c = '.';
+            if (c >= '０' && c <= '９') {
+                c = (char) ('0' + c - '０');
+            } else if (c == '．') {
+                c = '.';
+            }
             result.append(c);
         }
         return result.toString().trim();

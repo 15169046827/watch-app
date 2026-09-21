@@ -88,6 +88,8 @@ public final class ReliabilitySelfTest {
     }
 
     private static void require(boolean condition, String message) {
-        if (!condition) throw new AssertionError(message);
+        if (!condition) {
+            throw new AssertionError(message);
+        }
     }
 }

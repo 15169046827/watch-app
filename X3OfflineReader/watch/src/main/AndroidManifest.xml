@@ -22,8 +22,10 @@
             </intent-filter>
         </activity>
         <activity android:name=".NowPlayingActivity" android:excludeFromRecents="true" android:exported="false" android:noHistory="true" android:theme="@style/Theme.X3OfflineReader.NoDisplay" />
+        <activity android:name=".DataManagementActivity" android:exported="false" />
         <activity android:name=".BookLibraryActivity" android:exported="false" />
         <activity android:name=".ui.ChaptersActivity" android:exported="false" />
+        <activity android:name=".ui.BookSearchActivity" android:exported="false" android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name=".ui.PlayerActivity" android:exported="false" />
         <activity android:name=".music.MusicLibraryActivity" android:exported="false" />
         <activity android:name=".music.MusicPlayerActivity" android:exported="false" />

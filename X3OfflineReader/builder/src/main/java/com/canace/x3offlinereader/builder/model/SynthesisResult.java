@@ -16,7 +16,11 @@ public final class SynthesisResult {
         this.durationMs = durationMs;
     }
 
-    public Path getWavPath() { return wavPath; }
-    public long getDurationMs() { return durationMs; }
-}
+    public Path getWavPath() {
+        return wavPath;
+    }
 
+    public long getDurationMs() {
+        return durationMs;
+    }
+}

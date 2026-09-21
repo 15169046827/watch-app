@@ -5,7 +5,6 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,24 +23,28 @@ final class NoteStore extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE local_notes (" +
-                "id TEXT PRIMARY KEY," +
-                "text TEXT NOT NULL," +
-                "kind INTEGER NOT NULL," +
-                "created_at INTEGER NOT NULL," +
-                "state INTEGER NOT NULL," +
-                "error TEXT NOT NULL DEFAULT ''," +
-                "last_attempt_at INTEGER NOT NULL DEFAULT 0)");
+        db.execSQL("CREATE TABLE local_notes ("
+                + "id TEXT PRIMARY KEY,"
+                + "text TEXT NOT NULL,"
+                + "kind INTEGER NOT NULL,"
+                + "created_at INTEGER NOT NULL,"
+                + "state INTEGER NOT NULL,"
+                + "error TEXT NOT NULL DEFAULT '',"
+                + "last_attempt_at INTEGER NOT NULL DEFAULT 0)");
         createRecentPagesTable(db);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion < 2) db.execSQL("DROP TABLE IF EXISTS remote_cache");
+        if (oldVersion < 2) {
+            db.execSQL("DROP TABLE IF EXISTS remote_cache");
+        }
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE local_notes ADD COLUMN last_attempt_at INTEGER NOT NULL DEFAULT 0");
         }
-        if (oldVersion < 4) createRecentPagesTable(db);
+        if (oldVersion < 4) {
+            createRecentPagesTable(db);
+        }
     }
 
     void insertPending(NoteItem item) {
@@ -96,11 +99,61 @@ final class NoteStore extends SQLiteOpenHelper {
         return queryLocal(null, null, "created_at DESC", limit);
     }
 
+    List<NoteItem> allLocal(int limit) {
+        return queryLocal(null, null, "created_at ASC", Math.max(1, limit));
+    }
+
+    void mergeBackup(List<NoteItem> notes, List<RecentPage> pages) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            for (NoteItem item : notes) {
+                ContentValues values = noteValues(item);
+                db.insertWithOnConflict("local_notes", null, values,
+                        SQLiteDatabase.CONFLICT_IGNORE);
+            }
+            for (RecentPage page : pages) {
+                ContentValues values = new ContentValues();
+                values.put("page_id", page.id);
+                values.put("title", page.title);
+                values.put("accessed_at", page.accessedAt);
+                db.insertWithOnConflict("recent_pages", null, values,
+                        SQLiteDatabase.CONFLICT_REPLACE);
+            }
+            db.execSQL("DELETE FROM recent_pages WHERE page_id NOT IN ("
+                    + "SELECT page_id FROM recent_pages "
+                    + "ORDER BY accessed_at DESC, rowid DESC LIMIT " + MAX_RECENT_PAGES + ")");
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    void clearLocalNotes() {
+        getWritableDatabase().delete("local_notes", null, null);
+    }
+
+    void clearAll() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            db.delete("local_notes", null, null);
+            db.delete("recent_pages", null, null);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
     void recordRecentPage(String pageId, String title, long accessedAt) {
         String safeId = safeValue(pageId, 200);
-        if (safeId.isEmpty()) return;
+        if (safeId.isEmpty()) {
+            return;
+        }
         String safeTitle = safeValue(title, 240);
-        if (safeTitle.isEmpty()) safeTitle = "未命名页面";
+        if (safeTitle.isEmpty()) {
+            safeTitle = "未命名页面";
+        }
         ContentValues values = new ContentValues();
         values.put("page_id", safeId);
         values.put("title", safeTitle);
@@ -108,9 +161,9 @@ final class NoteStore extends SQLiteOpenHelper {
         SQLiteDatabase db = getWritableDatabase();
         db.insertWithOnConflict("recent_pages", null, values,
                 SQLiteDatabase.CONFLICT_REPLACE);
-        db.execSQL("DELETE FROM recent_pages WHERE page_id NOT IN (" +
-                "SELECT page_id FROM recent_pages " +
-                "ORDER BY accessed_at DESC, rowid DESC LIMIT " + MAX_RECENT_PAGES + ")");
+        db.execSQL("DELETE FROM recent_pages WHERE page_id NOT IN ("
+                + "SELECT page_id FROM recent_pages "
+                + "ORDER BY accessed_at DESC, rowid DESC LIMIT " + MAX_RECENT_PAGES + ")");
     }
 
     List<RecentPage> recentPages(int limit) {
@@ -152,7 +205,7 @@ final class NoteStore extends SQLiteOpenHelper {
         List<NoteItem> result = new ArrayList<>();
         try (Cursor cursor = getReadableDatabase().query("local_notes",
                 new String[]{"id", "text", "kind", "created_at", "state", "error",
-                        "last_attempt_at"},
+                    "last_attempt_at"},
                 selection, args, null, null, order, String.valueOf(limit))) {
             while (cursor.moveToNext()) {
                 result.add(new NoteItem(cursor.getString(0), cursor.getString(1), cursor.getInt(2),
@@ -163,21 +216,37 @@ final class NoteStore extends SQLiteOpenHelper {
         return result;
     }
 
+    private static ContentValues noteValues(NoteItem item) {
+        ContentValues values = new ContentValues();
+        values.put("id", item.id);
+        values.put("text", item.text);
+        values.put("kind", item.kind);
+        values.put("created_at", item.createdAt);
+        values.put("state", item.state);
+        values.put("error", item.error);
+        values.put("last_attempt_at", item.lastAttemptAt);
+        return values;
+    }
+
     private static String safeError(String error) {
-        if (error == null) return "同步失败";
+        if (error == null) {
+            return "同步失败";
+        }
         String value = error.trim();
         return value.length() > 120 ? value.substring(0, 120) : value;
     }
 
     private static void createRecentPagesTable(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS recent_pages (" +
-                "page_id TEXT PRIMARY KEY," +
-                "title TEXT NOT NULL," +
-                "accessed_at INTEGER NOT NULL)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS recent_pages ("
+                + "page_id TEXT PRIMARY KEY,"
+                + "title TEXT NOT NULL,"
+                + "accessed_at INTEGER NOT NULL)");
     }
 
     private static String safeValue(String value, int maxLength) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
         String safe = value.trim();
         return safe.length() > maxLength ? safe.substring(0, maxLength) : safe;
     }

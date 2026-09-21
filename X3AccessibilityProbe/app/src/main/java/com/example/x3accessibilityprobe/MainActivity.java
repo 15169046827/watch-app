@@ -4,10 +4,8 @@ import android.Manifest;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -23,7 +21,6 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-
 import java.util.List;
 
 public final class MainActivity extends Activity {
@@ -36,14 +33,14 @@ public final class MainActivity extends Activity {
     private TextView bleResultView;
     private float gestureDownX;
     private float gestureDownY;
-    private boolean receiverRegistered;
+    private boolean preferenceListenerRegistered;
 
-    private final BroadcastReceiver bleResultReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            refreshBleResults();
-        }
-    };
+    private final SharedPreferences.OnSharedPreferenceChangeListener bleResultListener =
+            (sharedPreferences, key) -> {
+                if (BleProbeService.KEY_RESULTS.equals(key)) {
+                    refreshBleResults();
+                }
+            };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,13 +105,11 @@ public final class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT));
 
         setContentView(scrollView);
-        registerReceiver(bleResultReceiver, new IntentFilter(BleProbeService.ACTION_RESULT));
-        receiverRegistered = true;
+        getSharedPreferences(BleProbeService.PREFS, MODE_PRIVATE)
+                .registerOnSharedPreferenceChangeListener(bleResultListener);
+        preferenceListenerRegistered = true;
         refreshStatus();
         refreshBleResults();
-        if (getIntent().getBooleanExtra("run_ble_probe", false)) {
-            runBleProbeWithPermission();
-        }
     }
 
     @Override
@@ -191,19 +186,11 @@ public final class MainActivity extends Activity {
     }
 
     @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        if (intent.getBooleanExtra("run_ble_probe", false)) {
-            runBleProbeWithPermission();
-        }
-    }
-
-    @Override
     protected void onDestroy() {
-        if (receiverRegistered) {
-            unregisterReceiver(bleResultReceiver);
-            receiverRegistered = false;
+        if (preferenceListenerRegistered) {
+            getSharedPreferences(BleProbeService.PREFS, MODE_PRIVATE)
+                    .unregisterOnSharedPreferenceChangeListener(bleResultListener);
+            preferenceListenerRegistered = false;
         }
         super.onDestroy();
     }
@@ -276,7 +263,7 @@ public final class MainActivity extends Activity {
                     && info.getResolveInfo().serviceInfo != null
                     && getPackageName().equals(info.getResolveInfo().serviceInfo.packageName)
                     && ProbeAccessibilityService.class.getName().equals(
-                    info.getResolveInfo().serviceInfo.name)) {
+                            info.getResolveInfo().serviceInfo.name)) {
                 return true;
             }
         }

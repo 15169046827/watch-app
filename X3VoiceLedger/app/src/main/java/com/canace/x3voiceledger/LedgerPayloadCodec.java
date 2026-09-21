@@ -1,11 +1,9 @@
 package com.canace.x3voiceledger;
 
 import com.canace.x3voiceledger.protocol.SyncProtocol;
-
+import java.nio.charset.StandardCharsets;
 import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.nio.charset.StandardCharsets;
 
 final class LedgerPayloadCodec {
     static byte[] ledger(LedgerEntry entry) throws JSONException {
@@ -29,14 +27,21 @@ final class LedgerPayloadCodec {
         object.put("locationLabel", entry.locationLabel);
         object.put("latitude", entry.latitude == null ? JSONObject.NULL : entry.latitude);
         object.put("longitude", entry.longitude == null ? JSONObject.NULL : entry.longitude);
-        object.put("locationAccuracy", entry.locationAccuracy == null ? JSONObject.NULL : entry.locationAccuracy);
-        object.put("locationTime", entry.locationTime == null ? JSONObject.NULL : entry.locationTime);
+        object.put(
+                "locationAccuracy",
+                entry.locationAccuracy == null ? JSONObject.NULL : entry.locationAccuracy);
+        object.put(
+                "locationTime", entry.locationTime == null ? JSONObject.NULL : entry.locationTime);
         return object.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     static byte[] empty() {
-        return ("{\"type\":\"" + SyncProtocol.TYPE_EMPTY + "\",\"schema\":"
-                + SyncProtocol.SCHEMA_VERSION + "}").getBytes(StandardCharsets.UTF_8);
+        return ("{\"type\":\""
+                        + SyncProtocol.TYPE_EMPTY
+                        + "\",\"schema\":"
+                        + SyncProtocol.SCHEMA_VERSION
+                        + "}")
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     private LedgerPayloadCodec() { }

@@ -6,4 +6,3 @@ import java.nio.file.Path;
 public interface OpbookPackager {
     void packageDirectory(Path stagedDirectory, Path outputOpbook) throws Exception;
 }
-

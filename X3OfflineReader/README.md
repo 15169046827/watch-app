@@ -9,9 +9,9 @@
 - `specification/`：`.opbook` 1.0 开放格式、Draft 2020-12 JSON Schema 和安全/语义验证器。
 - `samples/`：项目自写公开输入、Schema 正反例和本机生成但不纳入源码的 Golden 包。
 
-小说与音乐在 UI、SQLite、队列、进度、收藏、设置和存储上隔离，只共享 `PlaybackService`、MediaSession、Audio Focus 与系统媒体控制。Watch 0.5.4 的独立音乐库支持 MP3、M4A、FLAC 与同名 LRC；导入时保留 Unicode 文件名，以可信媒体标签优先、文件名 `歌手-歌名` 作为乱码或缺失标签的回退，并按内容去除重复副本。音乐默认以 1×、单曲结束停止播放；LRC 支持 UTF-8、UTF-16 与 GB18030，并支持一行多时间戳、逐字增强 LRC 合并为整句显示和 offset。音乐播放页扩展为前一句、当前句、后一句三段歌词，当前句高亮；超宽歌曲标题自动横向滚动。选择音乐时应把音频与对应的同名 `.lrc` 一并选中。小说侧继续沿用 0.5.0 的 SAF 原地索引，不复制或完整解压 `.opbook`：对可寻址文件直接解析 ZIP/ZIP64 中央目录，只读取元数据和封面，播放前才随机提取当前与相邻章节的 M4A、验证媒体头及 SHA-256，不把 ZIP 直接交给系统解码器。
+小说与音乐在 UI、SQLite、队列、进度、设置和存储上隔离，只共享 `PlaybackService`、MediaSession、Audio Focus 与系统媒体控制。Watch 0.8.0 延续 0.7.6 的两个播放器均采用横向操作页与内容页：较短滑动即可切页，全部操作图标在音频准备前后保持固定视觉尺度，内容滚动视口覆盖完整 466×466 画布并使用 Android 圆屏原生弧形滚动条。小说书库按最近播放时间优先，点击书籍直接续听；章节目录自动定位当前章，已有原始章节号时直接沿用，仅为无编号标题补序号，避免序章导致目录与正文错位。操作页表冠调音量，正文页表冠按行滚动；小说倍速为显示倍率的 0.5×～5.0× 滑杆，每 0.1× 一档。书签功能已取消，书内搜索保留。音乐歌词页保留全部有效歌词并持续高亮、居中跟随当前句。
 
-小说与音乐播放页的播放/暂停控件采用 48dp 高触控区，便于圆屏点击。OPPO Watch X3 的上方物理键短按由系统电源策略在普通 App 收到事件前消费，长按又与全局电源菜单冲突，因此听读不拦截该键；后台控制继续使用 MediaSession 提供的系统媒体入口。
+小说与音乐播放页的播放/暂停控件采用 74dp 主按钮，便于圆屏点击。OPPO Watch X3 的上方物理键短按由系统电源策略在普通 App 收到事件前消费，长按又与全局电源菜单冲突，因此听读不拦截该键；后台控制继续使用 MediaSession 提供的系统媒体入口。
 
 ## 构建与验证
 
@@ -30,12 +30,13 @@
 Windows 便携应用镜像：
 
 ```powershell
-.\builder\package-windows.ps1          # 内含 JRE、FFmpeg、离线 TTS 运行环境与模型
+.\builder\package-windows-preview.ps1  # 个人 GitHub 未签名便携预览 ZIP；只接受干净的已审核源码
+.\builder\package-windows.ps1          # 正式包；须配置 Authenticode 证书、HTTPS 时间戳和 signtool
 .\builder\package-windows.ps1 -WithoutMelo
 .\builder\package-windows.ps1 -WorkRoot '<absolute-data-directory>' # 可选的绝对数据目录
 ```
 
-产物位于 `builder\build\windows-package\X3AudiobookBuilder`，用户可见名称为“听读工坊”，兼容 GUI 文件名为 `X3AudiobookBuilder.exe`，CLI 为 `X3BuilderCLI.exe`。Debug APK 位于 `watch\build\outputs\apk\debug\watch-debug.apk`，用户可见名称为“听读”，固定使用工作区共享 Debug Key；不得生成替代密钥。
+未签名预览产物为 `builder\build\X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.zip` 及其 `.sha256`，只用于 WARS 1.1 LIMITED_PREVIEW，不生成安装器、不覆盖正式目录，并随包写入未知发布者提示和源提交。正式产物位于 `builder\build\windows-package\X3AudiobookBuilder`。兼容 GUI 文件名为 `X3AudiobookBuilder.exe`，CLI 为 `X3BuilderCLI.exe`。Debug APK 位于 `watch\build\outputs\apk\debug\watch-debug.apk`，固定使用工作区共享 Debug Key；不得生成替代密钥。
 
 为当前 Windows 用户创建开始菜单入口：
 
@@ -44,6 +45,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\create-start-m
 ```
 
 ## 当前状态
+
+听读 0.8.0 增加首次离线数据说明与“数据和迁移”，可导出/恢复进度、收藏与播放设置并分类清理 App 本机数据；源 `.opbook`、音乐和 LRC 不进入备份，App 级清理也不删除这些源文件。听读工坊 0.7.0 补充首次数据说明、界面设置/最近来源历史清理、过期任务删除确认、独立的未签名 GitHub 便携预览轨道，以及 GUI/CLI 双启动程序的正式 Authenticode 签名和独立验签。完整边界见 [`specification/DATA_LIFECYCLE.md`](specification/DATA_LIFECYCLE.md)。
+
+听读 0.7.6 的播放器分页、全屏原生弧形滚动条、章节目录、正文定位、倍速滑杆与完整歌词契约见 [`specification/WATCH_PLAYER_PAGING.md`](specification/WATCH_PLAYER_PAGING.md)。0.6.2 的播放器音量滑杆与表冠接入契约见 [`specification/WATCH_VOLUME_CONTROLS.md`](specification/WATCH_VOLUME_CONTROLS.md)。书内搜索详见 [`specification/WATCH_BOOK_SEARCH.md`](specification/WATCH_BOOK_SEARCH.md)。
 
 听读工坊 0.6.4 将句子缓存、断点、未完成 Track 和 GUI 控制文件从可替换的 app-image/构建目录迁移到当前 Windows 用户的独立本机数据目录（默认 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`）。正式 GUI、CLI 和打包脚本使用同一位置；旧源码或正式包内的 `builder/.work` 会逐文件复制并校验 SHA-256，目标冲突或验证失败会中止替换并保留旧数据，全部通过后才移除旧副本。新正式包内不再创建 `.work`，因此 Gradle 清理、程序重打包和升级不会删除转换缓存或断点；需要自定义磁盘时可使用绝对路径环境变量 `X3_BUILDER_WORK_ROOT` 或打包参数 `-WorkRoot`。详见 [`specification/BUILDER_RESUME_CACHE.md`](specification/BUILDER_RESUME_CACHE.md)。
 

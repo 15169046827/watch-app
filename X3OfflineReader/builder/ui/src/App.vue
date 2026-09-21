@@ -38,6 +38,7 @@ const initialEstimate = ref(0)
 const projectedTotal = ref(0)
 const completedTaskSeconds = ref<number | null>(null)
 const completedRunSeconds = ref<number | null>(null)
+const showDataNotice = ref(false)
 let timer = 0
 let unlisten: UnlistenFn | undefined
 let previewAudio: HTMLAudioElement | undefined
@@ -51,6 +52,8 @@ const form = reactive({
 })
 const lastInputDirectory = ref('')
 const lastCoverDirectory = ref('')
+const preferencesStorageKey = 'tingdu-builder-preferences'
+const dataNoticeStorageKey = 'tingdu-builder-data-notice-v1'
 
 const nav = [
   { id: 'build', icon: 'pi-sparkles', label: '制作新书' },
@@ -78,8 +81,9 @@ watch(() => [...form.inputs], applyRecognizedMetadata)
 
 onMounted(async () => {
   loadPrefs()
+  showDataNotice.value = localStorage.getItem(dataNoticeStorageKey) !== 'accepted'
   try {
-    unlisten = await listen<BuilderEvent>('builder-event', event => handleEvent(event.payload))
+    unlisten = await listen<BuilderEvent>('builder-event', event => { void handleEvent(event.payload) })
     await refreshState()
     status.value = '准备就绪'
   } catch (error) {
@@ -177,6 +181,7 @@ function stopPreviewAudio() {
 }
 async function cacheAction(action: 'prune' | 'stale' | 'clear') {
   if (busy.value) return
+  if (action === 'stale' && !window.confirm('确定删除超过 30 天的未完成临时任务吗？对应断点将无法继续；电子书源文件和已输出的 .opbook 不会删除。')) return
   if (action === 'clear' && !window.confirm('确定清空句子音频缓存吗？未完成任务的断点不会删除。')) return
   status.value = '正在整理存储…'
   try {
@@ -184,6 +189,19 @@ async function cacheAction(action: 'prune' | 'stale' | 'clear') {
     Object.assign(cache, result)
     status.value = `整理完成：删除 ${result.deletedFiles} 个文件，释放 ${humanBytes(result.deletedBytes)}`
   } catch (error) { status.value = `整理失败：${errorText(error)}` }
+}
+function acceptDataNotice() {
+  localStorage.setItem(dataNoticeStorageKey, 'accepted')
+  showDataNotice.value = false
+}
+function clearInterfaceData() {
+  if (busy.value || !window.confirm('确定清除界面设置和最近 50 项来源识别历史吗？当前任务、断点、缓存、源文件和输出文件不会删除。')) return
+  localStorage.removeItem(preferencesStorageKey)
+  localStorage.removeItem(metadataStorageKey)
+  lastInputDirectory.value = ''
+  lastCoverDirectory.value = ''
+  activeInputIdentity = ''
+  status.value = '界面设置与来源识别历史已清除'
 }
 async function handleEvent(event: BuilderEvent) {
   if (event.type === 'estimate') {
@@ -234,20 +252,33 @@ function observeEta(percent: number) {
   projectedTotal.value = Math.max(elapsedSeconds.value + 1, Math.round(projectedTotal.value * .85 + bounded * .15))
 }
 
+const excludedPreferenceKeys = new Set([
+  'inputs', 'title', 'author', 'cover', 'meloWorkers', 'sherpaWorkers', 'windowsWorkers'
+])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function loadPrefs() {
   try {
-    const saved = JSON.parse(localStorage.getItem('tingdu-builder-preferences') ?? '{}')
-    lastInputDirectory.value = saved.lastInputDirectory ?? ''
-    lastCoverDirectory.value = saved.lastCoverDirectory ?? ''
-    delete saved.lastInputDirectory; delete saved.lastCoverDirectory
-    delete saved.title; delete saved.author; delete saved.cover
-    delete saved.meloWorkers; delete saved.sherpaWorkers; delete saved.windowsWorkers
-    Object.assign(form, saved, { inputs: [], meloWorkers: 2, sherpaWorkers: 4, windowsWorkers: 2 })
+    const saved: unknown = JSON.parse(localStorage.getItem(preferencesStorageKey) ?? '{}')
+    if (!isRecord(saved)) return
+    lastInputDirectory.value = typeof saved.lastInputDirectory === 'string' ? saved.lastInputDirectory : ''
+    lastCoverDirectory.value = typeof saved.lastCoverDirectory === 'string' ? saved.lastCoverDirectory : ''
+    const mutableForm = form as unknown as Record<string, unknown>
+    for (const [key, currentValue] of Object.entries(form)) {
+      if (excludedPreferenceKeys.has(key)) continue
+      const savedValue = saved[key]
+      if (typeof savedValue === typeof currentValue) mutableForm[key] = savedValue
+    }
   } catch { /* ignore damaged preferences */ }
 }
 function savePrefs() {
-  const { inputs: _inputs, title: _title, author: _author, cover: _cover, meloWorkers: _meloWorkers, sherpaWorkers: _sherpaWorkers, windowsWorkers: _windowsWorkers, ...preferences } = form
-  localStorage.setItem('tingdu-builder-preferences', JSON.stringify({ ...preferences, lastInputDirectory: lastInputDirectory.value, lastCoverDirectory: lastCoverDirectory.value }))
+  const preferences = Object.fromEntries(
+    Object.entries(form).filter(([key]) => !excludedPreferenceKeys.has(key))
+  )
+  localStorage.setItem(preferencesStorageKey, JSON.stringify({ ...preferences, lastInputDirectory: lastInputDirectory.value, lastCoverDirectory: lastCoverDirectory.value }))
 }
 type CompletedMetadata = { title: string; author: string }
 const metadataStorageKey = 'tingdu-builder-completed-metadata-v1'
@@ -255,9 +286,17 @@ let activeInputIdentity = ''
 function inputIdentity(inputs = form.inputs) {
   return JSON.stringify(inputs.map(path => path.replaceAll('/', '\\').toLocaleLowerCase()).sort())
 }
+function isCompletedMetadata(value: unknown): value is CompletedMetadata {
+  return isRecord(value) && typeof value.title === 'string' && typeof value.author === 'string'
+}
 function completedMetadata(): Record<string, CompletedMetadata> {
-  try { return JSON.parse(localStorage.getItem(metadataStorageKey) ?? '{}') }
-  catch { return {} }
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(metadataStorageKey) ?? '{}')
+    if (!isRecord(parsed)) return {}
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, CompletedMetadata] => isCompletedMetadata(entry[1]))
+    )
+  } catch { return {} }
 }
 function applyRecognizedMetadata() {
   const identity = inputIdentity()
@@ -313,6 +352,10 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
       </header>
 
       <Message v-if="status && (status.includes('失败') || status.includes('无法'))" severity="error" :closable="false">{{ status }}</Message>
+      <Message v-if="showDataNotice" severity="info" :closable="false">
+        工坊默认在本机处理源文件，并在用户数据目录保存断点、缓存、界面设置和最多 50 项来源识别历史。只有选用在线 Edge 音色并逐次确认后，待朗读正文才会发送给在线服务；清理操作不会删除电子书源文件或已输出的 .opbook。
+        <Button label="知道了" size="small" text @click="acceptDataNotice" />
+      </Message>
 
       <section v-if="page === 'build'" class="page-grid build-grid">
         <Card class="hero-card span-2">
@@ -432,8 +475,15 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
         <Card>
           <template #title>缓存清理</template>
           <template #content>
-            <p class="storage-note">工坊默认保留最近使用的句子音频以加速重复转换；超过 20 GB 或 180 天会自动整理。未完成任务的断点与缓存分开保存。</p>
+            <p class="storage-note">工坊默认保留最近使用的句子音频以加速重复转换；超过 20 GB 或 180 天会自动整理。未完成任务的断点与缓存分开保存。断点和缓存依赖本机路径与运行环境，不作为可移植备份导出；电子书源文件和生成结果由你在原目录自行保管。</p>
             <div class="storage-actions"><Button label="按默认规则整理" icon="pi pi-sparkles" :disabled="busy" @click="cacheAction('prune')" /><Button label="清理过期临时任务" icon="pi pi-clock" outlined :disabled="busy" @click="cacheAction('stale')" /><Button label="清空句子缓存" icon="pi pi-trash" severity="danger" outlined :disabled="busy" @click="cacheAction('clear')" /></div>
+          </template>
+        </Card>
+        <Card>
+          <template #title>界面设置与历史</template>
+          <template #content>
+            <p class="storage-note">保存在本机的界面偏好包含最近选择目录；来源识别历史最多保留 50 项文件路径、书名和作者。清除后不会影响转换任务、断点、缓存、源文件或输出文件。</p>
+            <div class="storage-actions"><Button label="清除界面设置与历史" icon="pi pi-history" severity="danger" outlined :disabled="busy" @click="clearInterfaceData" /></div>
           </template>
         </Card>
       </section>

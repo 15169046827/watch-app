@@ -2,8 +2,10 @@ plugins {
     id 'application'
 }
 
+apply from: rootProject.file('../gradle/android-java-quality.gradle')
+
 group = 'com.canace.x3offlinereader'
-version = '0.6.4'
+version = '0.7.0'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -23,6 +25,7 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    environment 'X3_BUILDER_WORK_ROOT', ''
 }
 
 tasks.withType(JavaCompile).configureEach {
