@@ -46,6 +46,21 @@ $productRelativePaths = @{
     X3Schedule = @($requiredRelativePaths[5], $requiredRelativePaths[6])
 }
 
+$productSourceMarkers = @{
+    X3AccessibilityProbe = 'X3AccessibilityProbe\app\build.gradle'
+    X3VoiceLedger = 'X3VoiceLedger\settings.gradle'
+    X3WolaiNotes = 'X3WolaiNotes\settings.gradle'
+    X3OfflineReader = 'X3OfflineReader\settings.gradle'
+    X3Schedule = 'X3Schedule\settings.gradle'
+}
+$productOrder = @(
+    'X3AccessibilityProbe',
+    'X3VoiceLedger',
+    'X3WolaiNotes',
+    'X3OfflineReader',
+    'X3Schedule'
+)
+
 if ($RequireAllApplications -and $Product) {
     throw 'Pass either -RequireAllApplications or -Product, not both.'
 }
@@ -54,7 +69,14 @@ if ($RequireAllApplications -or $Product) {
     $selectedRelativePaths = if ($Product) {
         $productRelativePaths[$Product]
     } else {
-        $requiredRelativePaths
+        @(
+            foreach ($productName in $productOrder) {
+                $sourceMarker = Join-Path $workspace $productSourceMarkers[$productName]
+                if (Test-Path -LiteralPath $sourceMarker -PathType Leaf) {
+                    $productRelativePaths[$productName]
+                }
+            }
+        )
     }
     $missing = @(
         foreach ($relativePath in $selectedRelativePaths) {
