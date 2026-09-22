@@ -12,12 +12,16 @@ public final class NoteFormatterSelfTest {
 
     private static String repeat(char value, int count) {
         StringBuilder result = new StringBuilder(count);
-        for (int index = 0; index < count; index++) result.append(value);
+        for (int index = 0; index < count; index++) {
+            result.append(value);
+        }
         return result.toString();
     }
 
     private static void require(boolean condition, String name) {
-        if (!condition) throw new AssertionError(name);
+        if (!condition) {
+            throw new AssertionError(name);
+        }
     }
 }
 

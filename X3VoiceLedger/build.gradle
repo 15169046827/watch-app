@@ -1,3 +1,115 @@
 plugins {
     id 'com.android.application' version '8.7.3' apply false
+    id 'checkstyle'
+}
+
+evaluationDependsOn(':phone')
+
+checkstyle {
+    toolVersion = '10.21.4'
+    configFile = rootProject.file('../config/checkstyle/checkstyle.xml')
+    ignoreFailures = false
+    maxWarnings = 0
+    showViolations = true
+}
+
+def selfTestSources = files(
+        'app/src/main/java/com/canace/x3voiceledger/AlipayPaymentParser.java',
+        'app/src/main/java/com/canace/x3voiceledger/PaymentCapturePolicy.java',
+        'app/src/main/java/com/canace/x3voiceledger/LedgerParser.java',
+        'app/src/main/java/com/canace/x3voiceledger/LocationSession.java',
+        'app/src/main/java/com/canace/x3voiceledger/LocationSnapshot.java',
+        'phone/src/main/java/com/canace/x3voiceledger/phone/IncomingRevisionPolicy.java',
+        'phone/src/main/java/com/canace/x3voiceledger/phone/ScreenshotRetryPolicy.java',
+        'phone/src/main/java/com/canace/x3voiceledger/phone/BackupPolicy.java',
+        'phone/src/main/java/com/canace/x3voiceledger/phone/LedgerProfileImporter.java',
+        'phone/src/main/java/com/canace/x3voiceledger/phone/ProfileImportCompletionGate.java',
+        'phone/src/main/java/com/canace/x3voiceledger/phone/YimuCategoryMapper.java',
+        fileTree('tools') { include '**/*.java' })
+def selfTestOutput = layout.buildDirectory.dir('classes/java/toolsSelfTest')
+
+tasks.register('checkstyleTools', Checkstyle) {
+    group = 'verification'
+    description = 'Checks the standalone Java self-tests against workspace conventions.'
+    source = fileTree('tools') { include '**/*.java' }
+    classpath = files()
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+tasks.register('compileToolsSelfTests', JavaCompile) {
+    group = 'verification'
+    description = 'Compiles the standalone Java self-tests and their production sources.'
+    source = selfTestSources
+    destinationDirectory = selfTestOutput
+    classpath = files(
+            project(':phone').android.bootClasspath,
+            project(':phone').configurations.debugCompileClasspath)
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    options.encoding = 'UTF-8'
+}
+
+tasks.register('toolsSelfTest') {
+    group = 'verification'
+    description = 'Runs all standalone Java self-tests sequentially and fails fast.'
+    dependsOn tasks.named('compileToolsSelfTests')
+    doLast {
+        [
+            'com.canace.x3voiceledger.AlipayPaymentParserSelfTest',
+            'com.canace.x3voiceledger.PaymentCapturePolicySelfTest',
+            'com.canace.x3voiceledger.ParserSelfTest',
+            'com.canace.x3voiceledger.DataConsistencySelfTest',
+            'com.canace.x3voiceledger.phone.LedgerBackupManagerSelfTest',
+            'com.canace.x3voiceledger.phone.YimuCategoryMapperSelfTest',
+            'com.canace.x3voiceledger.phone.LedgerProfileImporterSelfTest',
+            'com.canace.x3voiceledger.phone.ProfileImportCompletionGateSelfTest'
+        ].each { testMain ->
+            javaexec {
+                classpath = files(
+                        selfTestOutput,
+                        project(':phone').android.bootClasspath,
+                        project(':phone').configurations.debugRuntimeClasspath)
+                mainClass = testMain
+            }
+        }
+    }
+}
+
+tasks.register('verifyBundledDependencies') {
+    group = 'verification'
+    description = 'Verifies checked-in third-party binary dependencies against pinned hashes.'
+    def jarFile = file('phone/libs/jxl-2.6.12.jar')
+    def checksumFile = file('phone/libs/jxl-2.6.12.jar.sha256')
+    inputs.files(jarFile, checksumFile)
+    doLast {
+        if (!jarFile.isFile() || !checksumFile.isFile()) {
+            throw new GradleException('JExcelApi binary or checksum file is missing.')
+        }
+        def expected = checksumFile.text.trim().split(/\s+/)[0]
+        def digest = java.security.MessageDigest.getInstance('SHA-256').digest(jarFile.bytes)
+        def actual = digest.encodeHex().toString()
+        if (!actual.equalsIgnoreCase(expected)) {
+            throw new GradleException('JExcelApi SHA-256 does not match the pinned checksum.')
+        }
+    }
+}
+
+tasks.register('qualityCheck') {
+    group = 'verification'
+    description = 'Runs module Checkstyle, tools Checkstyle, and all standalone self-tests.'
+    dependsOn ':app:checkstyleMain'
+    dependsOn ':app:checkstyleAndroidTest'
+    dependsOn ':phone:checkstyleMain'
+    dependsOn ':phone:checkstyleAndroidTest'
+    dependsOn ':common:checkstyleMain'
+    dependsOn tasks.named('checkstyleTools')
+    dependsOn tasks.named('toolsSelfTest')
+    dependsOn tasks.named('verifyBundledDependencies')
+}
+
+tasks.named('toolsSelfTest') {
+    mustRunAfter tasks.named('checkstyleTools')
 }

@@ -16,9 +16,19 @@ public final class SynthesisRequest {
         this.rate = rate;
     }
 
-    public String getSegmentId() { return segmentId; }
-    public String getText() { return text; }
-    public String getVoiceId() { return voiceId; }
-    public double getRate() { return rate; }
-}
+    public String getSegmentId() {
+        return segmentId;
+    }
 
+    public String getText() {
+        return text;
+    }
+
+    public String getVoiceId() {
+        return voiceId;
+    }
+
+    public double getRate() {
+        return rate;
+    }
+}

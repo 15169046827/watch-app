@@ -10,10 +10,13 @@ public final class WatchSyncWakeReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())
                 || (BluetoothAdapter.ACTION_STATE_CHANGED.equals(intent.getAction())
-                && intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_ON)) {
+                        && intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)
+                                == BluetoothAdapter.STATE_ON)) {
             WatchRetryJobService.schedule(context);
             try (LedgerStore store = new LedgerStore(context)) {
-                if (store.pendingCount() > 0) BleSyncService.start(context);
+                if (store.pendingCount() > 0) {
+                    BleSyncService.start(context);
+                }
             }
         }
     }

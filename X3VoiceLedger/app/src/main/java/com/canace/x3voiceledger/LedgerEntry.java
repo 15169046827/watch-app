@@ -21,12 +21,26 @@ final class LedgerEntry {
     final Long locationTime;
     final String locationLabel;
 
-    LedgerEntry(String id, long createdAt, long updatedAt, long transactionTime,
-                long amountCents, String note, String category, String categoryParent,
-                String categoryChild, String account, String bookName, String tags, String rawText,
-                String source,
-                Double latitude, Double longitude, Float locationAccuracy,
-                Long locationTime, String locationLabel) {
+    LedgerEntry(
+            String id,
+            long createdAt,
+            long updatedAt,
+            long transactionTime,
+            long amountCents,
+            String note,
+            String category,
+            String categoryParent,
+            String categoryChild,
+            String account,
+            String bookName,
+            String tags,
+            String rawText,
+            String source,
+            Double latitude,
+            Double longitude,
+            Float locationAccuracy,
+            Long locationTime,
+            String locationLabel) {
         this.id = id;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;

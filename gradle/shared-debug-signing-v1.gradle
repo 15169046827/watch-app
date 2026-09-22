@@ -1,0 +1,60 @@
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.PrivateKey
+
+def configuredDebugKey = System.getenv('X3_DEBUG_KEYSTORE_FILE')
+def sharedDebugKey = configuredDebugKey
+        ? rootProject.file(configuredDebugKey)
+        : rootProject.file('../.signing/x3-debug.keystore')
+def expectedDebugDigest = '138cb8267ee755e9d2ac92fb3b93428b872fdda68712f6744b9d7f8bca6a2faa'
+def debugKeyAlias = 'androiddebugkey'
+def debugKeyPassword = 'android'.toCharArray()
+
+if (!sharedDebugKey.isFile()) {
+    throw new GradleException("Required shared Debug key is missing: ${sharedDebugKey}")
+}
+
+KeyStore debugKeyStore = KeyStore.getInstance('JKS')
+sharedDebugKey.withInputStream { stream ->
+    debugKeyStore.load(stream, debugKeyPassword)
+}
+def debugCertificate = debugKeyStore.getCertificate(debugKeyAlias)
+if (debugCertificate == null) {
+    throw new GradleException("Shared Debug key does not contain alias '${debugKeyAlias}'")
+}
+def debugPrivateKey
+try {
+    debugPrivateKey = debugKeyStore.getKey(debugKeyAlias, debugKeyPassword)
+} catch (Exception error) {
+    throw new GradleException(
+            "Shared Debug alias '${debugKeyAlias}' cannot be unlocked with the required password",
+            error)
+}
+if (!(debugPrivateKey instanceof PrivateKey)) {
+    throw new GradleException("Shared Debug alias '${debugKeyAlias}' is not a private key entry")
+}
+
+def actualDebugDigest = MessageDigest.getInstance('SHA-256')
+        .digest(debugCertificate.encoded)
+        .collect { String.format('%02x', it & 0xff) }
+        .join()
+if (actualDebugDigest != expectedDebugDigest) {
+    throw new GradleException(
+            "Unexpected shared Debug certificate. Expected ${expectedDebugDigest}, got ${actualDebugDigest}")
+}
+
+android {
+    signingConfigs {
+        debug {
+            storeFile sharedDebugKey
+            storePassword 'android'
+            keyAlias debugKeyAlias
+            keyPassword 'android'
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+}

@@ -11,6 +11,14 @@
 
 Android Studio 应打开具体 Android 项目的子目录。各项目的构建、配置和功能边界见其 README。
 
+## 审计标准
+
+本仓库全部项目采用 Codex 全局技能 `$universal-project-audit` 中的 UPARS 1.0.0，并叠加[手表应用审计补充规则](./docs/audit/WATCH_APP_AUDIT_PROFILE.md)。UPARS 负责跨项目通用要求；本仓库只维护圆屏、Wear OS、离线、设备网络、签名、配套构建器和额度检查等项目专属规则。[WARS 1.0 公共版发布标准](./docs/release/WARS_1_0.md)记录面向普通用户的安装、授权、数据与签名要求；[生产发布验收清单](./docs/release/PRODUCTION_ACCEPTANCE_CHECKLIST.md)用于逐批次留证和最终放行。WACAS 1.1 审计整改与 WARS 1.0 发布标准化并行执行并分别给出结论。
+
+`X3VoiceLedger`、`X3WolaiNotes`、`X3OfflineReader` 和听读工坊按公共产品管理；`X3AccessibilityProbe` 保持内部诊断工具定位。
+
+机器可读的项目规则位于 [`config/audit/watch-app-audit-profile.json`](./config/audit/watch-app-audit-profile.json)。现有 Java 质量、签名、网络安全及 CI 文件是该 profile 的仓库级实现；项目规则可以加严，但不得静默降低 UPARS 门槛。
+
 ## 开发环境
 
 - JDK 17
@@ -33,7 +41,7 @@ Set-Location .\X3AccessibilityProbe
 
 ## 签名
 
-仓库不包含任何签名密钥。普通克隆使用 Android 标准 Debug 签名即可构建；维护者可在仓库根目录的 `.signing/x3-debug.keystore` 放置既有团队 Debug Key，以便覆盖安装内部测试版本。
+仓库不包含任何签名密钥。所有 Android 应用的 Debug 构建要求使用仓库外的既有共享 Debug Key；配置阶段会校验其私钥条目和固定证书摘要，缺失或不符时停止构建。
 
 维护者可在仓库根目录验证内部 Debug APK 的证书：
 
@@ -41,4 +49,6 @@ Set-Location .\X3AccessibilityProbe
 .\scripts\verify-debug-signatures.ps1
 ```
 
-正式发布必须使用独立、安全备份且不进入仓库的 Release Key，不能使用 Debug Key。
+正式 Android 产品共用一把独立、安全备份且不进入仓库的 Release Key，不能使用 Debug Key。Release 构建所需的密钥位置、类型、别名、口令和证书 SHA-256 只从环境变量或受保护的 CI Secret 提供；发布产物还需运行独立签名核验。
+
+Windows 听读工坊的公开 EXE/MSI 必须通过 Authenticode 验证，并核对预先登记的签名证书 SHA-256。密钥准备、构建配置和验收要求详见 WARS 1.0。

@@ -1,0 +1,89 @@
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.PrivateKey
+
+def releaseTaskRequested = gradle.startParameter.taskNames.any {
+    it.toLowerCase(Locale.ROOT).contains('release')
+}
+def releaseSettings = [
+        file: System.getenv('X3_RELEASE_KEYSTORE_FILE'),
+        type: System.getenv('X3_RELEASE_KEYSTORE_TYPE') ?: 'JKS',
+        alias: System.getenv('X3_RELEASE_KEY_ALIAS'),
+        storePassword: System.getenv('X3_RELEASE_KEYSTORE_PASSWORD'),
+        keyPassword: System.getenv('X3_RELEASE_KEY_PASSWORD'),
+        digest: System.getenv('X3_RELEASE_CERT_SHA256')
+]
+def requiredNames = [
+        file: 'X3_RELEASE_KEYSTORE_FILE',
+        alias: 'X3_RELEASE_KEY_ALIAS',
+        storePassword: 'X3_RELEASE_KEYSTORE_PASSWORD',
+        keyPassword: 'X3_RELEASE_KEY_PASSWORD',
+        digest: 'X3_RELEASE_CERT_SHA256'
+]
+def missingReleaseSettings = requiredNames.findAll { key, ignored ->
+    !releaseSettings[key]
+}.values()
+
+if (releaseTaskRequested && !missingReleaseSettings.isEmpty()) {
+    throw new GradleException(
+            "Release signing is incomplete. Missing: ${missingReleaseSettings.join(', ')}")
+}
+
+if (missingReleaseSettings.isEmpty()) {
+    def releaseKey = rootProject.file(releaseSettings.file)
+    if (!releaseKey.isFile()) {
+        throw new GradleException("Required shared Release key is missing: ${releaseKey}")
+    }
+
+    char[] storePasswordChars = releaseSettings.storePassword.toCharArray()
+    char[] keyPasswordChars = releaseSettings.keyPassword.toCharArray()
+    KeyStore releaseKeyStore = KeyStore.getInstance(releaseSettings.type)
+    releaseKey.withInputStream { stream ->
+        releaseKeyStore.load(stream, storePasswordChars)
+    }
+    def releaseCertificate = releaseKeyStore.getCertificate(releaseSettings.alias)
+    if (releaseCertificate == null) {
+        throw new GradleException(
+                "Shared Release key does not contain alias '${releaseSettings.alias}'")
+    }
+    def releasePrivateKey
+    try {
+        releasePrivateKey = releaseKeyStore.getKey(releaseSettings.alias, keyPasswordChars)
+    } catch (Exception error) {
+        throw new GradleException('Shared Release private key cannot be unlocked', error)
+    }
+    if (!(releasePrivateKey instanceof PrivateKey)) {
+        throw new GradleException('Shared Release alias is not a private key entry')
+    }
+
+    def actualDigest = MessageDigest.getInstance('SHA-256')
+            .digest(releaseCertificate.encoded)
+            .collect { String.format('%02x', it & 0xff) }
+            .join()
+    def expectedDigest = releaseSettings.digest.replaceAll('[^0-9A-Fa-f]', '').toLowerCase(Locale.ROOT)
+    if (expectedDigest.length() != 64 || actualDigest != expectedDigest) {
+        throw new GradleException(
+                "Unexpected shared Release certificate. Expected ${expectedDigest}, got ${actualDigest}")
+    }
+    def debugDigest = '138cb8267ee755e9d2ac92fb3b93428b872fdda68712f6744b9d7f8bca6a2faa'
+    if (actualDigest == debugDigest) {
+        throw new GradleException('The shared Debug certificate cannot be used for Release signing')
+    }
+
+    android {
+        signingConfigs {
+            release {
+                storeFile releaseKey
+                storePassword releaseSettings.storePassword
+                keyAlias releaseSettings.alias
+                keyPassword releaseSettings.keyPassword
+                storeType releaseSettings.type
+            }
+        }
+        buildTypes {
+            release {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}

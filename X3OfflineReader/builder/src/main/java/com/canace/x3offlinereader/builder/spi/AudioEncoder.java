@@ -7,4 +7,3 @@ import java.util.List;
 public interface AudioEncoder {
     void encodeM4a(List<Path> sentenceWavs, Path outputM4a) throws Exception;
 }
-

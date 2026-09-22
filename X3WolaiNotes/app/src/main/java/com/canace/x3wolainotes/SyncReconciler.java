@@ -25,7 +25,9 @@ final class SyncReconciler {
 
     static String findMatch(NoteItem item, String expectedText, List<Candidate> candidates,
                             Set<String> consumedIds, long now) {
-        if (item.state != NoteItem.STATE_UNCERTAIN || item.lastAttemptAt <= 0L) return "";
+        if (item.state != NoteItem.STATE_UNCERTAIN || item.lastAttemptAt <= 0L) {
+            return "";
+        }
         long earliest = item.lastAttemptAt - MATCH_LOOKBACK_MS;
         long latest = now + FUTURE_CLOCK_SKEW_MS;
         Candidate best = null;

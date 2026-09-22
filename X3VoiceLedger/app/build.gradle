@@ -2,7 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
-def stableDebugKey = rootProject.file('../.signing/x3-debug.keystore')
+apply from: rootProject.file('../gradle/shared-debug-signing-v1.gradle')
+apply from: rootProject.file('../gradle/shared-release-signing-v1.gradle')
+apply from: rootProject.file('../gradle/android-java-quality.gradle')
 
 android {
     namespace 'com.canace.x3voiceledger'
@@ -12,25 +14,12 @@ android {
         applicationId 'com.canace.x3voiceledger'
         minSdk 26
         targetSdk 30
-        versionCode 12
-        versionName '0.8.3'
-    }
-
-    signingConfigs {
-        if (stableDebugKey.isFile()) {
-            debug {
-                storeFile stableDebugKey
-                storePassword 'android'
-                keyAlias 'androiddebugkey'
-                keyPassword 'android'
-            }
-        }
+        versionCode 13
+        versionName '0.8.4'
+        testInstrumentationRunner 'com.canace.x3voiceledger.SyntheticBlePeripheralRunner'
     }
 
     buildTypes {
-        debug {
-            if (stableDebugKey.isFile()) { signingConfig signingConfigs.debug }
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -38,7 +27,12 @@ android {
     }
 
     lint {
-        disable 'ExpiredTargetSdkVersion', 'GradleDependency', 'LockedOrientationActivity', 'DiscouragedApi'
+        // API 30 is intentional for the customized Android 11 watch runtime; upgrades need device validation.
+        disable 'ExpiredTargetSdkVersion', 'GradleDependency'
+        // The watch UI is portrait-locked for its circular launcher and confirmation flow.
+        disable 'LockedOrientationActivity'
+        // Legacy system-UI and location calls are retained for the verified API 30 firmware.
+        disable 'DiscouragedApi'
     }
 }
 

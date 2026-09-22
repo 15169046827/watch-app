@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "standardId": "WARS",
+  "version": "1.1.0",
+  "status": "approved_in_progress",
+  "seriesName": "日常工具",
+  "releaseIdentity": {
+    "publisherType": "individual",
+    "publisherName": "Ym_Li",
+    "channel": "github_direct_download"
+  },
+  "publicProducts": [
+    "x3_voice_ledger_watch",
+    "x3_voice_ledger_phone",
+    "x3_wolai_notes",
+    "x3_offline_reader",
+    "windows_audiobook_builder"
+  ],
+  "internalProducts": [
+    "x3_accessibility_probe"
+  ],
+  "approvedDecisions": {
+    "initialDistribution": "personal_github_preview_then_formal_public_production",
+    "androidReleaseKeyPolicy": "one_shared_release_key_across_public_android_products",
+    "wolaiAuthorization": "personal_token_for_preview_formal_oauth_for_production",
+    "dataLifecycleScope": "product_specific_analysis_and_implementation",
+    "paymentAutoLedger": "first_beta_default_off_separate_consent_limitations_disclosed",
+    "windowsSigning": "unsigned_portable_preview_authenticode_for_production"
+  },
+  "requiredProductControls": [
+    "first_run_guidance",
+    "privacy_and_data_inventory",
+    "migration_export_clear",
+    "compatible_upgrade",
+    "least_privilege",
+    "high_risk_feature_isolation",
+    "quality_and_security_gates",
+    "public_documentation",
+    "clean_user_acceptance"
+  ],
+  "androidReleaseSigning": {
+    "sharedCertificateRequired": true,
+    "mustDifferFromDebugCertificate": true,
+    "failClosedWhenReleaseRequested": true,
+    "independentArtifactVerificationRequired": true,
+    "registeredCertificateSha256": "3ef6162e5c749caf81d222642997ef306380fc96696c9661b77b72a829dc3f73"
+  },
+  "windowsReleaseSigning": {
+    "authenticodeStatus": "Valid",
+    "sha256IdentityVerificationRequired": true
+  },
+  "distributionTracks": {
+    "personalGithubPreview": {
+      "verdict": "LIMITED_PREVIEW",
+      "androidReleaseSigningRequired": true,
+      "wolaiPersonalToken": {
+        "allowed": true,
+        "defaultUnconfigured": true,
+        "explicitRiskDisclosureRequired": true,
+        "encryptedLocalStorageRequired": true,
+        "excludedFromApkLogsAndBackupsRequired": true,
+        "localClearRequired": true,
+        "notOAuthDisclosureRequired": true
+      },
+      "windowsPortable": {
+        "unsignedAllowed": true,
+        "installerForbiddenWithoutAuthenticode": true,
+        "artifactFormat": "portable_zip",
+        "unknownPublisherDisclosureRequired": true,
+        "sha256Required": true,
+        "sourceCommitRequired": true
+      }
+    },
+    "formalPublicProduction": {
+      "verdictRequiresAllProductionControls": true,
+      "wolaiOAuthRequired": true,
+      "windowsAuthenticodeRequired": true
+    }
+  },
+  "productionReleaseRequires": [
+    "formal_credentials_and_signing_material",
+    "real_device_or_target_os_acceptance",
+    "install_upgrade_migration_and_rollback_validation",
+    "permission_denial_and_offline_paths",
+    "documentation_and_known_limitations"
+  ],
+  "codeAuditPassDoesNotImplyProductionRelease": true
+}

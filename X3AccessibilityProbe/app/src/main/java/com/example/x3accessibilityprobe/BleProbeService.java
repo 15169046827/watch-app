@@ -24,7 +24,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
-
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
@@ -32,8 +31,6 @@ import java.util.UUID;
 
 /** Runs an isolated, time-bounded BLE capability test inside the shared X3 probe app. */
 public final class BleProbeService extends Service {
-    public static final String ACTION_RESULT =
-            "com.example.x3accessibilityprobe.BLE_RESULT";
     public static final String PREFS = "ble_probe";
     public static final String KEY_RESULTS = "results";
 
@@ -148,6 +145,20 @@ public final class BleProbeService extends Service {
             return;
         }
 
+        reportAdapterCapabilities(adapter);
+        if (!adapter.isEnabled()) {
+            finishProbe();
+            return;
+        }
+
+        startAdvertising(adapter);
+        startGattServer(manager);
+        startScanner(adapter);
+        handler.postDelayed(this::recordBackgroundCheckpoint, 15_000L);
+        handler.postDelayed(this::finishProbe, 25_000L);
+    }
+
+    private void reportAdapterCapabilities(BluetoothAdapter adapter) {
         line("adapter.enabled=" + adapter.isEnabled());
         line("feature.multipleAdvertisement="
                 + adapter.isMultipleAdvertisementSupported());
@@ -155,11 +166,9 @@ public final class BleProbeService extends Service {
         line("feature.offloadedBatching=" + adapter.isOffloadedScanBatchingSupported());
         line("feature.maxAdvertisingDataLength="
                 + adapter.getLeMaximumAdvertisingDataLength());
-        if (!adapter.isEnabled()) {
-            finishProbe();
-            return;
-        }
+    }
 
+    private void startAdvertising(BluetoothAdapter adapter) {
         advertiser = adapter.getBluetoothLeAdvertiser();
         line("advertiser.api=" + (advertiser == null ? "UNAVAILABLE" : "AVAILABLE"));
         if (advertiser != null) {
@@ -174,7 +183,9 @@ public final class BleProbeService extends Service {
             advertiser.startAdvertising(
                     settings, advertisingData(0x07D2, "X2"), advertise2Callback);
         }
+    }
 
+    private void startGattServer(BluetoothManager manager) {
         try {
             gattServer = manager.openGattServer(this, gattCallback);
             line("gatt.open=" + (gattServer == null ? "UNAVAILABLE" : "SUCCESS"));
@@ -194,7 +205,9 @@ public final class BleProbeService extends Service {
         } catch (SecurityException error) {
             line("gatt=SECURITY_EXCEPTION " + error.getMessage());
         }
+    }
 
+    private void startScanner(BluetoothAdapter adapter) {
         scanner = adapter.getBluetoothLeScanner();
         line("scanner.api=" + (scanner == null ? "UNAVAILABLE" : "AVAILABLE"));
         if (scanner != null) {
@@ -208,22 +221,20 @@ public final class BleProbeService extends Service {
                 line("scan=SECURITY_EXCEPTION " + error.getMessage());
             }
         }
+    }
 
-        handler.postDelayed(() -> {
-            if (scanner != null) {
-                try {
-                    scanner.stopScan(scanCallback);
-                    line("scan.stop=SUCCESS results=" + scanResults
-                            + " uniqueDevices=" + scanAddresses.size());
-                } catch (RuntimeException error) {
-                    line("scan.stop=FAIL " + error.getClass().getSimpleName());
-                }
+    private void recordBackgroundCheckpoint() {
+        if (scanner != null) {
+            try {
+                scanner.stopScan(scanCallback);
+                line("scan.stop=SUCCESS results=" + scanResults
+                        + " uniqueDevices=" + scanAddresses.size());
+            } catch (RuntimeException error) {
+                line("scan.stop=FAIL " + error.getClass().getSimpleName());
             }
-            line("background.checkpoint=BLE_ALIVE adv1=" + adv1Ok
-                    + " adv2=" + adv2Ok + " gatt=" + gattAdded);
-        }, 15_000L);
-
-        handler.postDelayed(this::finishProbe, 25_000L);
+        }
+        line("background.checkpoint=BLE_ALIVE adv1=" + adv1Ok
+                + " adv2=" + adv2Ok + " gatt=" + gattAdded);
     }
 
     private AdvertiseData advertisingData(int manufacturerId, String marker) {
@@ -265,10 +276,20 @@ public final class BleProbeService extends Service {
             }
             advertiser = null;
         }
-        if (gattServer != null) {
-            gattServer.clearServices();
-            gattServer.close();
-            gattServer = null;
+        BluetoothGattServer server = gattServer;
+        gattServer = null;
+        if (server != null) {
+            try {
+                server.clearServices();
+            } catch (RuntimeException error) {
+                line("gatt.clear=FAIL " + error.getClass().getSimpleName());
+            } finally {
+                try {
+                    server.close();
+                } catch (RuntimeException error) {
+                    line("gatt.close=FAIL " + error.getClass().getSimpleName());
+                }
+            }
         }
     }
 
@@ -281,7 +302,6 @@ public final class BleProbeService extends Service {
         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .putString(KEY_RESULTS, report.toString())
                 .apply();
-        sendBroadcast(new Intent(ACTION_RESULT).setPackage(getPackageName()));
     }
 
     private static String advertiseError(int code) {

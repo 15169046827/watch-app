@@ -1,191 +1,78 @@
 # X3AccessibilityProbe
 
-面向 OPPO Watch X3（OWW261、Android 11 / API 30）的统一硬件与系统能力探针。
+面向 OPPO Watch X3（OWW261、Android 11 / API 30）的统一硬件与系统能力探针。用户可见名称为“能力测试”；包名 `com.example.x3accessibilityprobe` 保持不变，以兼容覆盖升级。
 
-用户可见名称：`能力测试`。项目目录、包名和内部类名继续保留，确保覆盖升级与历史文档兼容。
+本项目只用于可复现的能力验证，不包含记账、支付自动化或产品业务逻辑。日期化验收记录、设备截图和过程日志保存在项目文档系统中，不进入 Git。
 
-除 AccessibilityService 外，版本 1.4 增加可手动运行的 BLE 能力测试，覆盖广播、双路并行广播、GATT Server、扫描和短时前台服务后台存活。版本 1.6 增加支付页面的结构化脱敏节点快照和离线暂存。探针测试代码与正式记账应用保持隔离。
+## 功能
 
-## 第一阶段范围
+- 检查第三方 `AccessibilityService` 的安装、系统入口、授权和事件交付能力。
+- 以结构化脱敏方式观察窗口事件和节点特征。
+- 手动运行限时 BLE 探针，覆盖双路 legacy 广播、GATT Server、扫描和短时前台服务存活。
+- 只观察物理按键与表冠事件，并始终保留系统默认行为。
+- 在圆屏安全区内展示状态，支持右滑退出。
 
-- 注册 `ProbeAccessibilityService`
-- Service 连接、收到事件、被中断时写入 Logcat
-- Activity 仅显示安装状态
-- 不包含支付识别、通知监听、记账、Wear OS 或第三方库
+## 能力矩阵
 
-应用包名：`com.example.x3accessibilityprobe`
+| 能力 | 已验证结论 | 产品使用边界 |
+| --- | --- | --- |
+| 第三方 AccessibilityService | 可安装、由用户通过系统界面授权、绑定并接收跨应用事件 | 不写 secure settings，不绕过用户授权 |
+| 支付成功页结构 | 支持读取成功状态、金额特征、渠道和事件时间；未证明可读取商户名 | 仅保留脱敏结构；不保存原始金额、商户或节点文本 |
+| BLE 广播 | 支持两路并发 legacy 广播 | 长期熄屏、Doze 和厂商清理仍需独立验证 |
+| BLE GATT Server | 可打开并成功添加服务 | 本探针不实现正式同步协议 |
+| BLE 扫描 | 可启动、停止并接收扫描回调 | 需要用户授予精确位置权限 |
+| 上方物理按键 | Linux/Android 映射可观察，但系统电源策略可能优先消费 | 不作为 App 必需控制，不消费系统行为 |
+| 旋转表冠 | 以前台 `ACTION_SCROLL`、鼠标类 source 和 `AXIS_VSCROLL` 交付 | 产品需按方向累计和限速，并保留标准旋转编码器路径 |
+| 圆屏布局 | 可根据 `isScreenRound()` 计算安全区 | 重要文字和控件不得贴近圆形边缘 |
 
-Service 组件：`com.example.x3accessibilityprobe/.ProbeAccessibilityService`
+## 隐私与安全边界
 
-## 构建
+- 导出的启动 Activity 不接受外部参数触发 BLE 探针；BLE 只能由用户点击应用内按钮启动。
+- BLE 结果通过同一进程的私有 `SharedPreferences` 监听更新，不暴露可被外部应用伪造的结果广播。
+- Logcat 和离线记录都只包含长度、数字数量、货币标志、金额格式、支付关键词及非敏感元数据，不包含原始页面文本。
+- 普通应用事件仅写入 Logcat，不离线持久化。只有快照时实际活动窗口的 root 包属于允许的支付包，脱敏快照才可写入应用私有文件。
+- 离线日志最大 512 KiB，超限后轮转；诊断记录不得提交或对外分享。
+- 探针不修改系统代理、网络、飞行模式、蓝牙总开关或无障碍授权状态。
 
-在项目根目录执行：
+## 构建与质量检查
+
+项目使用仓库统一的 Debug 签名配置；配置阶段会校验密钥文件、`androiddebugkey` 私钥条目和证书 SHA-256，任一不符即停止。密钥文件不属于仓库，也不得生成或替换。
+
+在本项目目录执行：
 
 ```powershell
-.\gradlew.bat assembleDebug
+gradle :app:checkstyleMain :app:checkstyleTest :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
-Debug APK 输出到：
+APK 输出为：
 
 ```text
 .build\app\outputs\apk\debug\app-debug.apk
 ```
 
-## 安装前后验证
+安装前应在仓库根目录运行统一签名验证脚本。覆盖安装使用 `adb install -r`；不得通过卸载绕过签名不一致，因为卸载会删除应用数据和权限状态。
 
-请先把 Android SDK 的 `platform-tools` 加入 `PATH`，或设置 `ANDROID_SDK_ROOT`。以下命令不会依赖特定电脑的目录结构：
+## 可复现实验
 
-```powershell
-adb devices
-adb shell dumpsys accessibility
-adb install -r ".\.build\app\outputs\apk\debug\app-debug.apk"
-adb shell dumpsys accessibility
-```
+所有实机实验都必须先按工作区设备协调规则确认设备连接。实验完成后应释放设备，并把日期、系统版本、步骤、结果和限制写入外部项目文档；Git 只保留下列长期有效的复现入口。
 
-安装前记录 `installedServiceCount`。安装后理想结果是它从 `0` 变为 `1`。
+### Accessibility
 
-本阶段不要修改 `enabled_accessibility_services`，也不要尝试启用 Service。只有确认系统已识别所安装的 AccessibilityService 后，才进入第二阶段。
+1. 覆盖安装 Debug APK。
+2. 运行 `scripts\check_accessibility.ps1`，确认系统已识别 Service。
+3. 由用户在系统设置界面授权，不使用 ADB 修改 secure settings。
+4. 运行 `scripts\watch_probe_logcat.ps1`，在普通页面和专用测试页面观察脱敏事件结构。
+5. 检查离线文件只包含允许支付 root 产生的脱敏快照。
 
-## OPPO Watch X3 实机结果
+### BLE
 
-2026-08-17 在 `OWW261`（Android 11 / API 30）上验证：
+1. 在 Activity 中点击“运行 BLE 探针”并授予精确位置权限。
+2. 确认两路广播、GATT Service 和扫描分别给出结果。
+3. 将 Activity 退到后台，等待探针自动完成并清理资源。
+4. 长时间熄屏、Doze、重启和厂商进程清理必须作为独立实验，不从短时结果推断。
 
-- APK 安装成功，Activity 冷启动成功
-- `installedServiceCount`：`0` → `1`
-- 系统识别组件：`com.example.x3accessibilityprobe/.ProbeAccessibilityService`
-- `accessibility_enabled` 仍为 `0`
-- `enabled_accessibility_services` 仍为 `null`
-- `Bound services` 和 `Enabled services` 均为空
+### 输入设备与圆屏
 
-结论：第一阶段通过；系统 Framework 能识别第三方 AccessibilityService。尚未启用该 Service。
-
-## 第二阶段实机结果
-
-2026-08-17 通过 OPPO Settings 的正常系统界面完成启用，没有使用 ADB 写入 secure settings：
-
-- 隐藏入口：`com.android.settings/.Settings$AccessibilitySettingsActivity`
-- 系统列表正常显示 `X3 Accessibility Probe Service`
-- 系统权限确认弹窗正常出现
-- `accessibility_enabled=1`
-- `enabled_accessibility_services=com.example.x3accessibilityprobe/com.example.x3accessibilityprobe.ProbeAccessibilityService`
-- `Bound services` 包含 Probe
-- Logcat 出现 `lifecycle=CONNECTED`
-
-结论：第二阶段通过；OPPO Watch X3 支持通过系统 Settings 正常、持久地启用第三方 AccessibilityService。
-
-## 第三阶段普通页面结果
-
-Service 启用后，已从 OPPO Settings 收到并解析：
-
-- `TYPE_WINDOW_STATE_CHANGED`
-- `TYPE_WINDOW_CONTENT_CHANGED`
-- `TYPE_VIEW_SCROLLED`
-- `TYPE_VIEW_CLICKED`
-- `packageName`、`className`、`event.text`、`contentDescription`
-- source 节点的包名、类名、View ID、文字、描述、子节点数、可点击状态和屏幕边界
-
-结论：第三阶段的普通 App 页面验证通过。尚未进行支付 App 测试。
-
-## 第四阶段支付页面结果
-
-2026-08-24 在支付宝 NFC 实际支付成功页验证：
-
-- 来源包：`com.eg.android.AlipayGphone`
-- 页面类：`com.alipay.watch.npay.ui.NFCPaySuccessActivity`
-- 收到 `TYPE_WINDOW_STATE_CHANGED` 和 `TYPE_WINDOW_CONTENT_CHANGED`
-- `getRootInActiveWindow()` 成功，完整成功页快照包含 14 个节点
-- `nfc_pay_text` 节点命中“付款成功”特征
-- `tv_amount` 节点包含可解析的小数金额特征，独立节点包含人民币符号
-- 支付渠道可由包名确定，支付时间可由事件时间确定
-- 本次成功页节点树没有发现商户名称字段
-- 支付页退出后无法倒推其窗口是否设置 `FLAG_SECURE`，本项保持未判定
-
-结论：Accessibility 路线已经证明可稳定获得“支付宝 NFC 支付成功 + 金额 + 渠道 + 时间”；商户名称需要其他来源或由用户补充。公开仓库不包含真实设备日志、支付记录或验收截图。
-
-## 上方物理按键结果
-
-2026-08-31 在 OWW261 前台 Activity 上验证：
-
-- Linux input 来源为 `qpnp_pon`，原始键为 `KEY_F1`；短按序列是 `DOWN → SYN_REPORT → UP → SYN_REPORT`。
-- 系统 key-layout 将 scan code `59` 映射为 Android `KEYCODE_F1`（keyCode `131`）。
-- 屏幕点亮且探针 Activity 已恢复时，真实短按在 Linux 层出现，但未进入 `dispatchKeyEvent`；短按后屏幕关闭，系统窗口策略把它按电源键行为处理。
-- 前台长按的可交付阶段会出现 `KEYCODE_F1`：约 401 ms 的首个 repeat 带 `isLongPress=true`，随后产生重复 DOWN；系统策略同时声明长按电源键进入全局电源操作。
-- 探针始终把事件交回 `super.dispatchKeyEvent`，没有拦截或改变电源、返回和安全相关系统行为。
-
-结论：上方物理键虽然在 Linux/Android 映射中名为 F1，但产品行为属于系统电源键，不适合作为普通 App 的必需快捷键。媒体播放应使用 `MediaSession` 的标准媒体按键回调；前台 `KEYCODE_F1` 只能作为不消费系统行为的可选诊断信号，不能依赖其短按或长按一定到达。
-
-## 旋转表冠结果
-
-2026-09-04 在 OWW261 的普通前台 Activity 上验证：
-
-- Linux 输入设备为 `/dev/input/event3`（`oplus_crown`），事件类型为 `REL_WHEEL`。
-- Android InputReader 将它声明为 `source=0x2002` 的鼠标类指针设备，并暴露 `VSCROLL`；它不是 `SOURCE_ROTARY_ENCODER`。
-- Activity 的 `dispatchGenericMotionEvent` 能收到 `ACTION_SCROLL`。有效值位于 `AXIS_VSCROLL`；`AXIS_SCROLL` 和 `AXIS_HSCROLL` 保持为 0。
-- 顺时针的主方向为负值，逆时针为正值。连续转动会产生多帧整数和小数增量，并随速度改变；停止附近还可能出现小幅反向回摆。
-- 表冠不是“一刻度对应一个固定事件/固定 delta”的离散编码器，不能把每个 MotionEvent 直接换算成一次音量变化。
-
-播放器应先支持标准 `SOURCE_ROTARY_ENCODER + AXIS_SCROLL`，再为 OWW261 增加 `oplus_crown + SOURCE_MOUSE + AXIS_VSCROLL` 回退。只处理 `ACTION_SCROLL`；顺时针负值映射为音量增加，逆时针正值映射为音量降低。实现时使用方向锁定、累计阈值和约 80–120 ms 的步进限速，并在约 150 ms 无事件后结束本次旋转，避免高速事件和停止回摆导致音量跳变。只有播放器明确接管表冠时返回 `true`；其他页面调用 `super`，保留系统滚动与焦点行为。
-
-## 当前本地版本 1.11
-
-版本 1.11 增加只观察、不消费事件的 `dispatchGenericMotionEvent` 表冠探针，记录 action、source、三个滚动轴和 deviceId，并完成 OWW261 顺逆时针实机标定。版本 1.10 的物理按键探针及既有 Accessibility/BLE 能力保持不变。
-
-版本 1.10 增加只观察、不消费事件的 `dispatchKeyEvent` 按键探针，用于记录 action、Android keyCode/keyName、Linux scan code、repeat、long-press 标志和按压时长。版本 1.9 的图标与既有 Accessibility/BLE 能力保持不变。
-
-版本 1.9 将启动器图标升级为“日常工具”v2.1 规范：矿物蓝底色完整覆盖正方形画布，暖白雷达/准星严格居中；Android 11 使用标准自适应图标，由系统负责圆形或圆角方形蒙版。实机校准后，自适应前景以中心缩放至 72%，同时消除原先的双重留白并保留清楚的外侧底色边框。API 30 fallback、包名、应用数据和无障碍组件均不变。
-
-版本 1.1 已在电脑上构建并通过 Android Lint，但尚未安装到手表。它为下一次连接准备了：
-
-- Activity 显示 Probe 是否注册、Accessibility Manager 是否开启、Probe 是否启用
-- 检查系统是否有 Activity 能处理官方 `android.settings.ACCESSIBILITY_SETTINGS` Intent
-- “Open accessibility settings”按钮只调用官方设置 Intent，不修改 secure settings
-- 结构化 Logcat：事件类型、包名、类名、View ID、窗口和节点属性
-- 文本只保留长度、数字数量、货币标志、金额格式和支付关键词，不写入原文
-- 页面稳定约 250 毫秒后递归采集当前窗口，最多 80 个节点
-- 仅对支付宝、微信手表版和 OPPO 钱包写入最大 512 KB 的应用私有离线脱敏记录
-
-设备重新连接后，可以运行只读状态检查：
-
-```powershell
-.\scripts\check_accessibility.ps1
-```
-
-Service 成功启用后，可以观察 Probe 日志：
-
-```powershell
-.\scripts\watch_probe_logcat.ps1
-```
-
-版本 1.6 的新增记录不包含屏幕原文、真实金额或商户名称，但仍只应用于自己的测试设备，不对外分享设备诊断记录。
-
-## BLE 实机结果
-
-2026-08-17 在同一台 `OWW261` 上通过统一 Probe 真机验证：
-
-- `BluetoothLeAdvertiser`：可用
-- 第一路 `startAdvertising`：成功（low-latency、medium TX power）
-- 系统报告 `isMultipleAdvertisementSupported=true`
-- 第二路广播与第一路并发启动：成功，没有返回错误码
-- 最大扩展广播数据长度：`1213` 字节；正式兼容方案仍应使用小型 legacy payload
-- `BluetoothGattServer`：打开成功
-- `addService`：调用被接受，异步回调 `status=0 / GATT_SUCCESS`
-- `BluetoothLeScanner`：可用；`startScan` 被接受，运行 15 秒后正常停止，没有 `onScanFailed`
-- 本次环境没有发现周边设备，扫描回调结果数为 0；因此已证明扫描注册和运行正常，尚未用第二台广播设备验证发现数据内容
-- App 退到桌面后，前台服务中的双路广播和 GATT Service 在 15 秒检查点仍存活
-- 25 秒测试结束后主动停止扫描、广播、GATT Server 和前台服务，没有遗留后台连接
-
-Android 11 / API 30 上，本探针声明 `BLUETOOTH`、`BLUETOOTH_ADMIN`、`ACCESS_FINE_LOCATION` 和 `FOREGROUND_SERVICE`。扫描需要用户授予精确位置权限。短时后台测试通过 `connectedDevice` 类型前台服务完成，并产生低优先级常驻通知；普通后台进程不应被视为可靠的长期同步机制。
-
-OPPO ROM 的实测限制：应用不在 Doze 白名单；侧载覆盖安装后的厂商权限同步可能重置运行时位置权限，并且本次多次覆盖安装后清除了已启用的 AccessibilityService 状态。正式应用必须使用正常权限界面，不能依赖 ADB 授权；长期 BLE 同步还需要单独验证熄屏、Doze 和厂商后台清理。
-
-## 圆屏布局
-
-版本 1.2 起不再按矩形手机屏幕直接排版。Activity 会通过 Android `isScreenRound()` 检测圆屏，并根据实际屏幕直径计算内接矩形的圆角内缩：
-
-- 文字和按钮限制在中央安全列
-- 滚动视口固定避开顶部、底部圆弧区域
-- 状态页显示 `Layout: ROUND SAFE AREA`，便于实机确认
-
-## 手表返回手势
-
-版本 1.3 起，Activity 自行识别明显的水平向右滑动并调用 `finish()` 退出。识别条件会排除主要为垂直方向的移动，避免与状态页上下滚动冲突；Android 默认返回行为仍然保留。
+1. 在前台 Activity 观察按键和表冠事件，不拦截系统处理。
+2. 分别验证表冠方向、连续事件、停止回摆以及非探针页面的默认滚动。
+3. 检查标题、状态、按钮和退出提示均位于圆屏安全区，并验证右滑退出不会吞掉纵向滚动。

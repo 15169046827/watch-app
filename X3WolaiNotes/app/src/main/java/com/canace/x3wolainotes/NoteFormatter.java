@@ -5,7 +5,9 @@ final class NoteFormatter {
     }
 
     static String normalize(String input) {
-        if (input == null) return "";
+        if (input == null) {
+            return "";
+        }
         String value = input.trim().replaceAll("\\s+", " ");
         if (value.length() > AppConfig.MAX_NOTE_LENGTH) {
             value = value.substring(0, AppConfig.MAX_NOTE_LENGTH);

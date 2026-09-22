@@ -1,9 +1,5 @@
 package com.canace.x3wolainotes;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,8 +10,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 final class WolaiClient {
+    private static final int MAX_RESPONSE_BYTES = 1_048_576;
     private static volatile boolean forceOfflineForTest;
     private static volatile boolean forceUnknownWriteForTest;
 
@@ -148,31 +148,44 @@ final class WolaiClient {
     List<RemoteBlock> fetchChildren(String pageId) throws ApiException {
         HttpURLConnection connection = null;
         try {
-            connection = open("GET", "/blocks/" + pageId + "/children");
+            connection = open("GET", "/blocks/" + requireResourceId(pageId) + "/children");
             int status = connection.getResponseCode();
             String body = readBody(connection, status);
-            if (status < 200 || status >= 300) throw apiError(status, body);
+            if (status < 200 || status >= 300) {
+                throw apiError(status, body);
+            }
             JSONObject root = new JSONObject(body);
             JSONArray data = root.optJSONArray("data");
             List<RemoteBlock> result = new ArrayList<>();
-            if (data == null) return result;
-            for (int index = 0; index < data.length(); index++) {
+            if (data == null) {
+                return result;
+            }
+            int blockCount = Math.min(data.length(), AppConfig.MAX_READER_BLOCKS);
+            for (int index = 0; index < blockCount; index++) {
                 JSONObject block = data.optJSONObject(index);
-                if (block == null) continue;
+                if (block == null) {
+                    continue;
+                }
                 String id = block.optString("id", "item-" + index);
                 String type = block.optString("type", "text");
                 Object content = block.opt("content");
                 String targetPageId = "page".equals(type) ? id : extractPageReference(content);
-                result.add(new RemoteBlock(id, type, extractText(content),
+                targetPageId = safeResourceId(targetPageId);
+                boolean canLoadChildren = ApiInputPolicy.isValidResourceId(id) && hasChildren(block);
+                result.add(new RemoteBlock(id, type,
+                        ApiInputPolicy.boundedText(extractText(content),
+                                AppConfig.MAX_REMOTE_TEXT_LENGTH),
                         epochMillis(block.optLong("created_at", 0L)),
                         epochMillis(block.optLong("edited_at", 0L)),
-                        targetPageId, hasChildren(block), block.optBoolean("checked", false), 0));
+                        targetPageId, canLoadChildren, block.optBoolean("checked", false), 0));
             }
             return result;
         } catch (IOException | JSONException error) {
             throw new ApiException("读取 Wolai 失败", error);
         } finally {
-            if (connection != null) connection.disconnect();
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 
@@ -185,56 +198,86 @@ final class WolaiClient {
     DatabaseTable fetchDatabase(String databaseId) throws ApiException {
         HttpURLConnection connection = null;
         try {
-            connection = open("GET", "/databases/" + databaseId);
+            connection = open("GET", "/databases/" + requireResourceId(databaseId));
             int status = connection.getResponseCode();
             String body = readBody(connection, status);
-            if (status < 200 || status >= 300) throw apiError(status, body);
-
-            JSONObject root = new JSONObject(body);
-            JSONObject data = root.optJSONObject("data");
-            if (data == null) throw new ApiException("表格响应缺少 data");
-
-            List<String> columns = new ArrayList<>();
-            JSONArray columnOrder = data.optJSONArray("column_order");
-            if (columnOrder != null) {
-                for (int index = 0; index < columnOrder.length(); index++) {
-                    String column = columnOrder.optString(index, "").trim();
-                    if (!column.isEmpty()) columns.add(column);
-                }
+            if (status < 200 || status >= 300) {
+                throw apiError(status, body);
             }
 
-            List<DatabaseRow> rows = new ArrayList<>();
-            JSONArray remoteRows = data.optJSONArray("rows");
-            if (remoteRows != null) {
-                for (int index = 0; index < remoteRows.length(); index++) {
-                    JSONObject remoteRow = remoteRows.optJSONObject(index);
-                    if (remoteRow == null) continue;
-                    JSONObject rowData = remoteRow.optJSONObject("data");
-                    List<DatabaseCell> cells = new ArrayList<>();
-                    if (rowData != null) {
-                        for (String column : columns) {
-                            JSONObject remoteCell = rowData.optJSONObject(column);
-                            String type = remoteCell == null ? "" : remoteCell.optString("type", "");
-                            Object rawValue = remoteCell == null ? null : remoteCell.opt("value");
-                            cells.add(new DatabaseCell(column, type, formatCellValue(rawValue)));
-                        }
-                    }
-                    rows.add(new DatabaseRow(remoteRow.optString("page_id", "").trim(), cells));
-                }
-            }
-            return new DatabaseTable(columns, rows, root.optBoolean("has_more", false), "");
+            return parseDatabase(new JSONObject(body));
         } catch (IOException | JSONException error) {
             throw new ApiException("读取 Wolai 表格失败", error);
         } finally {
-            if (connection != null) connection.disconnect();
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
+    }
+
+    private static DatabaseTable parseDatabase(JSONObject root) throws ApiException {
+        JSONObject data = root.optJSONObject("data");
+        if (data == null) {
+            throw new ApiException("表格响应缺少 data");
+        }
+        List<String> columns = parseColumns(data.optJSONArray("column_order"));
+        List<DatabaseRow> rows = parseRows(data.optJSONArray("rows"), columns);
+        return new DatabaseTable(columns, rows, root.optBoolean("has_more", false), "");
+    }
+
+    private static List<String> parseColumns(JSONArray columnOrder) {
+        List<String> columns = new ArrayList<>();
+        if (columnOrder == null) {
+            return columns;
+        }
+        int columnCount = Math.min(columnOrder.length(), AppConfig.MAX_DATABASE_COLUMNS);
+        for (int index = 0; index < columnCount; index++) {
+            String column = ApiInputPolicy.boundedText(columnOrder.optString(index, ""),
+                    AppConfig.MAX_NOTE_LENGTH);
+            if (!column.isEmpty()) {
+                columns.add(column);
+            }
+        }
+        return columns;
+    }
+
+    private static List<DatabaseRow> parseRows(JSONArray remoteRows, List<String> columns) {
+        List<DatabaseRow> rows = new ArrayList<>();
+        if (remoteRows == null) {
+            return rows;
+        }
+        int rowCount = Math.min(remoteRows.length(), AppConfig.MAX_DATABASE_ROWS);
+        for (int index = 0; index < rowCount; index++) {
+            JSONObject remoteRow = remoteRows.optJSONObject(index);
+            if (remoteRow != null) {
+                rows.add(parseRow(remoteRow, columns));
+            }
+        }
+        return rows;
+    }
+
+    private static DatabaseRow parseRow(JSONObject remoteRow, List<String> columns) {
+        JSONObject rowData = remoteRow.optJSONObject("data");
+        List<DatabaseCell> cells = new ArrayList<>();
+        for (String column : columns) {
+            JSONObject remoteCell = rowData == null ? null : rowData.optJSONObject(column);
+            String type = remoteCell == null ? "" : remoteCell.optString("type", "");
+            Object rawValue = remoteCell == null ? null : remoteCell.opt("value");
+            cells.add(new DatabaseCell(column, type,
+                    formatCellValue(rawValue, AppConfig.MAX_JSON_DEPTH)));
+        }
+        return new DatabaseRow(safeResourceId(remoteRow.optString("page_id", "")), cells);
     }
 
     private void appendChildren(String parentId, int depth, List<RemoteBlock> result)
             throws ApiException {
-        if (depth >= AppConfig.MAX_READER_DEPTH || result.size() >= AppConfig.MAX_READER_BLOCKS) return;
+        if (depth >= AppConfig.MAX_READER_DEPTH || result.size() >= AppConfig.MAX_READER_BLOCKS) {
+            return;
+        }
         for (RemoteBlock block : fetchChildren(parentId)) {
-            if (result.size() >= AppConfig.MAX_READER_BLOCKS) return;
+            if (result.size() >= AppConfig.MAX_READER_BLOCKS) {
+                return;
+            }
             result.add(block.atDepth(depth));
             if (block.hasChildren && !block.isPageLink()) {
                 appendChildren(block.id, depth + 1, result);
@@ -246,13 +289,14 @@ final class WolaiClient {
         HttpURLConnection connection = null;
         boolean requestMayHaveReachedServer = false;
         try {
+            String validPageId = requireResourceId(pageId);
             JSONObject block = new JSONObject();
             block.put("type", "text");
             block.put("content", text);
             JSONArray blocks = new JSONArray();
             blocks.put(block);
             JSONObject payload = new JSONObject();
-            payload.put("parent_id", pageId);
+            payload.put("parent_id", validPageId);
             payload.put("blocks", blocks);
 
             if (BuildConfig.DEBUG && forceUnknownWriteForTest) {
@@ -280,7 +324,9 @@ final class WolaiClient {
             throw new ApiException("写入结果无法确认", error, 0,
                     requestMayHaveReachedServer);
         } finally {
-            if (connection != null) connection.disconnect();
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 
@@ -293,6 +339,7 @@ final class WolaiClient {
         connection.setConnectTimeout(12000);
         connection.setReadTimeout(16000);
         connection.setUseCaches(false);
+        connection.setInstanceFollowRedirects(false);
         connection.setRequestProperty("Authorization", token);
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
@@ -304,13 +351,18 @@ final class WolaiClient {
     private static String readBody(HttpURLConnection connection, int status) throws IOException {
         InputStream input = status >= 200 && status < 400
                 ? connection.getInputStream() : connection.getErrorStream();
-        if (input == null) return "";
+        if (input == null) {
+            return "";
+        }
         try (InputStream stream = input; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[2048];
             int count;
-            while ((count = stream.read(buffer)) >= 0) {
+            while ((count = stream.read(buffer)) > 0) {
+                int remaining = MAX_RESPONSE_BYTES - output.size();
+                if (count > remaining) {
+                    throw new IOException("Wolai response exceeds safety limit");
+                }
                 output.write(buffer, 0, count);
-                if (output.size() > 1024 * 1024) break;
             }
             return output.toString("UTF-8");
         }
@@ -324,7 +376,9 @@ final class WolaiClient {
         String message = "Wolai 返回 " + status;
         try {
             String remote = new JSONObject(body).optString("message", "").trim();
-            if (!remote.isEmpty()) message = remote;
+            if (!remote.isEmpty()) {
+                message = remote;
+            }
         } catch (JSONException ignored) {
             // Keep the status-only error; never expose a full HTML error body.
         }
@@ -332,91 +386,168 @@ final class WolaiClient {
     }
 
     private static String extractText(Object content) {
-        if (content instanceof String) return ((String) content).trim();
+        if (content instanceof String) {
+            return ((String) content).trim();
+        }
         if (content instanceof JSONObject) {
             return ((JSONObject) content).optString("title", "").trim();
         }
-        if (!(content instanceof JSONArray)) return "";
+        if (!(content instanceof JSONArray)) {
+            return "";
+        }
         JSONArray items = (JSONArray) content;
         StringBuilder text = new StringBuilder();
         for (int index = 0; index < items.length(); index++) {
             Object item = items.opt(index);
             String fragment = "";
-            if (item instanceof JSONObject) fragment = ((JSONObject) item).optString("title", "");
-            else if (item instanceof String) fragment = (String) item;
-            if (fragment.isEmpty()) continue;
-            if (text.length() > 0) text.append(' ');
+            if (item instanceof JSONObject) {
+                fragment = ((JSONObject) item).optString("title", "");
+            } else if (item instanceof String) {
+                fragment = (String) item;
+            }
+            if (fragment.isEmpty()) {
+                continue;
+            }
+            if (text.length() > 0) {
+                text.append(' ');
+            }
             text.append(fragment);
         }
         return text.toString().trim();
     }
 
     private static String extractPageReference(Object content) {
+        return extractPageReference(content, AppConfig.MAX_JSON_DEPTH);
+    }
+
+    private static String extractPageReference(Object content, int remainingDepth) {
+        if (remainingDepth <= 0) {
+            return "";
+        }
         if (content instanceof JSONObject) {
             JSONObject item = (JSONObject) content;
             if ("bi_link".equals(item.optString("type"))) {
                 String blockId = item.optString("block_id", "").trim();
-                if (!blockId.isEmpty()) return blockId;
+                if (!blockId.isEmpty()) {
+                    return blockId;
+                }
                 String refId = item.optString("ref_id", "").trim();
-                if (!refId.isEmpty()) return refId;
+                if (!refId.isEmpty()) {
+                    return refId;
+                }
             }
             return "";
         }
-        if (!(content instanceof JSONArray)) return "";
+        if (!(content instanceof JSONArray)) {
+            return "";
+        }
         JSONArray items = (JSONArray) content;
         for (int index = 0; index < items.length(); index++) {
-            String refId = extractPageReference(items.opt(index));
-            if (!refId.isEmpty()) return refId;
+            String refId = extractPageReference(items.opt(index), remainingDepth - 1);
+            if (!refId.isEmpty()) {
+                return refId;
+            }
         }
         return "";
     }
 
     private static boolean hasChildren(JSONObject block) {
-        if (block.optBoolean("has_children", false)) return true;
+        if (block.optBoolean("has_children", false)) {
+            return true;
+        }
         Object children = block.opt("children");
-        if (children instanceof JSONArray) return ((JSONArray) children).length() > 0;
-        if (!(children instanceof JSONObject)) return false;
+        if (children instanceof JSONArray) {
+            return ((JSONArray) children).length() > 0;
+        }
+        if (!(children instanceof JSONObject)) {
+            return false;
+        }
         Object ids = ((JSONObject) children).opt("ids");
         return ids instanceof JSONArray && ((JSONArray) ids).length() > 0;
     }
 
-    private static String formatCellValue(Object value) {
-        if (value == null || value == JSONObject.NULL) return "";
-        if (value instanceof String) return ((String) value).trim();
-        if (value instanceof Number || value instanceof Boolean) return String.valueOf(value);
+    private static String formatCellValue(Object value, int remainingDepth) {
+        if (remainingDepth <= 0) {
+            return "";
+        }
+        if (value == null || value == JSONObject.NULL) {
+            return "";
+        }
+        if (value instanceof String) {
+            return ApiInputPolicy.boundedText((String) value, AppConfig.MAX_CELL_TEXT_LENGTH);
+        }
+        if (value instanceof Number || value instanceof Boolean) {
+            return String.valueOf(value);
+        }
         if (value instanceof JSONArray) {
-            JSONArray array = (JSONArray) value;
-            StringBuilder result = new StringBuilder();
-            for (int index = 0; index < array.length(); index++) {
-                String item = formatCellValue(array.opt(index));
-                if (item.isEmpty()) continue;
-                if (result.length() > 0) result.append("、");
-                result.append(item);
-            }
-            return result.toString();
+            return formatArrayValue((JSONArray) value, remainingDepth - 1);
         }
         if (value instanceof JSONObject) {
-            JSONObject object = (JSONObject) value;
-            for (String key : new String[]{"title", "name", "text", "value"}) {
-                String preferred = formatCellValue(object.opt(key));
-                if (!preferred.isEmpty()) return preferred;
-            }
-            JSONArray names = object.names();
-            if (names == null) return "";
-            StringBuilder result = new StringBuilder();
-            for (int index = 0; index < names.length(); index++) {
-                String item = formatCellValue(object.opt(names.optString(index)));
-                if (item.isEmpty()) continue;
-                if (result.length() > 0) result.append("、");
-                result.append(item);
-            }
-            return result.toString();
+            return formatObjectValue((JSONObject) value, remainingDepth - 1);
         }
-        return String.valueOf(value).trim();
+        return ApiInputPolicy.boundedText(String.valueOf(value), AppConfig.MAX_CELL_TEXT_LENGTH);
+    }
+
+    private static String formatArrayValue(JSONArray array, int remainingDepth) {
+        StringBuilder result = new StringBuilder();
+        int itemCount = Math.min(array.length(), AppConfig.MAX_DATABASE_COLUMNS);
+        for (int index = 0; index < itemCount; index++) {
+            appendCellPart(result, formatCellValue(array.opt(index), remainingDepth));
+            if (result.length() >= AppConfig.MAX_CELL_TEXT_LENGTH) {
+                break;
+            }
+        }
+        return ApiInputPolicy.boundedText(result.toString(), AppConfig.MAX_CELL_TEXT_LENGTH);
+    }
+
+    private static String formatObjectValue(JSONObject object, int remainingDepth) {
+        for (String key : new String[]{"title", "name", "text", "value"}) {
+            String preferred = formatCellValue(object.opt(key), remainingDepth);
+            if (!preferred.isEmpty()) {
+                return preferred;
+            }
+        }
+        JSONArray names = object.names();
+        if (names == null) {
+            return "";
+        }
+        StringBuilder result = new StringBuilder();
+        int itemCount = Math.min(names.length(), AppConfig.MAX_DATABASE_COLUMNS);
+        for (int index = 0; index < itemCount; index++) {
+            appendCellPart(result,
+                    formatCellValue(object.opt(names.optString(index)), remainingDepth));
+            if (result.length() >= AppConfig.MAX_CELL_TEXT_LENGTH) {
+                break;
+            }
+        }
+        return ApiInputPolicy.boundedText(result.toString(), AppConfig.MAX_CELL_TEXT_LENGTH);
+    }
+
+    private static void appendCellPart(StringBuilder result, String item) {
+        if (item.isEmpty()) {
+            return;
+        }
+        if (result.length() > 0) {
+            result.append("、");
+        }
+        result.append(item);
     }
 
     private static long epochMillis(long value) {
-        if (value <= 0L) return 0L;
+        if (value <= 0L) {
+            return 0L;
+        }
         return value < 100_000_000_000L ? value * 1000L : value;
+    }
+
+    private static String requireResourceId(String value) throws ApiException {
+        if (!ApiInputPolicy.isValidResourceId(value)) {
+            throw new ApiException("Wolai 资源标识无效");
+        }
+        return value;
+    }
+
+    private static String safeResourceId(String value) {
+        return ApiInputPolicy.isValidResourceId(value) ? value : "";
     }
 }

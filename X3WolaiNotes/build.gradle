@@ -2,3 +2,60 @@ plugins {
     id 'com.android.application' version '8.7.3' apply false
 }
 
+
+evaluationDependsOn(':app')
+
+def selfTestSources = files(
+        'app/build/generated/source/buildConfig/debug/com/canace/x3wolainotes/BuildConfig.java',
+        'app/src/main/java/com/canace/x3wolainotes/ApiInputPolicy.java',
+        'app/src/main/java/com/canace/x3wolainotes/AppConfig.java',
+        'app/src/main/java/com/canace/x3wolainotes/BackupPolicy.java',
+        'app/src/main/java/com/canace/x3wolainotes/ConfigValidator.java',
+        'app/src/main/java/com/canace/x3wolainotes/NoteFormatter.java',
+        'app/src/main/java/com/canace/x3wolainotes/NoteItem.java',
+        'app/src/main/java/com/canace/x3wolainotes/ReaderFilter.java',
+        'app/src/main/java/com/canace/x3wolainotes/RecentPage.java',
+        'app/src/main/java/com/canace/x3wolainotes/SyncReconciler.java',
+        'app/src/main/java/com/canace/x3wolainotes/UserErrorMessages.java',
+        fileTree('tools') { include '**/*.java' })
+def selfTestOutput = layout.buildDirectory.dir('classes/java/toolsSelfTest')
+
+tasks.register('compileToolsSelfTests', JavaCompile) {
+    group = 'verification'
+    description = 'Compiles standalone self-tests and their production logic.'
+    dependsOn ':app:generateDebugBuildConfig'
+    source = selfTestSources
+    destinationDirectory = selfTestOutput
+    classpath = files()
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+    options.encoding = 'UTF-8'
+}
+
+tasks.register('toolsSelfTest') {
+    group = 'verification'
+    description = 'Runs all standalone self-tests sequentially.'
+    dependsOn tasks.named('compileToolsSelfTests')
+    doLast {
+        [
+            'com.canace.x3wolainotes.NoteFormatterSelfTest',
+            'com.canace.x3wolainotes.ReliabilitySelfTest',
+            'com.canace.x3wolainotes.BackupPolicySelfTest'
+        ].each { testMain ->
+            javaexec {
+                classpath = files(selfTestOutput)
+                mainClass = testMain
+            }
+        }
+    }
+}
+
+tasks.register('qualityCheck') {
+    group = 'verification'
+    description = 'Runs source checks and all standalone self-tests.'
+    dependsOn ':app:checkstyleMain'
+    dependsOn ':app:checkstyleTest'
+    dependsOn ':app:checkstyleAndroidTest'
+    dependsOn ':app:checkstyleTools'
+    dependsOn tasks.named('toolsSelfTest')
+}

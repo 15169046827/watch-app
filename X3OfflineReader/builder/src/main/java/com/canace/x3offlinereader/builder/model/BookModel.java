@@ -5,7 +5,7 @@ import java.util.List;
 
 /** Provider-neutral normalized model shared by TXT/EPUB parsers and the packager. */
 public final class BookModel {
-    private BookModel() {}
+    private BookModel() { }
 
     public static final class Book {
         public String bookId;

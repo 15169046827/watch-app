@@ -1,7 +1,6 @@
 package com.canace.x3voiceledger;
 
 import android.location.Location;
-
 import java.util.Locale;
 
 final class LocationSnapshot {
@@ -11,10 +10,18 @@ final class LocationSnapshot {
     final long time;
 
     LocationSnapshot(Location location) {
-        latitude = location.getLatitude();
-        longitude = location.getLongitude();
-        accuracy = location.hasAccuracy() ? location.getAccuracy() : 0f;
-        time = location.getTime();
+        this(
+                location.getLatitude(),
+                location.getLongitude(),
+                location.hasAccuracy() ? location.getAccuracy() : 0f,
+                location.getTime());
+    }
+
+    LocationSnapshot(double latitude, double longitude, float accuracy, long time) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.accuracy = accuracy;
+        this.time = time;
     }
 
     String coordinateLabel() {

@@ -25,7 +25,8 @@ public final class ParserSelfTest {
     private static void expectLocation(String input, String note, String location) {
         LedgerParser.Result result = LedgerParser.parse(input);
         if (!result.valid || !note.equals(result.note) || !location.equals(result.locationLabel)) {
-            throw new AssertionError(input + " => note=" + result.note + ", location=" + result.locationLabel);
+            throw new AssertionError(
+                    input + " => note=" + result.note + ", location=" + result.locationLabel);
         }
     }
 
@@ -35,19 +36,31 @@ public final class ParserSelfTest {
         LedgerParser.Result result = LedgerParser.parse(input);
         Calendar actual = Calendar.getInstance();
         actual.setTimeInMillis(result.transactionTime);
-        if (!result.valid || actual.get(Calendar.YEAR) != expected.get(Calendar.YEAR)
+        if (!result.valid
+                || actual.get(Calendar.YEAR) != expected.get(Calendar.YEAR)
                 || actual.get(Calendar.DAY_OF_YEAR) != expected.get(Calendar.DAY_OF_YEAR)
-                || actual.get(Calendar.HOUR_OF_DAY) != hour || !note.equals(result.note)) {
+                || actual.get(Calendar.HOUR_OF_DAY) != hour
+                || !note.equals(result.note)) {
             throw new AssertionError("spoken transaction time parsing failed");
         }
     }
 
     private static void expect(String input, long cents, String note, String category) {
         LedgerParser.Result result = LedgerParser.parse(input);
-        if (!result.valid || result.amountCents != cents || !note.equals(result.note)
+        if (!result.valid
+                || result.amountCents != cents
+                || !note.equals(result.note)
                 || !category.equals(result.category)) {
-            throw new AssertionError(input + " => valid=" + result.valid + ", cents="
-                    + result.amountCents + ", note=" + result.note + ", category=" + result.category);
+            throw new AssertionError(
+                    input
+                            + " => valid="
+                            + result.valid
+                            + ", cents="
+                            + result.amountCents
+                            + ", note="
+                            + result.note
+                            + ", category="
+                            + result.category);
         }
     }
 }
