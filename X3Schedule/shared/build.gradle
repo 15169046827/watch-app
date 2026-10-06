@@ -1,0 +1,11 @@
+plugins { id 'com.android.library' }
+android {
+    lint { warningsAsErrors true }
+    namespace 'com.canace.x3schedule.shared'
+    compileSdk 35
+    defaultConfig { minSdk 26 }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
+}
+dependencies { api project(':domain'); testImplementation 'junit:junit:4.13.2' }
+
+apply from: rootProject.file('../gradle/android-java-quality.gradle')

@@ -1,0 +1,11 @@
+<resources>
+    <string name="schedule_saving">正在保存…</string>
+    <string name="schedule_confirm_save">确认保存</string>
+    <string name="schedule_item_summary">%1$s\n%2$s</string>
+    <string name="schedule_option_summary">%1$s\n%2$s  ›</string>
+    <string name="schedule_reminder_label">提醒</string>
+    <string name="schedule_deadline_label">截止</string>
+    <string name="schedule_weekday_label">星期%1$s</string>
+    <string name="schedule_capacity_error">批次超限或容量读取失败；上限 32 MiB、1000 计划、各 50000 实例/记录。本地数据保留。</string>
+    <string name="schedule_restore_summary">%1$d 项计划，%2$d 个实例，%3$d 条记录。较旧计划不覆盖新版；相同 ID 内容冲突会回滚整个恢复。恢复按版本合并设置，不恢复设备配对与本机建议处理历史。</string>
+</resources>

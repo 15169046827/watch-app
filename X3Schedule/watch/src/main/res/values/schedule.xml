@@ -1,0 +1,14 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- These per-resource overrides are consumed through shared ScheduleUi/R at runtime. -->
+    <bool tools:ignore="UnusedResources" name="schedule_phone">false</bool>
+    <color tools:ignore="UnusedResources" name="schedule_background">#090C12</color>
+    <color tools:ignore="UnusedResources" name="schedule_card">#191F29</color>
+    <color tools:ignore="UnusedResources" name="schedule_subtle">#26303C</color>
+    <color tools:ignore="UnusedResources" name="schedule_text">#F5F7FA</color>
+    <color tools:ignore="UnusedResources" name="schedule_muted">#9DAABC</color>
+    <color tools:ignore="UnusedResources" name="schedule_border">#435063</color>
+    <color tools:ignore="UnusedResources" name="schedule_accent">#D99AB4</color>
+    <color tools:ignore="UnusedResources" name="schedule_on_accent">#291820</color>
+    <color tools:ignore="UnusedResources" name="schedule_error">#F38E97</color>
+    <color tools:ignore="UnusedResources" name="schedule_ripple">#30D99AB4</color>
+</resources>
