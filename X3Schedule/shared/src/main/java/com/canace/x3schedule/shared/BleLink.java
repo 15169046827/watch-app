@@ -352,7 +352,7 @@ public final class BleLink implements AutoCloseable {
 
         @Override
         public void onStartSuccess(AdvertiseSettings s) {
-            status("等待已配对手机；离线提醒可用");
+            status("等待已配对手机；离线查看与记录可用");
         }
 
         @Override
@@ -413,7 +413,7 @@ public final class BleLink implements AutoCloseable {
                 rx = new Frames();
                 response.clear();
                 responseOffset = 0;
-                status(state == BluetoothProfile.STATE_CONNECTED ? "正在同步" : "未连接；离线提醒可用");
+                status(state == BluetoothProfile.STATE_CONNECTED ? "正在同步" : "未连接；离线查看与记录可用");
             });
         }
 

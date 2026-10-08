@@ -20,7 +20,9 @@ final class ReminderWork {
         Context application = context.getApplicationContext();
         execute(() -> {
             if (!DataMaintenance.active()) {
+                ReminderTrace.event("WORK_BEGIN", deliver);
                 ReminderReceiver.schedule(application, deliver);
+                ReminderTrace.event("WORK_DONE", 0);
             }
         }, finished);
     }
@@ -32,6 +34,7 @@ final class ReminderWork {
                 operation.run();
                 success = true;
             } catch (RuntimeException error) {
+                ReminderTrace.event("WORK_FAILED", 0);
                 // The caller decides whether to retry or disclose failure; never crash the worker.
             } finally {
                 boolean result = success;

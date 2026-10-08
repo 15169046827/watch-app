@@ -109,7 +109,7 @@ public final class Models {
         public int reminderMinutes = 0;
 
         // bit 1 phone, bit 2 watch
-        public int reminderTargets = 3;
+        public int reminderTargets = 1;
 
         public int leaveWeek = -1;
 
@@ -350,11 +350,11 @@ public final class Models {
 
         public int reminderMinutes = 0;
 
-        public int reminderTargets = 3;
+        public int reminderTargets = 1;
 
         public boolean phoneRemindersEnabled = true;
 
-        public boolean watchRemindersEnabled = true;
+        public boolean watchRemindersEnabled = false;
 
         public Map<String, Integer> categoryWeek = new TreeMap<>();
 

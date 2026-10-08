@@ -16,6 +16,31 @@ import org.junit.Test;
 
 public class ReminderTest {
 
+    @Test
+    public void automaticFollowUpsRemainDifferentFromScheduledStartAndEnd() {
+        List<Reminders.Due> due = Reminders.candidates(instance(), null, true, new Settings());
+        assertEquals(Reminders.Purpose.START, due.get(0).purpose);
+        assertEquals(Reminders.Purpose.END, due.get(1).purpose);
+        assertEquals(Reminders.Purpose.RETRY, due.get(2).purpose);
+        assertEquals(Reminders.Purpose.RETRY, due.get(3).purpose);
+    }
+
+    @Test
+    public void explicitlyContinuingReplacesAutomaticRetriesWithUserConfirmation() {
+        Instance instance = instance();
+        Event continued = new Event();
+        continued.action = Action.CONTINUE;
+        continued.continueMinutes = 10;
+        continued.confirmedAt = instance.end;
+        List<Reminders.Due> due = Reminders.candidates(instance, continued, true, new Settings());
+        assertEquals(2, due.size());
+        assertEquals(Reminders.Purpose.CONFIRMATION, due.get(1).purpose);
+        Settings daytime = new Settings();
+        daytime.quietStart = daytime.quietEnd;
+        due = Reminders.candidates(instance, continued, true, daytime);
+        assertEquals(instance.end + 10 * 60000L, due.get(1).at);
+    }
+
     private Instance instance() {
         Plan p = new Plan();
         p.title = "合成测试";
@@ -38,7 +63,9 @@ public class ReminderTest {
         Instance i = instance();
         i.reminderTargets = 2;
         assertTrue(Reminders.candidates(i, null, true, new Settings()).isEmpty());
-        assertEquals(4, Reminders.candidates(i, null, false, new Settings()).size());
+        Settings legacy = new Settings();
+        legacy.watchRemindersEnabled = true;
+        assertTrue(Reminders.candidates(i, null, false, legacy).isEmpty());
     }
 
     @Test

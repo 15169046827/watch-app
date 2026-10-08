@@ -74,6 +74,7 @@ public class CalendarEditsTest {
     @Test
     public void secondSplitAndGlobalDefaults() {
         Plan p = plan();
+        p.reminderTargets = 3; // Preserve an explicitly stored legacy dual-endpoint definition.
         Plan draft = Wire.copy(p, Plan.class);
         draft.startMinute = 600;
         long now = Instant.parse("2026-09-17T00:00:00Z").toEpochMilli();

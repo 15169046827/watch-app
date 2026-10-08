@@ -223,6 +223,7 @@ public final class Store extends SQLiteOpenHelper {
         db.beginTransaction();
         try {
             Plan prior = plans().stream().filter(p -> p.id.equals(draft.id)).findFirst().orElse(null);
+            com.canace.x3schedule.domain.ReminderScope.requireSave(draft, prior, settings());
             if (prior != null) {
                 Kinds.requireChange(prior, draft);
                 require(draft.kind != Kind.TODO

@@ -292,6 +292,7 @@ public final class StoreTestRunner extends Instrumentation {
             checks += new CalendarMigrationChecks(getTargetContext()).run();
             checks += LocalDataChecks.run(getTargetContext());
             checks += ReminderWorkChecks.run();
+            checks += ReminderScopeStoreChecks.run(getTargetContext());
             try (SQLiteDatabase db = getTargetContext().openOrCreateDatabase(upgradeName, 0, null);
                 InputStream stream = getTargetContext().getAssets().open("schema-v1.sql")) {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();

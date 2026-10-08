@@ -1,7 +1,6 @@
 package com.canace.x3schedule.domain;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -44,8 +43,9 @@ public class PolicyRegressionTest {
         Instance i = Recurrence.generate(p, LocalDate.parse(p.anchor), LocalDate.parse(p.anchor)).get(0);
         Settings settings = new Settings();
         settings.phoneRemindersEnabled = false;
+        settings.watchRemindersEnabled = true;
         assertTrue(Reminders.candidates(i, null, true, settings).isEmpty());
-        assertFalse(Reminders.candidates(i, null, false, settings).isEmpty());
+        assertTrue(Reminders.candidates(i, null, false, settings).isEmpty());
     }
 
     @Test

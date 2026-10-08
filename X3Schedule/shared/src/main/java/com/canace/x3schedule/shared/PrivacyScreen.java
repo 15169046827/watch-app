@@ -14,12 +14,14 @@ final class PrivacyScreen {
     static void explain(LinearLayout content, boolean phone) {
         ScheduleUi.heading(content, "日常工具 · 日程");
         ScheduleUi.text(content, phone ? "在手机安排日历、提醒和待办，在手表查看并记录完成情况。"
-                : "在手表查看日程和提醒、完成待办。日历安排和备份请在手机操作。", 15);
+                : "在手表查看日程、记录完成和完成待办。手表本地提醒已停用，请在手机设置提醒。", 15);
         ScheduleUi.heading(content, "数据保存在本机");
         ScheduleUi.text(content, "无需账户，不连接互联网，也没有云端备份。日程、完成记录和设置保存在应用私有目录；"
                 + "选择已配对设备后，才通过蓝牙同步到另一台设备。", 14);
         ScheduleUi.heading(content, "权限由你选择");
-        ScheduleUi.text(content, "蓝牙权限用于双端同步；通知和准时提醒权限用于提醒。拒绝后仍可查看与管理本机数据，"
+        ScheduleUi.text(content, "手机开始、结束及主动延后确认使用系统闹钟，可能显示“下一个闹钟”。"
+                + "自动催促和旧提醒补发可能因系统省电延迟；手表不会兜底。", 14);
+        ScheduleUi.text(content, "蓝牙权限用于双端同步；手机通知和准时提醒权限用于日程提醒。手表通知权限仅用于后台连接。拒绝后仍可查看与管理本机数据，"
                 + "可在“连接与权限”重新设置。后台连接另行开启，系统省电或强行停止可能延迟提醒和同步。", 14);
         ScheduleUi.heading(content, "备份与清除");
         ScheduleUi.text(content, "手机可导出包含日程和完成记录的备份；文件未加密，仅写到你选择的位置。"

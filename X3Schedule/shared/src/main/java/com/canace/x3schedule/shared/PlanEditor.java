@@ -162,6 +162,9 @@ final class PlanEditor {
         if (draft.inheritReminders) {
             return "使用默认设置";
         }
+        if (draft.reminderTargets == 2) {
+            return "旧设置待处理（当前不提醒）";
+        }
         if (draft.reminderTargets == 0) {
             return "不提醒";
         }

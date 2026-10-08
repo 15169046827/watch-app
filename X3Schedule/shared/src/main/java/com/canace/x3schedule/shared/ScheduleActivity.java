@@ -137,6 +137,23 @@ public final class ScheduleActivity extends Activity {
         store = new Store(this);
         runtime = SyncRuntime.get(this);
         restoreSession(b);
+        if (b == null && store.meta("privacy_notice", "").equals("1")) {
+            openReminder();
+        }
+    }
+
+    private void openReminder() {
+        String id = getIntent().getStringExtra("schedule.reminderInstance");
+        if (id == null || id.length() > 256) {
+            return;
+        }
+        Instance target = store.instances().stream().filter(item -> id.equals(item.id) && !item.cancelled)
+                .findFirst().orElse(null);
+        if (target == null) {
+            toast("这项日程已改变或取消，请在日历查看最新安排。");
+        } else {
+            detail(target);
+        }
     }
 
     @Override
@@ -186,6 +203,7 @@ public final class ScheduleActivity extends Activity {
     private void restorePage(ScreenSession state) {
         Map<String, Runnable> routes = new java.util.HashMap<>();
         routes.put("home", () -> home(state.scroll));
+        routes.put("reminderSettings", this::reminderSettings);
         routes.put("new", this::newSchedule);
         routes.put("todos", this::todos);
         routes.put("list", () -> list(state.pending));
@@ -375,6 +393,10 @@ public final class ScheduleActivity extends Activity {
         page = "home";
         String[] titles = { "日历", "日程", "报告", "设置" };
         screen(store.phone ? titles[homeTab] : "日程");
+        if (store.phone) {
+            reminderAccess();
+            AgendaScreen.reminderAttention(this, content, this::reminderSettings);
+        }
         if (store.phone && homeTab == 0) {
             calendar(position);
             return;
@@ -402,7 +424,8 @@ public final class ScheduleActivity extends Activity {
             sync = ScheduleUi.status(content, syncText());
         }
         CapacityScreen.summary(this, text("正在读取同步数据容量…", 12));
-        text("离线提醒按本机已保存日程工作", 12);
+        text(store.phone ? "手机按本机日程提醒；手表不会兜底。"
+                : "手表本地提醒已停用；请在手机设置提醒。断连时仍可查看日程和记录完成。", 12);
     }
 
     private void calendar(int position) {
@@ -709,10 +732,40 @@ public final class ScheduleActivity extends Activity {
         }
     }
 
+    private void reminderSettings() {
+        require(store.phone, "请在手机处理提醒设置");
+        page = "reminderSettings";
+        screen("提醒设置待处理");
+        text("原日程和记录保留。请编辑未来日程，选择手机提醒或不提醒；手机提醒还受总开关和系统权限控制。", 14);
+        button("修改默认提醒与总开关", this::settings);
+        Models.Settings settings = store.settings();
+        for (Plan plan : store.plans()) {
+            if (com.canace.x3schedule.domain.ReminderScope.pending(plan, settings)) {
+                button(plan.title + " · 提醒设置待处理", () -> plan(plan));
+            }
+        }
+    }
+
+    private void reminderAccess() {
+        android.app.NotificationManager notifications = getSystemService(android.app.NotificationManager.class);
+        android.app.NotificationChannel channel = notifications.getNotificationChannel("schedule");
+        if (!notifications.areNotificationsEnabled() || channel != null
+                && channel.getImportance() == android.app.NotificationManager.IMPORTANCE_NONE) {
+            text("手机日程通知已被系统关闭，当前不会提醒；手表不会兜底。请在系统设置中允许通知。", 14);
+        }
+        if (Build.VERSION.SDK_INT >= 31 && !getSystemService(android.app.AlarmManager.class)
+                .canScheduleExactAlarms()) {
+            text("准时提醒权限未开启，手机提醒可能延迟。请在“连接与权限”允许准时提醒。", 14);
+        }
+    }
+
     private void plan(Plan p) {
         page = "plan";
         screen(p.title);
         session.plan = Wire.copy(p, Plan.class);
+        if (com.canace.x3schedule.domain.ReminderScope.pending(p, store.settings())) {
+            text("旧设置只选择了手表提醒，当前不会提醒。请编辑未来日程，选择手机提醒或不提醒。", 14);
+        }
         button("编辑", () -> chooseEdit(p, null));
         if (p.kind != Kind.TODO) {
             button("仅本次调整 / 取消", () -> exception(p));
@@ -899,6 +952,12 @@ public final class ScheduleActivity extends Activity {
     }
 
     private void preview(List<Plan> drafts, boolean importing, int position) {
+        List<Plan> existing = store.plans();
+        Models.Settings reminderSettings = store.settings();
+        for (Plan draft : drafts) {
+            Plan prior = existing.stream().filter(plan -> plan.id.equals(draft.id)).findFirst().orElse(null);
+            com.canace.x3schedule.domain.ReminderScope.requireSave(draft, prior, reminderSettings);
+        }
         page = "preview";
         screen("预览后保存");
         session.drafts = drafts;
@@ -989,9 +1048,16 @@ public final class ScheduleActivity extends Activity {
                 LocalTime.MIN.plusMinutes(s.dateOnlyReminderMinute).toString());
         DateTimeFields.time(dayReminder);
         text("未设置时使用上午 9 点；此时间不改变待办当天结束时的截止日期。", 14);
-        Spinner defaultTargets = choice("默认提醒端", new String[] { "不提醒", "仅手机", "仅手表", "双端" }, s.reminderTargets);
+        text("手机负责提醒；手表负责查看、记录和同步。关闭手机提醒后，手表不会兜底。", 14);
+        text("开始、结束和你主动延后的确认提醒使用系统闹钟，可能显示“下一个闹钟”标记。"
+                + "未确认时约15/60分钟后再次提醒，系统省电可能延迟；待确认记录始终保留。", 14);
+        reminderAccess();
+        boolean legacyTargets = s.reminderTargets == 2;
+        int initialTarget = legacyTargets ? 2 : s.reminderTargets & 1;
+        Spinner defaultTargets = choice("默认提醒端", legacyTargets
+                ? new String[] { "不提醒", "手机", "旧设置待处理（当前不提醒）" }
+                : new String[] { "不提醒", "手机" }, initialTarget);
         Spinner phoneEnabled = choice("手机提醒总开关", new String[] { "开启", "关闭" }, s.phoneRemindersEnabled ? 0 : 1);
-        Spinner watchEnabled = choice("手表提醒总开关", new String[] { "开启", "关闭" }, s.watchRemindersEnabled ? 0 : 1);
         EditText week = field("全局每周请假额度", "" + s.leaveWeek);
         EditText month = field("全局每月请假额度", "" + s.leaveMonth);
         EditText category = field("大类覆盖（可空）", "");
@@ -1007,9 +1073,11 @@ public final class ScheduleActivity extends Activity {
             s.reminderMinutes = integer(defaultReminder);
             s.dateOnlyReminderMinute = TimeRange.minute(value(dayReminder));
             require(s.reminderMinutes >= 0 && s.reminderMinutes <= 1440, "提醒分钟无效");
-            s.reminderTargets = defaultTargets.getSelectedItemPosition();
+            if (defaultTargets.getSelectedItemPosition() != initialTarget) {
+                s.reminderTargets = defaultTargets.getSelectedItemPosition();
+            }
             s.phoneRemindersEnabled = phoneEnabled.getSelectedItemPosition() == 0;
-            s.watchRemindersEnabled = watchEnabled.getSelectedItemPosition() == 0;
+            s.watchRemindersEnabled = false;
             s.leaveWeek = integer(week);
             s.leaveMonth = integer(month);
             require(s.leaveWeek >= 0 && s.leaveMonth >= 0, "额度不能小于 0");
@@ -1216,7 +1284,7 @@ public final class ScheduleActivity extends Activity {
             });
         }
         button("系统蓝牙设置", () -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
-        if (Build.VERSION.SDK_INT >= 31) {
+        if (store.phone && Build.VERSION.SDK_INT >= 31) {
             button("允许准时提醒", () -> startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
                     .setData(android.net.Uri.parse("package:" + getPackageName()))));
         }
@@ -1254,6 +1322,20 @@ public final class ScheduleActivity extends Activity {
         }
         if (!ps.isEmpty()) {
             requestPermissions(ps.toArray(new String[0]), 8);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(request, permissions, results);
+        if (request != 8 || page.equals("welcome")) {
+            return;
+        }
+        runtime.reconnect();
+        startLink();
+        scheduleReminders(true);
+        if (page.equals("connection")) {
+            safe(this::connection);
         }
     }
 

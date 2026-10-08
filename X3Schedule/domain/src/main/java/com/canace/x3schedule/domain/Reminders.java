@@ -14,6 +14,8 @@ import java.util.List;
 
 public final class Reminders {
 
+    public enum Purpose { START, END, CONFIRMATION, RETRY }
+
     private Reminders() {
     }
 
@@ -25,10 +27,17 @@ public final class Reminders {
 
         public long at;
 
+        public final Purpose purpose;
+
         public Due(String k, String id, long t) {
+            this(k, id, t, Purpose.RETRY);
+        }
+
+        public Due(String k, String id, long t, Purpose purpose) {
             key = k;
             instanceId = id;
             at = t;
+            this.purpose = purpose;
         }
     }
 
@@ -40,23 +49,26 @@ public final class Reminders {
         String key = i.kind == Kind.TODO ? ":deadline:" + i.start : ":start";
         long at = i.dateOnly ? DayPrecision.reminderAt(i, settings.dateOnlyReminderMinute)
                 : i.start - i.reminderMinutes * 60000L;
-        out.add(new Due(i.id + key, i.id, at));
+        out.add(new Due(i.id + key, i.id, at, Purpose.START));
         if (i.kind != Kind.EXECUTION) {
             shiftQuietHours(out, ZoneId.of(i.zone), settings);
             return out;
         }
         if (e != null && e.action == Action.CONTINUE) {
-            out.add(new Due(i.id + ":continue:" + e.id, i.id, e.confirmedAt + e.continueMinutes * 60000L));
+            out.add(new Due(i.id + ":continue:" + e.id, i.id, e.confirmedAt + e.continueMinutes * 60000L,
+                    Purpose.CONFIRMATION));
         } else {
             for (int min : new int[] { 0, 15, 60 }) {
-                out.add(new Due(i.id + ":end:" + min, i.id, i.end + min * 60000L));
+                out.add(new Due(i.id + ":end:" + min, i.id, i.end + min * 60000L,
+                        min == 0 ? Purpose.END : Purpose.RETRY));
             }
         }
         shiftQuietHours(out, ZoneId.of(i.zone), settings);
         return out;
     }
     private static boolean enabled(Instance instance, Event event, boolean phone, Settings settings) {
-        boolean endpointEnabled = phone ? settings.phoneRemindersEnabled : settings.watchRemindersEnabled;
+        // Legacy settings and synchronized target bits cannot re-enable watch notifications.
+        boolean endpointEnabled = phone && settings.phoneRemindersEnabled;
         return endpointEnabled && instance.timed && !instance.cancelled
                 && (instance.reminderTargets & (phone ? 1 : 2)) != 0
                 && !terminal(event);

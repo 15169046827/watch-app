@@ -22,12 +22,26 @@ import java.util.Set;
 public final class ReminderReceiver extends BroadcastReceiver {
 
     public static synchronized void schedule(Context context, boolean deliver) {
+        if (!context.getPackageName().endsWith(".phone")) {
+            cancelReminderAlarms(context);
+            context.getSystemService(NotificationManager.class).cancel(100);
+            // Keep offline recurrence/state maintenance independent of notification delivery.
+            try (Store store = new Store(context)) {
+                store.rebuild(System.currentTimeMillis());
+            }
+            return;
+        }
+        schedulePhone(context, deliver);
+    }
+
+    private static void schedulePhone(Context context, boolean deliver) {
+        ReminderTrace.event("SCAN", deliver);
         try (Store store = new Store(context)) {
             long now = System.currentTimeMillis();
             store.rebuild(now);
             List<Event> events = store.events();
             Settings settings = store.settings();
-            long next = Long.MAX_VALUE;
+            NextReminder next = new NextReminder();
             Set<String> dueInstances = new HashSet<>();
             List<String> keys = new ArrayList<>();
             for (Instance i : store.instances()) {
@@ -41,7 +55,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
                         dueInstances.add(i.id);
                         keys.add(due.key);
                     } else {
-                        next = Math.min(next, deliveryAt);
+                        next.offer(due, deliveryAt, now);
                     }
                 }
             }
@@ -59,30 +73,64 @@ public final class ReminderReceiver extends BroadcastReceiver {
                         + " 项日程需要查看或确认").setContentIntent(pi).setAutoCancel(true).setVisibility(Notification
                         .VISIBILITY_PRIVATE).build();
                 nm.notify(100, n);
+                ReminderTrace.event("NOTIFY", dueInstances.size());
                 for (String key : keys) {
                     store.putMeta("notified:" + key, "1");
                 }
             }
             if (!dueInstances.isEmpty() && !deliver) {
-                next = Math.min(next, now + 1000);
+                next.catchUp(now);
             }
-            scheduleAlarm(context, next);
+            scheduleAlarm(context, next, enabled);
         }
     }
 
-    private static void scheduleAlarm(Context context, long next) {
+    private static void scheduleAlarm(Context context, NextReminder next, boolean enabled) {
+        cancelReminderAlarms(context);
         AlarmManager am = context.getSystemService(AlarmManager.class);
         PendingIntent pi = PendingIntent.getBroadcast(context, 1, new Intent(context, ReminderReceiver.class)
                 .setAction("com.canace.x3schedule.TICK"), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent
                 .FLAG_IMMUTABLE);
-        am.cancel(pi);
-        if (next != Long.MAX_VALUE) {
-            if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pi);
-            } else {
-                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pi);
-            }
+        PendingIntent clock = PendingIntent.getBroadcast(context, 2, new Intent(context, ReminderReceiver.class)
+                .setAction("com.canace.x3schedule.TICK"), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent
+                .FLAG_IMMUTABLE);
+        ReminderTrace.event("CANCEL", 1);
+        boolean exact = Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms();
+        if (clockAlarm(context, am, clock, next, enabled && exact) && next.at == next.clockAt) {
+            return;
         }
+        if (next.at != Long.MAX_VALUE && enabled) {
+            // Automatic retries/catch-up, and user reminders without exact permission, may be delayed.
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.at, pi);
+            ReminderTrace.event("REQUEST_INEXACT", next.at);
+        }
+    }
+
+    private static void cancelReminderAlarms(Context context) {
+        AlarmManager alarms = context.getSystemService(AlarmManager.class);
+        // Both identities were used by shipped builds; cancel them even with restored legacy settings.
+        for (int request : new int[] { 1, 2 }) {
+            PendingIntent operation = PendingIntent.getBroadcast(context, request,
+                    new Intent(context, ReminderReceiver.class).setAction("com.canace.x3schedule.TICK"),
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            alarms.cancel(operation);
+        }
+    }
+
+    private static boolean clockAlarm(Context context, AlarmManager am, PendingIntent operation, NextReminder next,
+            boolean enabled) {
+        if (!enabled || next.clockAt == Long.MAX_VALUE) {
+            return false;
+        }
+        Intent open = new Intent(context, ScheduleActivity.class)
+                .setData(android.net.Uri.parse("x3schedule://reminder/" + android.net.Uri.encode(next.clockInstanceId)))
+                .putExtra("schedule.reminderInstance", next.clockInstanceId);
+        PendingIntent show = PendingIntent.getActivity(context, 11, open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        am.setAlarmClock(new AlarmManager.AlarmClockInfo(next.clockAt, show), operation);
+        ReminderTrace.event("REQUEST_CLOCK", next.clockAt);
+        ReminderTrace.alarmState(context, am, true);
+        return true;
     }
 
     @Override
@@ -94,6 +142,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
             return;
         }
         Context application = context.getApplicationContext();
+        ReminderTrace.event("RECEIVE", 0);
         PendingResult pending = goAsync();
         ReminderWork.request(application, true, success -> {
             try {
