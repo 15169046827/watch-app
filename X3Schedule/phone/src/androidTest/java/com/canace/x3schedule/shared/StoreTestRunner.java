@@ -52,6 +52,8 @@ public final class StoreTestRunner extends Instrumentation {
 
     private boolean configuration;
 
+    private boolean alarmState;
+
     private String transactionCrash;
 
     private String crashId;
@@ -184,6 +186,7 @@ public final class StoreTestRunner extends Instrumentation {
         calendarFixture = arguments != null && "true".equals(arguments.getString("calendarFixture"));
         saveLifecycle = arguments != null && "true".equals(arguments.getString("saveLifecycle"));
         configuration = arguments != null && "true".equals(arguments.getString("configuration"));
+        alarmState = arguments != null && "true".equals(arguments.getString("alarmState"));
         transactionCrash = arguments == null ? null : arguments.getString("transactionCrash");
         crashId = arguments == null ? null : arguments.getString("crashId");
         start();
@@ -191,6 +194,10 @@ public final class StoreTestRunner extends Instrumentation {
 
     @Override
     public void onStart() {
+        if (alarmState) {
+            AlarmCapabilityChecks.run(this);
+            return;
+        }
         if (documentResults) {
             new DocumentResultChecks().run(this);
             return;
