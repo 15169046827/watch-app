@@ -316,8 +316,10 @@ public final class StoreTestRunner extends Instrumentation {
             result.putString("stream", "Synthetic Android Store checks passed: " + checks);
 
         } catch (Throwable error) {
+            StackTraceElement point = error.getStackTrace().length == 0 ? null : error.getStackTrace()[0];
             result.putString("stream", "Synthetic Android Store checks failed after " + checks + "; type=" + error
-                    .getClass().getSimpleName());
+                    .getClass().getSimpleName() + "; location=" + (point == null ? "unknown" : point.getFileName()
+                    + ":" + point.getLineNumber()));
             resultCode = Activity.RESULT_CANCELED;
         } finally {
             for (String name : new String[] { phoneName, watchName, upgradeName }) {

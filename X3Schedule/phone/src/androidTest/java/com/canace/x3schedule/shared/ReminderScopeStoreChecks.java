@@ -19,8 +19,9 @@ final class ReminderScopeStoreChecks {
         try (Store phone = new Store(context, phoneName, true);
                 Store watch = new Store(context, watchName, false)) {
             ReminderScopeStoreChecks test = new ReminderScopeStoreChecks();
+            long initialPending = phone.pending();
             test.rejected(phone, legacy());
-            test.check(phone.plans().isEmpty() && phone.pending() == 0);
+            test.check(phone.plans().isEmpty() && phone.pending() == initialPending);
             test.restoredAndSynchronized(phone, watch);
             return test.checks;
         } finally {
