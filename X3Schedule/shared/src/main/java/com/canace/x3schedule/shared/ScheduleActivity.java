@@ -374,7 +374,7 @@ public final class ScheduleActivity extends Activity {
 
     private String syncText() {
         return runtime.status() + "\n本机待同步改动：" + store.pending() + (store.phone && store.pending() > 0
-                ? "\n手表仍可能按旧日程提醒" : "");
+                ? "\n手表上的日程和记录可能尚未更新" : "");
     }
 
     private String time(long at, String zone) {
