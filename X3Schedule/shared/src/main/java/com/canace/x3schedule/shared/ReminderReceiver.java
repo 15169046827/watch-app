@@ -63,12 +63,14 @@ public final class ReminderReceiver extends BroadcastReceiver {
             boolean enabled = nm.areNotificationsEnabled() && nm.getNotificationChannel("schedule")
                     .getImportance() != NotificationManager.IMPORTANCE_NONE;
             if (deliver && content.size() > 0 && enabled) {
-                Intent open = new Intent(context, ScheduleActivity.class);
+                Intent open = reminderIntent(context);
                 if (content.instanceId() != null) {
                     open.putExtra("schedule.reminderInstance", content.instanceId());
+                } else {
+                    open.putExtra("schedule.reminderOverview", true);
                 }
                 PendingIntent pi = PendingIntent.getActivity(context, 10, open, PendingIntent
-                        .FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                        .FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
                 Notification n = new Notification.Builder(context, "schedule").setSmallIcon(android.R.drawable
                         .ic_menu_my_calendar).setContentTitle(content.title()).setContentText(content.text())
                         .setStyle(new Notification.BigTextStyle().bigText(content.text()))
@@ -124,15 +126,20 @@ public final class ReminderReceiver extends BroadcastReceiver {
         if (!enabled || next.clockAt == Long.MAX_VALUE) {
             return false;
         }
-        Intent open = new Intent(context, ScheduleActivity.class)
+        Intent open = reminderIntent(context)
                 .setData(android.net.Uri.parse("x3schedule://reminder/" + android.net.Uri.encode(next.clockInstanceId)))
                 .putExtra("schedule.reminderInstance", next.clockInstanceId);
         PendingIntent show = PendingIntent.getActivity(context, 11, open,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         am.setAlarmClock(new AlarmManager.AlarmClockInfo(next.clockAt, show), operation);
         ReminderTrace.event("REQUEST_CLOCK", next.clockAt);
         ReminderTrace.alarmState(context, am, true);
         return true;
+    }
+
+    private static Intent reminderIntent(Context context) {
+        return new Intent(context, ScheduleActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     }
 
     @Override

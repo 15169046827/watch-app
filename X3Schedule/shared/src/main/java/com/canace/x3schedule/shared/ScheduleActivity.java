@@ -143,6 +143,14 @@ public final class ScheduleActivity extends Activity {
     }
 
     private void openReminder() {
+        if (getIntent().getBooleanExtra("schedule.reminderOverview", false)) {
+            homeTab = 0;
+            calendarDay = LocalDate.now();
+            calendarMode = 2;
+            calendarOffset = 0;
+            home();
+            return;
+        }
         String id = getIntent().getStringExtra("schedule.reminderInstance");
         if (id == null || id.length() > 256) {
             return;
@@ -153,6 +161,15 @@ public final class ScheduleActivity extends Activity {
             toast("这项日程已改变或取消，请在日历查看最新安排。");
         } else {
             detail(target);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (store.meta("privacy_notice", "").equals("1")) {
+            safe(this::openReminder);
         }
     }
 
