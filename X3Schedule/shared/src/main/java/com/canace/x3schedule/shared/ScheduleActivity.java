@@ -1301,11 +1301,22 @@ public final class ScheduleActivity extends Activity {
             });
         }
         button("系统蓝牙设置", () -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
-        if (store.phone && Build.VERSION.SDK_INT >= 31) {
+        phoneReminderAccess();
+        text("关闭手机提醒不会发送手机同步状态通知。系统禁用通知、强行停止或限制后台后，提醒可靠性会受影响。", 13);
+    }
+
+    private void phoneReminderAccess() {
+        if (!store.phone) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 31 && Build.VERSION.SDK_INT <= 32) {
             button("允许准时提醒", () -> startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
                     .setData(android.net.Uri.parse("package:" + getPackageName()))));
         }
-        text("关闭手机提醒不会发送手机同步状态通知。系统禁用通知、强行停止或限制后台后，提醒可靠性会受影响。", 13);
+        button("手机系统应用设置", () -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(android.net.Uri.parse("package:" + getPackageName()))));
+        text("请在系统应用设置允许通知。手机若提供自启动或后台运行设置，也请允许日程运行；"
+                + "系统限制后台启动时，升级或重启后的提醒可能无法恢复。", 13);
     }
 
     @android.annotation.TargetApi(31)

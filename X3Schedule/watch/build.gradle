@@ -5,7 +5,7 @@ android {
     lint { warningsAsErrors true }
     namespace 'com.canace.x3schedule'
     compileSdk 35
-    defaultConfig { testInstrumentationRunner 'com.canace.x3schedule.shared.StoreTestRunner'; applicationId 'com.canace.x3schedule'; minSdk 26; targetSdk 30; versionCode 15; versionName '0.6.0' }
+    defaultConfig { testInstrumentationRunner 'com.canace.x3schedule.shared.StoreTestRunner'; applicationId 'com.canace.x3schedule'; minSdk 26; targetSdk 30; versionCode 16; versionName '0.6.1' }
     sourceSets {
         androidTest.java.srcDir '../phone/src/androidTest/java'
         validation.java.srcDir '../phone/src/validation/java'
