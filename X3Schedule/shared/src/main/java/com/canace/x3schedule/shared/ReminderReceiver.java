@@ -15,9 +15,7 @@ import com.canace.x3schedule.domain.Models.Instance;
 import com.canace.x3schedule.domain.Models.Settings;
 import com.canace.x3schedule.domain.Reminders;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 public final class ReminderReceiver extends BroadcastReceiver {
 
@@ -42,7 +40,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
             List<Event> events = store.events();
             Settings settings = store.settings();
             NextReminder next = new NextReminder();
-            Set<String> dueInstances = new HashSet<>();
+            ReminderContent content = new ReminderContent();
             List<String> keys = new ArrayList<>();
             for (Instance i : store.instances()) {
                 for (Reminders.Due due : Reminders.candidates(i, Execution.winner(events, i.id),
@@ -52,7 +50,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     }
                     long deliveryAt = Reminders.deliveryAt(due, now, i.zone, settings);
                     if (deliveryAt <= now) {
-                        dueInstances.add(i.id);
+                        content.add(i, due.purpose, now);
                         keys.add(due.key);
                     } else {
                         next.offer(due, deliveryAt, now);
@@ -64,21 +62,25 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     .IMPORTANCE_HIGH));
             boolean enabled = nm.areNotificationsEnabled() && nm.getNotificationChannel("schedule")
                     .getImportance() != NotificationManager.IMPORTANCE_NONE;
-            if (deliver && !dueInstances.isEmpty() && enabled) {
-                Intent open = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+            if (deliver && content.size() > 0 && enabled) {
+                Intent open = new Intent(context, ScheduleActivity.class);
+                if (content.instanceId() != null) {
+                    open.putExtra("schedule.reminderInstance", content.instanceId());
+                }
                 PendingIntent pi = PendingIntent.getActivity(context, 10, open, PendingIntent
                         .FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
                 Notification n = new Notification.Builder(context, "schedule").setSmallIcon(android.R.drawable
-                        .ic_menu_my_calendar).setContentTitle("日程提醒").setContentText(dueInstances.size()
-                        + " 项日程需要查看或确认").setContentIntent(pi).setAutoCancel(true).setVisibility(Notification
+                        .ic_menu_my_calendar).setContentTitle(content.title()).setContentText(content.text())
+                        .setStyle(new Notification.BigTextStyle().bigText(content.text()))
+                        .setContentIntent(pi).setAutoCancel(true).setVisibility(Notification
                         .VISIBILITY_PRIVATE).build();
                 nm.notify(100, n);
-                ReminderTrace.event("NOTIFY", dueInstances.size());
+                ReminderTrace.event("NOTIFY", content.size());
                 for (String key : keys) {
                     store.putMeta("notified:" + key, "1");
                 }
             }
-            if (!dueInstances.isEmpty() && !deliver) {
+            if (content.size() > 0 && !deliver) {
                 next.catchUp(now);
             }
             scheduleAlarm(context, next, enabled);
