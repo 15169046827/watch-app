@@ -35,6 +35,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
     private static void schedulePhone(Context context, boolean deliver) {
         ReminderTrace.event("SCAN", deliver);
         try (Store store = new Store(context)) {
+            NotificationManager nm = context.getSystemService(NotificationManager.class);
+            retireOldNotification(store, nm);
             long now = System.currentTimeMillis();
             store.rebuild(now);
             List<Event> events = store.events();
@@ -57,7 +59,6 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     }
                 }
             }
-            NotificationManager nm = context.getSystemService(NotificationManager.class);
             nm.createNotificationChannel(new NotificationChannel("schedule", "日程提醒", NotificationManager
                     .IMPORTANCE_HIGH));
             boolean enabled = nm.areNotificationsEnabled() && nm.getNotificationChannel("schedule")
@@ -86,6 +87,14 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 next.catchUp(now);
             }
             scheduleAlarm(context, next, enabled);
+        }
+    }
+
+    private static void retireOldNotification(Store store, NotificationManager manager) {
+        if (!store.meta("notification_route", "").equals("2")) {
+            // Retire old navigation tokens once; keep delivery deduplication and business data intact.
+            manager.cancel(100);
+            store.putMeta("notification_route", "2");
         }
     }
 
