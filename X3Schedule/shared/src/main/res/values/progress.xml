@@ -1,0 +1,9 @@
+<resources>
+    <color name="schedule_result_none">#A34444</color>
+    <color name="schedule_result_minimum">#B86B20</color>
+    <color name="schedule_result_basic">#247383</color>
+    <color name="schedule_result_perfect">#2E7D5B</color>
+    <color name="schedule_result_exempt">#747B85</color>
+    <color name="schedule_score_low">#915A2D</color>
+    <color name="schedule_score_minimum">#905017</color>
+</resources>

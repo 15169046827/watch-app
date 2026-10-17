@@ -14,7 +14,7 @@ import java.util.List;
 
 public final class Reminders {
 
-    public enum Purpose { START, END, CONFIRMATION, RETRY }
+    public enum Purpose { START, END, CONFIRMATION, RETRY, RECOVERY_START, RECOVERY_END, RECOVERY_CONFLICT }
 
     private Reminders() {
     }
@@ -89,7 +89,7 @@ public final class Reminders {
         return outsideQuietHours(Math.max(due.at, now), ZoneId.of(zone), settings);
     }
 
-    private static void shiftQuietHours(List<Due> out, ZoneId zone, Settings settings) {
+    static void shiftQuietHours(List<Due> out, ZoneId zone, Settings settings) {
         for (Due due : out) {
             due.at = outsideQuietHours(due.at, zone, settings);
         }

@@ -1,6 +1,6 @@
-# 本地蓝牙分批同步协议 3
+# 本地蓝牙分批同步协议 4
 
-0.5.0 / versionCode 8，两端均须升级。BLE 批次协议为 3，内部 Snapshot JSON 为 protocol 2/schema 4，SQLite 为 schema 5；三者不可混淆。旧手机 JSON 与 .x3backup 文件仍可恢复，旧 BLE Snapshot/ACK 不再作为业务消息接入。
+0.7.0 / versionCode 17开发候选，两端均须升级。BLE 批次协议为4，内部 Snapshot JSON 为 protocol 2/schema5，SQLite为schema6；三者不可混淆。旧手机 JSON 与 .x3backup 文件只通过备份迁移恢复，旧实时协议不再作为业务消息接入。新等级与补救事实见 PROGRESS.md；本版本尚未完成设备验收。
 
 ## 绑定与传输
 
@@ -16,7 +16,7 @@ GATT service 为 bcb71eb0-7600-46ea-8cf0-4838947ab001，Data characteristic 为 
 
 将归档连续字节分成 128 KiB 页，最后一页可短，最多 256 页。分批正文按以下次序编码（整数大端，字符串为 Java DataOutput.writeUTF；协议标识字段只允许 ASCII，因此是两字节无符号长度+ASCII）：
 
-- int32：协议 3。
+- int32：协议 4。
 - UTF：批次 id、source（phone/watch）、deviceId。
 - int64：冻结的 revision。
 - int32：count、bytes（整份归档字节数）。
@@ -28,7 +28,7 @@ id/deviceId 为 1–80 位字母数字、下划线或连字符。revision 非负
 
 ## 两级回执与发送持久化
 
-回执正文：int32=3、UTF 批次 id、int32 index、UTF 原始分批正文 SHA-256、单字节 committed（只能 0 或 1），立即 EOF。
+回执正文：int32=4、UTF 批次 id、int32 index、UTF 原始分批正文 SHA-256、单字节 committed（只能 0 或 1），立即 EOF。
 
 committed=0 只表示这一页已持久暂存；发送端前进游标，不推进 acked_revision，不释放整份发送副本。最后一页若仍收到 committed=0，说明接收端尚未收齐，发送端将游标回到 0；接收端对已有同内容页去重，最终可补齐丢失暂存。committed=1 只允许在最后一页返回，且只在完整校验与应用数据库事务提交后返回。
 
@@ -56,4 +56,4 @@ batch_in/batch_in_parts 保留一个尚未提交批次；每页暂存事务提�
 
 ## 日期精度升级边界
 
-实时接收严格要求 protocol 2/schema 4，不将旧 schema 3 日程解释为全天或多日。旧 schema 2/3 只在本地备份恢复入口验证并迁移；归档的原始页版本必须一致，避免迁移掩盖混版。外层批次协议仍为 3。主机测试覆盖日期精度、旧格式拒绝/备份迁移与 v5 队列清理；本版 Android 迁移和真实双端同步待设备验收。
+实时接收严格要求 protocol2/schema5；旧schema2/3/4只在本地备份恢复入口按原语义验证并迁移。归档的原始页版本必须一致，避免迁移掩盖混版。外层批次协议4；SQLite6再次清理未完成旧协议暂存，保留业务、设置、历史、已提交收据及确认修订，并重新排队。本版Android迁移和真实双端同步待设备验收。

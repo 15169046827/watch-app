@@ -50,6 +50,7 @@ public final class Kinds {
     }
 
     public static void validateInstance(Instance instance) {
+        Progress.validateInstance(instance);
         require(instance.kind != null && instance.planVersion > 0, "实例类型或版本无效");
         if (instance.dateOnly) {
             DayPrecision.validate(instance);
@@ -67,6 +68,8 @@ public final class Kinds {
 
     public static void validateAction(Instance instance, Action action) {
         require(instance.kind != Kind.REMINDER, "仅提醒日程不记录完成情况");
+        require(instance.progress == null ? action != Action.PROGRESS : action == Action.PROGRESS,
+                "请使用与任务版本一致的反馈方式");
         if (instance.kind == Kind.TODO) {
             require(action == Action.COMPLETE || action == Action.REOPEN, "待办只支持完成或重新打开");
         } else {

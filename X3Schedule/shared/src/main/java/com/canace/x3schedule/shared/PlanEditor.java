@@ -84,6 +84,9 @@ final class PlanEditor {
             }
             EditorControls.row(options, "提醒", reminderLabel(), this::reminders);
             if (draft.kind == Kind.EXECUTION) {
+                EditorControls.row(options, "完成标准与补救", draft.progress == null ? "沿用旧规则，点击启用新规则"
+                        : draft.progress.untimed ? "不定时 · 等级反馈" : "定时 · 等级反馈与备用时段",
+                        () -> ProgressOptionsDialog.show(activity, draft, this::refresh));
                 EditorControls.row(options, "执行设置", "步骤与请假额度",
                         () -> ExecutionOptionsDialog.show(activity, draft));
             }
@@ -91,6 +94,15 @@ final class PlanEditor {
     }
 
     private void timeRows() {
+        if (draft.progress != null && draft.progress.untimed) {
+            EditorControls.row(options, "任务日期", draft.anchor, () -> CalendarDateDialog.show(activity,
+                    "任务日期", java.time.LocalDate.parse(draft.anchor).atStartOfDay(), true, selected -> {
+                        draft.anchor = selected.toLocalDate().toString();
+                        refresh();
+                    }));
+            ScheduleUi.text(options, "不占用固定时段。按默认提醒时刻提醒，任务日结束时询问成果；没有反馈不记为未进行。", 13);
+            return;
+        }
         EditorControls.row(options, draft.dateOnly ? "开始日期" : "开始时间", formatted(CalendarEditing.start(draft)),
                 () -> CalendarDateDialog.show(activity, "开始", CalendarEditing.start(draft), draft.dateOnly,
                         value -> EditorControls.safe(activity, () -> changeStart(value))));
@@ -131,9 +143,14 @@ final class PlanEditor {
                 (dialog, which) -> {
                     draft.kind = which == 0 ? Kind.REMINDER : Kind.EXECUTION;
                     if (draft.kind == Kind.EXECUTION) {
+                        if (draft.progress == null) {
+                            draft.progress = new com.canace.x3schedule.domain.Progress.Options();
+                        }
                         draft.dateOnly = false;
                         draft.daySpan = 1;
                         resetExceptionSpans();
+                    } else {
+                        draft.progress = null;
                     }
                     refresh();
                 }).setNegativeButton("取消", null).show();

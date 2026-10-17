@@ -109,7 +109,7 @@ public class DayPrecisionTest {
         old.schema = 3;
         byte[] bytes = Wire.JSON.toJson(old).getBytes(StandardCharsets.UTF_8);
         assertThrows(IllegalArgumentException.class, () -> Wire.decode(bytes));
-        assertEquals(4, Wire.decodeBackup(bytes).schema);
+        assertEquals(5, Wire.decodeBackup(bytes).schema);
         assertEquals(540, Wire.decodeBackup(bytes).settings.dateOnlyReminderMinute);
         old.plans.add(plan(Kind.REMINDER, "2026-10-01", "UTC"));
         assertThrows(IllegalArgumentException.class,
@@ -120,7 +120,7 @@ public class DayPrecisionTest {
     @Test
     public void legacyArchiveMigratesOnlyForBackupAndRejectsMixedVersions() throws Exception {
         byte[] old = archive(3, 3);
-        assertEquals(4, Backup.read(new ByteArrayInputStream(old)).schema);
+        assertEquals(5, Backup.read(new ByteArrayInputStream(old)).schema);
         assertThrows(IllegalArgumentException.class,
                 () -> SnapshotArchive.readArchive(new ByteArrayInputStream(old)));
         byte[] mixed = archive(3, 4);

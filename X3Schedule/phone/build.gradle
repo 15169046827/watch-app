@@ -5,7 +5,7 @@ android {
     lint { warningsAsErrors true }
     namespace 'com.canace.x3schedule.phone'
     compileSdk 35
-    defaultConfig { testInstrumentationRunner 'com.canace.x3schedule.shared.StoreTestRunner'; applicationId 'com.canace.x3schedule.phone'; minSdk 26; targetSdk 35; versionCode 16; versionName '0.6.1' }
+    defaultConfig { testInstrumentationRunner 'com.canace.x3schedule.shared.StoreTestRunner'; applicationId 'com.canace.x3schedule.phone'; minSdk 26; targetSdk 35; versionCode 17; versionName '0.7.0' }
     signingConfigs { debug { storeFile stableDebugKey; storePassword 'android'; keyAlias 'androiddebugkey'; keyPassword 'android' } }
     // Validation runs the same production sources in a separate UID and data directory.
     testBuildType providers.gradleProperty('scheduleTestBuildType').getOrElse('debug')

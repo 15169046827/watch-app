@@ -135,7 +135,7 @@ public class BackupTest {
         original.schema = 2;
         Wire.Snapshot restored = decode(Wire.JSON.toJson(original).getBytes(StandardCharsets.UTF_8));
         assertEquals(2, restored.protocol);
-        assertEquals(4, restored.schema);
+        assertEquals(5, restored.schema);
     }
 
     @Test

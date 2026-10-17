@@ -39,7 +39,7 @@ public final class Wire {
 
         public int protocol = 2;
 
-        public int schema = 4;
+        public int schema = 5;
 
         public String id = UUID.randomUUID().toString();
 
@@ -100,6 +100,10 @@ public final class Wire {
                 validateMinutePrecision(s);
                 s.schema = 4;
             }
+            if (allowLegacy && s.protocol == 2 && s.schema == 4) {
+                validateLegacyProgress(s);
+                s.schema = 5;
+            }
             validate(s);
             return s;
         } catch (RuntimeException e) {
@@ -123,6 +127,17 @@ public final class Wire {
             require(event.snapshot == null || (event.snapshot.kind == Kind.EXECUTION && event.snapshot.timed),
                     "旧备份执行快照类型无效");
         }
+    }
+
+    private static void validateLegacyProgress(Snapshot snapshot) {
+        require(snapshot.settings.taskDayStartMinute == 240, "旧版本不能包含任务日设置");
+        for (Plan plan : snapshot.plans) {
+            require(plan.progress == null && plan.previous.stream().allMatch(p -> p.progress == null),
+                    "旧版本不能包含等级规则");
+        }
+        require(snapshot.instances.stream().allMatch(i -> i.progress == null), "旧版本不能包含等级实例");
+        require(snapshot.events.stream().allMatch(e -> e.progress == null && e.action != Models.Action.PROGRESS
+                && (e.snapshot == null || e.snapshot.progress == null)), "旧版本不能包含等级反馈");
     }
 
     private static void validateMinutePrecision(Snapshot snapshot) {
@@ -171,7 +186,7 @@ public final class Wire {
     }
 
     private static void validateEnvelope(Snapshot s, int maxItems) {
-        require(s != null && s.protocol == 2 && s.schema == 4, "不支持的数据版本");
+        require(s != null && s.protocol == 2 && s.schema == 5, "请将两端升级到0.7.0或兼容版本");
         require(s.id != null && s.id.matches("[A-Za-z0-9_-]{1,80}")
                 && s.deviceId != null && s.deviceId.matches("[A-Za-z0-9_-]{1,80}"), "来源无效");
         require("phone".equals(s.source) || "watch".equals(s.source), "来源无效");
@@ -182,6 +197,20 @@ public final class Wire {
     private static void validateAuthority(Snapshot s) {
         require(s.source.equals("phone") || (s.plans.isEmpty() && s.instances.isEmpty()
                 && s.events.stream().noneMatch(e -> e.correction)), "手表不能编辑计划或人工修正");
+        if ("watch".equals(s.source)) {
+            for (Event event : s.events) {
+                require(watchProgress(event), "手表不能修改补救时间表或代替其他任务确认让位");
+            }
+        }
+    }
+
+    private static boolean watchProgress(Event event) {
+        if (event.progress == null) {
+            return true;
+        }
+        Progress.Entry entry = event.progress;
+        return entry.session != Progress.Session.MANUAL && entry.yielded.isEmpty()
+                && (entry.op == Progress.Op.RESULT || entry.op == Progress.Op.ENABLE || entry.op == Progress.Op.LEAVE);
     }
 
     private static void validatePlans(List<Plan> plans) {

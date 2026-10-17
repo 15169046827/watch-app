@@ -13,6 +13,8 @@ import com.canace.x3schedule.domain.Execution;
 import com.canace.x3schedule.domain.Models.Event;
 import com.canace.x3schedule.domain.Models.Instance;
 import com.canace.x3schedule.domain.Models.Settings;
+import com.canace.x3schedule.domain.Progress;
+import com.canace.x3schedule.domain.ProgressReminders;
 import com.canace.x3schedule.domain.Reminders;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,13 +42,18 @@ public final class ReminderReceiver extends BroadcastReceiver {
             long now = System.currentTimeMillis();
             store.rebuild(now);
             List<Event> events = store.events();
+            List<Instance> instances = store.instances();
+            java.util.Map<String, List<Event>> progressEvents = Progress.index(events);
             Settings settings = store.settings();
+            java.util.Map<String, List<Reminders.Due>> conflicts = RecoveryConflictReminders.candidates(
+                    instances, events, now, settings);
             NextReminder next = new NextReminder();
             ReminderContent content = new ReminderContent();
             List<String> keys = new ArrayList<>();
-            for (Instance i : store.instances()) {
-                for (Reminders.Due due : Reminders.candidates(i, Execution.winner(events, i.id),
-                        store.phone, settings)) {
+            for (Instance i : instances) {
+                List<Reminders.Due> candidates = candidates(i, events, progressEvents, store.phone, settings);
+                candidates.addAll(conflicts.getOrDefault(i.id, java.util.Collections.emptyList()));
+                for (Reminders.Due due : candidates) {
                     if (!store.meta("notified:" + due.key, "").isEmpty()) {
                         continue;
                     }
@@ -72,8 +79,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 }
                 PendingIntent pi = PendingIntent.getActivity(context, 10, open, PendingIntent
                         .FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                Notification n = new Notification.Builder(context, "schedule").setSmallIcon(android.R.drawable
-                        .ic_menu_my_calendar).setContentTitle(content.title()).setContentText(content.text())
+                Notification n = new Notification.Builder(context, "schedule")
+                        .setSmallIcon(R.drawable.ic_schedule_notification)
+                        .setContentTitle(content.title()).setContentText(content.text())
                         .setStyle(new Notification.BigTextStyle().bigText(content.text()))
                         .setContentIntent(pi).setAutoCancel(true).setVisibility(Notification
                         .VISIBILITY_PRIVATE).build();
@@ -88,6 +96,15 @@ public final class ReminderReceiver extends BroadcastReceiver {
             }
             scheduleAlarm(context, next, enabled);
         }
+    }
+
+    private static List<Reminders.Due> candidates(Instance item, List<Event> events,
+            java.util.Map<String, List<Event>> indexed, boolean phone, Settings settings) {
+        if (item.progress == null) {
+            return Reminders.candidates(item, Execution.winner(events, item.id), phone, settings);
+        }
+        return ProgressReminders.candidates(item, indexed.getOrDefault(item.id,
+                java.util.Collections.emptyList()), phone, settings);
     }
 
     private static void retireOldNotification(Store store, NotificationManager manager) {

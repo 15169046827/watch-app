@@ -12,6 +12,7 @@ import com.canace.x3schedule.domain.Models.Plan;
 import com.canace.x3schedule.domain.Models.Settings;
 import com.canace.x3schedule.domain.OverlapIndex;
 import com.canace.x3schedule.domain.PlanEdits;
+import com.canace.x3schedule.domain.RecoveryConflicts;
 import com.canace.x3schedule.domain.Recurrence;
 import com.canace.x3schedule.domain.Wire;
 import java.time.LocalDate;
@@ -36,6 +37,8 @@ final class PlanPreviewScreen {
     private final List<Plan> drafts;
     private final Runnable saved;
     private final Runnable loaded;
+    private java.util.Set<String> acceptedConflicts = java.util.Collections.emptySet();
+    private boolean blockStandby;
 
     PlanPreviewScreen(Activity activity, LinearLayout parent, List<Plan> drafts, Runnable saved, Runnable loaded) {
         this.activity = activity;
@@ -78,12 +81,14 @@ final class PlanPreviewScreen {
 
     private Preview read(Context context) {
         List<Instance> existing;
+        List<com.canace.x3schedule.domain.Models.Event> events;
         Settings settings;
         try (Store store = new Store(context)) {
             store.getReadableDatabase().beginTransaction();
             try {
                 existing = store.instances();
                 settings = store.settings();
+                events = store.events();
                 store.getReadableDatabase().setTransactionSuccessful();
             } finally {
                 store.getReadableDatabase().endTransaction();
@@ -91,14 +96,33 @@ final class PlanPreviewScreen {
         }
         OverlapIndex overlaps = new OverlapIndex(existing);
         Preview result = new Preview();
+        java.util.Map<String, Instance> projected = new java.util.HashMap<>();
+        for (Instance item : existing) {
+            if (drafts.stream().noneMatch(p -> p.id.equals(item.planId)) || item.start <= System.currentTimeMillis()) {
+                projected.put(item.id, item);
+            }
+        }
         for (Plan draft : drafts) {
             LocalDate today = LocalDate.now(ZoneId.of(draft.zone));
             List<Instance> generated = Recurrence.generate(PlanEdits.withDefaults(draft, settings),
                     today, today.plusDays(180));
             for (Instance item : generated) {
                 result.conflicts += overlaps.count(item);
+                projected.putIfAbsent(item.id, item);
             }
             result.samples.add(new ArrayList<>(generated.subList(0, Math.min(8, generated.size()))));
+        }
+        java.util.Set<String> known = new java.util.HashSet<>();
+        for (RecoveryConflicts.Conflict conflict
+                : RecoveryConflicts.scan(existing, events, System.currentTimeMillis())) {
+            known.add(conflict.key);
+        }
+        for (RecoveryConflicts.Conflict conflict
+                : RecoveryConflicts.scan(projected.values(), events,
+                        System.currentTimeMillis())) {
+            if (!known.contains(conflict.key)) {
+                result.standby.add(conflict);
+            }
         }
         return result;
     }
@@ -122,8 +146,32 @@ final class PlanPreviewScreen {
         ScheduleUi.text(parent, "未来180天与已有其他计划重叠：" + result.conflicts
                 + "处；仍可保存。已开始的历史及待办完成状态保留。", 14);
         Button confirm = ScheduleUi.button(parent, "确认保存", () -> { });
-        confirm.setOnClickListener(view -> commit(confirm));
+        confirm.setOnClickListener(view -> consent(confirm, result));
         ScheduleUi.primary(confirm);
+    }
+
+    private void consent(Button button, Preview preview) {
+        if (preview.standby.isEmpty()) {
+            commit(button);
+            return;
+        }
+        StringBuilder details = new StringBuilder("以下备用补救有冲突，启用时仍会重新检查：\n");
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        for (RecoveryConflicts.Conflict conflict : preview.standby) {
+            details.append(conflict.item.title).append(" · ").append(conflict.item.date).append('\n');
+            keys.add(conflict.key);
+        }
+        new android.app.AlertDialog.Builder(activity).setTitle("处理补救冲突").setMessage(details)
+                .setNegativeButton("返回调整日程", null)
+                .setNeutralButton("已知冲突，不再通知", (dialog, which) -> {
+                    acceptedConflicts = keys;
+                    blockStandby = false;
+                    commit(button);
+                }).setPositiveButton("暂不处理，当日备用补救失效", (dialog, which) -> {
+                    acceptedConflicts = keys;
+                    blockStandby = true;
+                    commit(button);
+                }).show();
     }
 
     private void commit(Button confirm) {
@@ -139,7 +187,7 @@ final class PlanPreviewScreen {
                 for (Plan draft : drafts) {
                     copies.add(Wire.copy(draft, Plan.class));
                 }
-                store.saveAll(copies);
+                store.saveWithConflictConsent(copies, acceptedConflicts, blockStandby);
             } catch (RuntimeException error) {
                 parent.post(() -> failed(confirm));
                 return;
@@ -190,5 +238,6 @@ final class PlanPreviewScreen {
     private static final class Preview {
         final List<List<Instance>> samples = new ArrayList<>();
         long conflicts;
+        final List<RecoveryConflicts.Conflict> standby = new ArrayList<>();
     }
 }

@@ -13,6 +13,7 @@ import com.canace.x3schedule.domain.Execution;
 import com.canace.x3schedule.domain.Models.Event;
 import com.canace.x3schedule.domain.Models.Instance;
 import com.canace.x3schedule.domain.Models.Plan;
+import com.canace.x3schedule.domain.ProgressReport;
 import com.canace.x3schedule.domain.Reports;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -49,6 +50,7 @@ final class ReportScreen {
     private Button submit;
 
     private boolean requested;
+    private int generation;
 
     private Runnable afterRender = () -> { };
 
@@ -135,7 +137,8 @@ final class ReportScreen {
             submit.setEnabled(false);
             result.removeAllViews();
             text(result, "正在整理本地记录…", 14);
-            new Thread(() -> load(range, filter), "schedule-report").start();
+            int request = ++generation;
+            new Thread(() -> load(range, filter, request), "schedule-report").start();
         } catch (DateTimeParseException error) {
             Toast.makeText(activity, "日期请使用 YYYY-MM-DD 格式", Toast.LENGTH_LONG).show();
         } catch (IllegalArgumentException error) {
@@ -143,11 +146,12 @@ final class ReportScreen {
         }
     }
 
-    private void load(Reports.Range range, String filter) {
+    private void load(Reports.Range range, String filter, int request) {
         try (Store store = new Store(activity.getApplicationContext())) {
             // One read transaction makes the three tables and settings a consistent snapshot.
             store.getReadableDatabase().beginTransaction();
             Reports.Summary summary;
+            ProgressReport.Summary progress;
             try {
                 List<Instance> instances = store.instances();
                 List<Event> events = store.events();
@@ -157,14 +161,26 @@ final class ReportScreen {
                 }
                 Set<String> leaves = Execution.validLeaves(instances, events, plans, store.settings());
                 summary = Reports.summarize(instances, events, leaves, range, System.currentTimeMillis(), filter);
+                List<Instance> graded = new java.util.ArrayList<>(instances);
+                graded.removeIf(i -> filter != null && !filter.equals(i.category));
+                progress = ProgressReport.range(graded, events, range.first,
+                        range.last, System.currentTimeMillis());
                 store.getReadableDatabase().setTransactionSuccessful();
             } finally {
                 store.getReadableDatabase().endTransaction();
             }
-            activity.runOnUiThread(() -> render(range, summary));
+            activity.runOnUiThread(() -> {
+                if (request != generation || !active()) {
+                    return;
+                }
+                render(range, summary);
+                if (active()) {
+                    progressReport(progress);
+                }
+            });
         } catch (RuntimeException error) {
             activity.runOnUiThread(() -> {
-                if (active()) {
+                if (active() && request == generation) {
                     submit.setEnabled(true);
                     result.removeAllViews();
                     text(result, "报告未能读取，请返回后重试；原记录保留。", 14);
@@ -175,6 +191,23 @@ final class ReportScreen {
 
     private boolean active() {
         return !activity.isDestroyed() && !activity.isFinishing() && content.isAttachedToWindow();
+    }
+
+    private void progressReport(ProgressReport.Summary summary) {
+        ScheduleUi.heading(result, "等级任务 · 按各任务归属日");
+        android.widget.TextView score = ScheduleUi.text(result, "计划执行得分："
+                + ProgressReport.display(summary.score())
+                + " · 待确认 " + summary.pending, 18);
+        ProgressAppearance.score(score, summary.score());
+        if (period.getSelectedItemPosition() <= 1) {
+            text(result, "实际成果：完整 " + summary.perfect + " · 基本 " + summary.basic
+                    + " · 最低行动 " + summary.minimum + " · 未完成/未进行 " + summary.none
+                    + " · 豁免 " + summary.exempt, 14);
+        }
+        text(result, "正式补救启用 " + summary.recoveryEnabled + " · 有行动 " + summary.recoveryActed
+                + " · 升档 " + summary.recoveryImproved + " · 最终完整 " + summary.recoveryPerfect
+                + " · 自行补做 " + summary.manualActions, 14);
+        text(result, "有效任务等权平均；未反馈、未来、纯提醒、不计分、有效请假/让位不作为零分。旧规则报表独立保留。", 13);
     }
 
     private void render(Reports.Range range, Reports.Summary summary) {

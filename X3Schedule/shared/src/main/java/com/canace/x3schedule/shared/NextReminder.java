@@ -9,7 +9,8 @@ final class NextReminder {
     String clockInstanceId;
 
     void offer(Reminders.Due due, long deliveryAt, long now) {
-        boolean eligible = due.purpose != Reminders.Purpose.RETRY && due.at > now;
+        boolean eligible = due.purpose != Reminders.Purpose.RETRY
+                && due.purpose != Reminders.Purpose.RECOVERY_CONFLICT && due.at > now;
         if (eligible && deliveryAt < clockAt) {
             clockAt = deliveryAt;
             clockInstanceId = due.instanceId;

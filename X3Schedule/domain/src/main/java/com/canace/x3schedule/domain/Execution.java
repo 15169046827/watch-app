@@ -54,7 +54,8 @@ public final class Execution {
         if (fallback.kind == Kind.TODO) {
             return Wire.copy(fallback, Instance.class);
         }
-        Event first = events.stream().filter(e -> e.instanceId.equals(fallback.id) && e.snapshot != null)
+        Event first = events.stream().filter(e -> e.instanceId.equals(fallback.id) && e.snapshot != null
+                && Progress.freezes(e))
                 .min(Comparator.comparingLong((Event e) -> e.confirmedAt).thenComparing(e -> e.id)).orElse(null);
         return first == null ? fallback : Wire.copy(first.snapshot, Instance.class);
     }
@@ -62,6 +63,9 @@ public final class Execution {
     public static State state(Instance instance, Event event, long now) {
         if (instance.cancelled) {
             return State.CANCELLED;
+        }
+        if (instance.progress != null) {
+            return progressState(instance, event, now);
         }
         if (instance.kind != Kind.EXECUTION) {
             return Kinds.state(instance, event, now);
@@ -76,6 +80,12 @@ public final class Execution {
             return now < instance.start ? State.UPCOMING : State.RUNNING;
         }
         return now >= instance.end + 86400000L ? State.OVERDUE : State.PENDING;
+    }
+
+    private static State progressState(Instance instance, Event event, long now) {
+        Collection<Event> events = event == null ? java.util.Collections.emptyList()
+                : java.util.Collections.singletonList(event);
+        return Progress.state(instance, Progress.summarize(instance, events), now);
     }
 
     private static State explicitState(Instance instance, Event event, long now) {
@@ -253,7 +263,8 @@ public final class Execution {
     }
 
     static boolean inRange(Instance instance, long from, long to, long now) {
-        return instance.kind == Kind.EXECUTION && instance.start >= from && instance.start < to
+        return instance.progress == null && instance.kind == Kind.EXECUTION
+                && instance.start >= from && instance.start < to
                 && !instance.cancelled && instance.start <= now;
     }
 

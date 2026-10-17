@@ -114,8 +114,9 @@ public class SegmentEditsTest {
         Plan plan = split();
         String date = "2026-09-22";
         List<Instance> old = day(plan, date);
-        Plan changed = PlanEdits.exception(plan, LocalDate.parse(date), override(720, false), NOW);
-        List<Instance> merged = Recurrence.reconcile(old, day(changed, date), Collections.emptySet(), NOW);
+        assertThrows(IllegalArgumentException.class,
+                () -> PlanEdits.exception(plan, LocalDate.parse(date), override(720, false), NOW));
+        List<Instance> merged = Recurrence.reconcile(old, day(plan, date), Collections.emptySet(), NOW);
         assertEquals(old.get(0).start, merged.get(0).start);
     }
 }

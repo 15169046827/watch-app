@@ -12,6 +12,8 @@ import com.canace.x3schedule.domain.CalendarWindow;
 import com.canace.x3schedule.domain.DayPrecision;
 import com.canace.x3schedule.domain.Models.Instance;
 import com.canace.x3schedule.domain.Models.Kind;
+import com.canace.x3schedule.domain.Progress;
+import com.canace.x3schedule.domain.ProgressReport;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -48,6 +50,8 @@ final class CalendarScreen {
     private final Actions actions;
     private final Runnable loaded;
     private final ZoneId zone = ZoneId.systemDefault();
+    private Map<String, Progress.Summary> progress = new java.util.HashMap<>();
+    private final Map<LocalDate, ProgressReport.Summary> scores = new LinkedHashMap<>();
 
     CalendarScreen(Activity activity, LinearLayout parent, LocalDate selected, int mode, int offset,
             Actions actions, Runnable loaded, CalendarSurface surface) {
@@ -111,6 +115,12 @@ final class CalendarScreen {
             try {
                 List<Instance> items = CalendarWindow.read(store.plans(), store.instances(), store.events(),
                         store.settings(), first, last, zone, System.currentTimeMillis());
+                List<com.canace.x3schedule.domain.Models.Event> events = store.events();
+                progress = Progress.summaries(items, events);
+                for (LocalDate day = first; !day.isAfter(last); day = day.plusDays(1)) {
+                    scores.put(day, ProgressReport.range(items, events,
+                            day, day, System.currentTimeMillis()));
+                }
                 store.getReadableDatabase().setTransactionSuccessful();
                 return items;
             } finally {
@@ -170,7 +180,7 @@ final class CalendarScreen {
             month(days, first);
             dayList(days.get(selected).items);
         } else {
-            new CalendarTimeline(activity, parent, days, zone, actions, width, offset).show();
+            new CalendarTimeline(activity, parent, days, zone, actions, width, offset).progress(progress).show();
         }
         ScheduleUi.text(parent, "时间按本机时区显示 · " + zone.getId(), 12);
     }
@@ -204,7 +214,22 @@ final class CalendarScreen {
                 if (day.equals(selected)) {
                     ScheduleUi.primary(button);
                 }
+                monthScore(button, day);
             }
+        }
+    }
+
+    private void monthScore(Button button, LocalDate day) {
+        ProgressReport.Summary score = scores.get(day);
+        if (score == null || score.results == 0 && score.pending == 0) {
+            return;
+        }
+        button.setText(day.getDayOfMonth() + "\n"
+                + (score.score() == null ? "○" : (int) Math.floor(score.score()) + (score.pending > 0 ? "○" : "·")));
+        button.setContentDescription(button.getContentDescription() + "，计划执行得分"
+                + ProgressReport.display(score.score()) + "，待确认" + score.pending);
+        if (!day.equals(selected)) {
+            ProgressAppearance.score(button, score.score());
         }
     }
 
@@ -216,17 +241,22 @@ final class CalendarScreen {
         }
         if (today.size() > 50) {
             ScheduleUi.button(parent, "查看当天全部 " + today.size() + " 项日程",
-                    () -> CalendarItemDialog.show(activity, selected.toString(), today, zone, actions::detail));
+                    () -> CalendarItemDialog.show(activity, selected.toString(), today, zone,
+                            progress, actions::detail));
             ScheduleUi.text(parent, "下方显示前50项；完整列表可查看所有日程。", 13);
         }
         for (Instance item : today.subList(0, Math.min(50, today.size()))) {
             Button button = ScheduleUi.button(parent, item.title + "\n" + label(item, zone),
                     () -> actions.detail(item));
             button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            ProgressAppearance.item(button, item, progress);
         }
     }
 
     static String label(Instance item, ZoneId zone) {
+        if (item.progress != null && item.progress.untimed) {
+            return item.taskDay + " · 不定时任务";
+        }
         if (!item.timed) {
             return "不设截止";
         }

@@ -16,7 +16,7 @@ public final class OverlapIndex {
         List<Instance> timed = new ArrayList<>();
         Map<String, List<Instance>> groups = new HashMap<>();
         for (Instance item : items) {
-            if (!item.cancelled && item.timed) {
+            if (Progress.occupiesTime(item)) {
                 timed.add(item);
                 groups.computeIfAbsent(item.planId, ignored -> new ArrayList<>()).add(item);
             }
@@ -26,7 +26,7 @@ public final class OverlapIndex {
     }
 
     public int count(Instance item) {
-        if (item.cancelled || !item.timed) {
+        if (!Progress.occupiesTime(item)) {
             return 0;
         }
         Bounds own = plans.get(item.planId);

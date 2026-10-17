@@ -33,7 +33,7 @@ public final class Models {
 
     public enum Action {
 
-        START, COMPLETE, CONTINUE, INCOMPLETE, LEAVE, REOPEN
+        START, COMPLETE, CONTINUE, INCOMPLETE, LEAVE, REOPEN, PROGRESS
     }
 
     public enum State {
@@ -52,6 +52,8 @@ public final class Models {
     }
 
     public static class Plan {
+
+        public Progress.Options progress;
 
         public Kind kind = Kind.EXECUTION;
 
@@ -128,6 +130,10 @@ public final class Models {
 
         public void validate() {
             Kinds.validatePlan(this);
+            if (progress != null) {
+                progress.validate();
+                require(kind == Kind.EXECUTION && !dateOnly, "等级反馈仅用于执行任务");
+            }
             validateIdentity();
             validateDates();
             validateSegments();
@@ -230,6 +236,12 @@ public final class Models {
 
     public static class Instance {
 
+        public Progress.Options progress;
+
+        public String taskDay;
+
+        public long taskDayEnd;
+
         public Kind kind = Kind.EXECUTION;
 
         public boolean dateOnly;
@@ -269,6 +281,8 @@ public final class Models {
 
     public static class Event {
 
+        public Progress.Entry progress;
+
         public String id = UUID.randomUUID().toString();
 
         public String instanceId;
@@ -294,6 +308,7 @@ public final class Models {
         public void validate() {
             validateIdentity();
             validateCompletion();
+            Progress.validate(this);
             if (snapshot != null) {
                 validateSnapshot();
             }
@@ -338,6 +353,8 @@ public final class Models {
 
     public static class Settings {
 
+        public int taskDayStartMinute = 240;
+
         public int dateOnlyReminderMinute = 9 * 60;
 
         public int leaveWeek = 1;
@@ -360,6 +377,7 @@ public final class Models {
 
         public Map<String, Integer> categoryMonth = new TreeMap<>();
         public void validate() {
+            require(taskDayStartMinute >= 0 && taskDayStartMinute < 1440, "任务日起点无效");
             require(dateOnlyReminderMinute >= 0 && dateOnlyReminderMinute < 1440, "默认提醒时间无效");
             require(leaveWeek >= 0 && leaveMonth >= 0, "额度无效");
             require(quietStart >= 0 && quietStart < 1440 && quietEnd >= 0 && quietEnd < 1440, "静音设置无效");

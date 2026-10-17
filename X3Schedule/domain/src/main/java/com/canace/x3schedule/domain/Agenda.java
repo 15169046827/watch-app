@@ -17,6 +17,7 @@ import java.util.Map;
 public final class Agenda {
     public final List<Instance> today = new ArrayList<>();
     public final Map<String, State> states = new HashMap<>();
+    public final Map<String, Progress.Summary> progress = new HashMap<>();
     public Instance current;
     public Instance next;
     public int pending;
@@ -31,11 +32,16 @@ public final class Agenda {
         long first = day.atStartOfDay(zone).toInstant().toEpochMilli();
         long last = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
         Map<String, Event> winners = Execution.winners(events);
+        result.progress.putAll(Progress.summaries(instances, events));
         List<Instance> sorted = new ArrayList<>(instances);
         sorted.sort(Comparator.comparingLong((Instance i) -> i.start).thenComparing(i -> i.id));
         for (Instance instance : sorted) {
             if (!instance.cancelled) {
                 State state = Execution.state(instance, winners.get(instance.id), now);
+                if (instance.progress != null) {
+                    Progress.Summary summary = result.progress.get(instance.id);
+                    state = Progress.state(instance, summary, now);
+                }
                 result.states.put(instance.id, state);
                 result.include(instance, state, now, first, last);
             }

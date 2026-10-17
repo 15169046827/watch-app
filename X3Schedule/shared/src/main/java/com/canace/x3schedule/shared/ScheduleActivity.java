@@ -38,6 +38,8 @@ import com.canace.x3schedule.domain.Models.Rule;
 import com.canace.x3schedule.domain.Models.State;
 import com.canace.x3schedule.domain.NaturalLanguage;
 import com.canace.x3schedule.domain.PlanEdits;
+import com.canace.x3schedule.domain.Progress;
+import com.canace.x3schedule.domain.Recurrence;
 import com.canace.x3schedule.domain.Wire;
 import com.canace.x3schedule.domain.WorkCalendar;
 import java.io.ByteArrayOutputStream;
@@ -57,6 +59,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
 
 /**
  * Native Views on both platforms. The watch has no plan editing route.
@@ -555,6 +558,9 @@ public final class ScheduleActivity extends Activity {
             button(Kinds.label(kind), () -> {
                 Plan plan = new Plan();
                 plan.kind = kind;
+                if (kind == Kind.EXECUTION) {
+                    plan.progress = new Progress.Options();
+                }
                 plan.inheritReminders = true;
                 plan.anchor = calendarDay.toString();
                 plan.zone = ZoneId.systemDefault().getId();
@@ -616,7 +622,7 @@ public final class ScheduleActivity extends Activity {
         long now = System.currentTimeMillis();
         int shown = 0;
         for (Instance i : is) {
-            State s = Execution.state(i, Execution.winner(events, i.id), now);
+            State s = currentState(i, events, now);
             boolean match = pending ? (s == State.PENDING || s == State.OVERDUE) : (!i.cancelled
                     && i.kind != Kind.TODO && i.end >= now - 86400000L && i.start < now + 86400000L);
             if (match && shown++ < 100) {
@@ -635,7 +641,7 @@ public final class ScheduleActivity extends Activity {
         session.calendarInstance = Wire.copy(i, Instance.class);
         text(Kinds.label(i.kind), 14);
         text(instanceTime(i), 14);
-        text(stateLabel(Execution.state(i, Execution.winner(store.events(), i.id), System.currentTimeMillis())), 16);
+        text(stateLabel(currentState(i, store.events(), System.currentTimeMillis())), 16);
         for (String step : i.steps) {
             text("• " + step, 14);
         }
@@ -656,6 +662,11 @@ public final class ScheduleActivity extends Activity {
         detailActions(i);
     }
 
+    private State currentState(Instance item, List<Event> events, long now) {
+        return item.progress == null ? Execution.state(item, Execution.winner(events, item.id), now)
+                : Progress.state(item, Progress.summarize(item, events), now);
+    }
+
     private Instance restoredCalendarItem(ScreenSession state) {
         Instance item = state.calendarInstance;
         require(item != null && item.id.equals(state.instanceId), "日程已失效");
@@ -666,6 +677,10 @@ public final class ScheduleActivity extends Activity {
     }
 
     private void detailActions(Instance i) {
+        if (i.progress != null) {
+            new ProgressScreen(this, content, i, () -> detail(i)).show();
+            return;
+        }
         if (i.kind == Kind.REMINDER) {
             text("此日程仅作提醒，无需打卡或确认完成。", 14);
             return;
@@ -742,6 +757,8 @@ public final class ScheduleActivity extends Activity {
     private void plans() {
         page = "plans";
         screen("日程");
+        button("未来七天补救冲突", () -> new RecoveryConflictsScreen(this, content,
+                item -> detail(item)).show());
         for (Plan p : store.plans()) {
             if (!p.deleted) {
                 button(Kinds.label(p.kind) + " · " + p.category + " / " + p.title, () -> plan(p));
@@ -828,7 +845,10 @@ public final class ScheduleActivity extends Activity {
     private LocalDate futureDate(Plan plan) {
         LocalDate today = LocalDate.now(ZoneId.of(plan.zone));
         LocalDate anchor = LocalDate.parse(plan.anchor);
-        return today.isBefore(anchor) ? anchor : today;
+        LocalDate selected = today.isBefore(anchor) ? anchor : today;
+        boolean started = Recurrence.generate(plan, selected, selected).stream()
+                .anyMatch(i -> i.start <= System.currentTimeMillis());
+        return started ? selected.plusDays(1) : selected;
     }
 
     private void openEdit(Plan plan, Instance item, int scope) {
@@ -1064,6 +1084,9 @@ public final class ScheduleActivity extends Activity {
         EditText dayReminder = field("全天提醒与按天截止的默认提醒时间",
                 LocalTime.MIN.plusMinutes(s.dateOnlyReminderMinute).toString());
         DateTimeFields.time(dayReminder);
+        EditText taskDayStart = field("每日任务日起点（只影响未来实例）",
+                LocalTime.MIN.plusMinutes(s.taskDayStartMinute).toString());
+        DateTimeFields.time(taskDayStart);
         text("未设置时使用上午 9 点；此时间不改变待办当天结束时的截止日期。", 14);
         text("手机负责提醒；手表负责查看、记录和同步。关闭手机提醒后，手表不会兜底。", 14);
         text("开始、结束和你主动延后的确认提醒使用系统闹钟，可能显示“下一个闹钟”标记。"
@@ -1089,6 +1112,7 @@ public final class ScheduleActivity extends Activity {
         primaryButton("保存设置", () -> {
             s.reminderMinutes = integer(defaultReminder);
             s.dateOnlyReminderMinute = TimeRange.minute(value(dayReminder));
+            s.taskDayStartMinute = TimeRange.minute(value(taskDayStart));
             require(s.reminderMinutes >= 0 && s.reminderMinutes <= 1440, "提醒分钟无效");
             if (defaultTargets.getSelectedItemPosition() != initialTarget) {
                 s.reminderTargets = defaultTargets.getSelectedItemPosition();
@@ -1272,7 +1296,7 @@ public final class ScheduleActivity extends Activity {
     private void connection() {
         page = "connection";
         screen("连接与权限");
-        text("分批同步需要手机和手表都升级到 0.5.0 或兼容版本。先在系统蓝牙设置配对，两端各选择对方。"
+        text("分批同步需要手机和手表都升级到 0.7.0 或兼容版本。先在系统蓝牙设置配对，两端各选择对方。"
                 + "Android 12+ 手机可授权伴随设备以后台重连；手表后台连接服务保持可用。系统强行停止或省电限制可能中断连接，恢复后自动补传。", 14);
         button("授予提醒 / 蓝牙权限", this::requestFeaturePermissions);
         button("选择已配对设备", this::peers);

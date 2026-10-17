@@ -17,6 +17,7 @@ public final class Backup {
     public static void validate(Wire.Snapshot snapshot) {
         SnapshotArchive.validate(snapshot);
         require("phone".equals(snapshot.source), "需手机备份");
+        ProgressHistory.validate(snapshot.events);
     }
 
     public static void write(Wire.Snapshot snapshot, OutputStream output) throws IOException {

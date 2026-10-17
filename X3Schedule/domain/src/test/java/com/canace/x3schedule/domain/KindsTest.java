@@ -234,12 +234,12 @@ public class KindsTest {
         snapshot.plans.add(plan(Kind.EXECUTION));
         snapshot.instances.add(instance(snapshot.plans.get(0)));
         String json = Wire.JSON.toJson(snapshot).replace("\"protocol\":2", "\"protocol\":1")
-                .replace("\"schema\":4", "\"schema\":2").replace("\"kind\":\"EXECUTION\",", "")
+                .replace("\"schema\":5", "\"schema\":2").replace("\"kind\":\"EXECUTION\",", "")
                 .replace("\"timed\":true,", "").replace("\"todoDue\":\"\",", "");
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         Wire.Snapshot upgraded = Wire.decodeBackup(bytes);
         assertEquals(2, upgraded.protocol);
-        assertEquals(4, upgraded.schema);
+        assertEquals(5, upgraded.schema);
         assertEquals(Kind.EXECUTION, upgraded.instances.get(0).kind);
         assertThrows(IllegalArgumentException.class, () -> Wire.decode(bytes));
     }

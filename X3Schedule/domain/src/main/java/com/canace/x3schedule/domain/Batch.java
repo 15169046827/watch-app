@@ -18,7 +18,7 @@ import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.function.IntFunction;
 
-/** Protocol 3 separates durable page receipts from atomic whole-snapshot commit receipts. */
+/** Protocol 4 separates durable page receipts from atomic whole-snapshot commit receipts. */
 public final class Batch {
     public static final int PAGE_BYTES = 128 * 1024;
     public static final int MAX_BYTES = SnapshotArchive.MAX_BYTES;
@@ -130,7 +130,7 @@ public final class Batch {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(3);
+            out.writeInt(4);
             out.writeUTF(manifest.id);
             out.writeUTF(manifest.source);
             out.writeUTF(manifest.deviceId);
@@ -150,7 +150,7 @@ public final class Batch {
         require(packet != null && packet.length <= MAX_PACKET, "分批数据过大");
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(packet));
-            require(in.readInt() == 3, "请将两端升级到 0.5.0 或兼容版本");
+            require(in.readInt() == 4, "请将两端升级到 0.7.0 或兼容版本");
             Part part = new Part();
             Manifest m = new Manifest();
             m.id = in.readUTF();
@@ -256,7 +256,7 @@ public final class Batch {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(3);
+            out.writeInt(4);
             out.writeUTF(ack.id);
             out.writeInt(ack.index);
             out.writeUTF(ack.digest);
@@ -271,7 +271,7 @@ public final class Batch {
         require(bytes != null && bytes.length <= 256, "回执过大");
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
-            require(in.readInt() == 3, "回执版本无效");
+            require(in.readInt() == 4, "回执版本无效");
             Ack ack = new Ack();
             ack.id = in.readUTF();
             identity(ack.id);

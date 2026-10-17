@@ -32,7 +32,9 @@ public final class CalendarWindow {
         }
         Set<String> recorded = new HashSet<>();
         for (Event event : events) {
-            recorded.add(event.instanceId);
+            if (Progress.freezes(event)) {
+                recorded.add(event.instanceId);
+            }
         }
         List<Instance> result = new ArrayList<>();
         for (Instance item : Recurrence.reconcile(saved, fresh, recorded, now)) {
@@ -71,6 +73,10 @@ public final class CalendarWindow {
     public static boolean intersects(Instance item, LocalDate first, LocalDate last, ZoneId zone) {
         if (item.cancelled || !item.timed) {
             return false;
+        }
+        if (item.progress != null && item.progress.untimed) {
+            LocalDate taskDay = LocalDate.parse(item.taskDay);
+            return !taskDay.isBefore(first) && !taskDay.isAfter(last);
         }
         if (item.dateOnly) {
             LocalDate day = DayPrecision.day(item);
@@ -111,7 +117,7 @@ public final class CalendarWindow {
         long first = day.atStartOfDay(zone).toInstant().toEpochMilli();
         long last = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
         for (Instance item : onDay(items, day, zone)) {
-            if (!item.dateOnly) {
+            if (!item.dateOnly && (item.progress == null || !item.progress.untimed)) {
                 int start = item.start <= first ? 0 : minute(item.start, zone);
                 int end = item.end >= last ? 1440 : minute(item.end, zone);
                 slots.add(new Slot(item, start, Math.max(start + 45, end)));

@@ -133,5 +133,22 @@ class SchemaTest(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.execute("INSERT INTO events VALUES ('e','i',2,'changed')")
 
+    def test_v6_preserves_business_settings_and_committed_receipts(self):
+        self.upgrade_four()
+        self.db.executescript((ASSETS / "migration-4-5.sql").read_text(encoding="utf-8-sig"))
+        self.db.execute("INSERT INTO plans VALUES ('p',1,'old-rules')")
+        self.db.execute("INSERT INTO events VALUES ('e','i',1,'old-event')")
+        self.db.execute("INSERT INTO meta VALUES ('settings','old-settings')")
+        self.db.execute("INSERT INTO meta VALUES ('peer','synthetic-peer')")
+        self.db.execute("INSERT INTO batch_receipts VALUES ('done','retained','digest')")
+        self.db.execute("INSERT INTO batch_out VALUES (1,'old-protocol',0)")
+        self.db.commit()
+        self.db.executescript((ASSETS / "migration-5-6.sql").read_text(encoding="utf-8-sig"))
+        for table in ['plans', 'events', 'batch_receipts']:
+            self.assertEqual(self.db.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0], 1)
+        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='settings'").fetchone()[0], 'old-settings')
+        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='peer'").fetchone()[0], 'synthetic-peer')
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM batch_out").fetchone()[0], 0)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

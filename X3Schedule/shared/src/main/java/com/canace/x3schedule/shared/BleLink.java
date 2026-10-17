@@ -306,7 +306,7 @@ public final class BleLink implements AutoCloseable {
                         exchange.localAck(store.acknowledgeBatch(Batch.decodeAck(body)));
                         require(g.readCharacteristic(characteristic), "read");
                     } else {
-                        require(frame[0] == 3, "请将两端升级到 0.5.0 或兼容版本");
+                        require(frame[0] == 3, "请将两端升级到 0.7.0 或兼容版本");
                         Batch.Ack ack = store.receiveBatch(body);
                         exchange.remoteAck(ack.committed);
                         send(Frames.pack(4, Batch.encodeAck(ack)), true);
@@ -481,7 +481,7 @@ public final class BleLink implements AutoCloseable {
             status(committed ? "对方已确认本机数据" : "正在分批同步");
             return;
         }
-        require(kind == 3 || (kind == 5 && body.length == 0), "请将两端升级到 0.5.0 或兼容版本");
+        require(kind == 3 || (kind == 5 && body.length == 0), "请将两端升级到 0.7.0 或兼容版本");
         response.clear();
         responseOffset = 0;
         if (kind == 3) {

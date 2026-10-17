@@ -9,6 +9,29 @@ def luminance(color):
     return sum(value * weight for value, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
 
 
+def contrast(first, second):
+    values = sorted((luminance(first), luminance(second)))
+    return (values[1] + 0.05) / (values[0] + 0.05)
+
+
+def check_progress(role, colors):
+    palette = {node.attrib["name"].removeprefix("schedule_"): node.text
+               for node in ET.parse(ROOT / "shared/src/main/res/values/progress.xml").getroot()}
+    if role == "watch":
+        palette.update({node.attrib["name"].removeprefix("schedule_"): node.text
+                        for node in ET.parse(ROOT / "watch/src/main/res/values/progress.xml").getroot()})
+    for name in ("result_none", "score_low", "score_minimum", "result_basic", "result_perfect"):
+        for surface in ("background", "card"):
+            assert contrast(palette[name], colors[surface]) >= 4.5, (role, name, surface)
+    alpha = 0.16 if role == "watch" else 0.08
+    for name, tint in palette.items():
+        base = colors["card"]
+        blended = "#" + "".join(f"{int(int(base[i:i+2], 16) * (1-alpha) + int(tint[i:i+2], 16) * alpha):02x}"
+                                for i in (1, 3, 5))
+        assert contrast(colors["text"], blended) >= 4.5, (role, name, "grade card")
+    print(f"{role} progress score text and tinted-card contrast passed.")
+
+
 def check():
     for path, expected in generate().items():
         assert path.read_text(encoding="utf-8") == expected, f"Stale icon export: {path}"
@@ -25,10 +48,10 @@ def check():
                  ("muted", "card"), ("accent", "subtle"), ("on_accent", "accent"),
                  ("error", "background")]
         for foreground, background in pairs:
-            values = sorted([luminance(colors[foreground]), luminance(colors[background])])
-            contrast = (values[1] + 0.05) / (values[0] + 0.05)
-            assert contrast >= 4.5, (role, foreground, background, contrast)
-            print(f"{role} {foreground}/{background}: {contrast:.2f}:1")
+            ratio = contrast(colors[foreground], colors[background])
+            assert ratio >= 4.5, (role, foreground, background, ratio)
+            print(f"{role} {foreground}/{background}: {ratio:.2f}:1")
+        check_progress(role, colors)
         app = ET.parse(ROOT / role / "src/main/AndroidManifest.xml").getroot().find("application")
         assert app.attrib[namespace + "icon"] == "@mipmap/ic_schedule"
         assert app.attrib[namespace + "roundIcon"] == app.attrib[namespace + "icon"]

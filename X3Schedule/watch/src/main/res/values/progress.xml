@@ -1,0 +1,11 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Each override is consumed by shared ProgressAppearance through the library R class.
+         Lint cannot trace those cross-module references, as with the existing ScheduleUi palette. -->
+    <color tools:ignore="UnusedResources" name="schedule_result_none">#F4A3A3</color>
+    <color tools:ignore="UnusedResources" name="schedule_result_minimum">#EDB36C</color>
+    <color tools:ignore="UnusedResources" name="schedule_result_basic">#82CDDB</color>
+    <color tools:ignore="UnusedResources" name="schedule_result_perfect">#91D1B0</color>
+    <color tools:ignore="UnusedResources" name="schedule_result_exempt">#AEB8C3</color>
+    <color tools:ignore="UnusedResources" name="schedule_score_low">#E8BB8C</color>
+    <color tools:ignore="UnusedResources" name="schedule_score_minimum">#EDB36C</color>
+</resources>

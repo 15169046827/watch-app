@@ -1,6 +1,6 @@
 # 分块备份格式 v1
 
-当前应用版本：0.5.0（versionCode 8）；归档魔数与容器格式仍为 v1，内部 Snapshot 为 protocol 2/schema 4。格式最初引入于0.2.1。扩展名 .x3backup，MIME application/octet-stream。导出只在手机提供；恢复仍由手机作为日程定义权威，最初不改变 BLE protocol 2/schema 3 或 SQLite schema 3；0.3.0 的 BLE 和数据库后续变化见 PROTOCOL.md，备份格式仍为 v1。
+当前开发候选：0.7.0（versionCode17）；归档魔数与容器仍为v1，内部Snapshot为protocol2/schema5。扩展名.x3backup，MIME application/octet-stream。导出只在手机提供，恢复仍由手机作为定义权威。BLE与SQLite版本见PROTOCOL.md，等级事件字段见PROGRESS.md。完整备份必须包含更正引用的原始事实，缺失或不可更正的引用拒绝恢复。
 
 ## 容量与内容
 
@@ -28,7 +28,7 @@
 
 ## 兼容与验证
 
-不含新魔数的文件按既有 JSON 备份读取：最多 2 MiB，要求严格 UTF-8/JSON，支持 phone protocol 1/schema 2、protocol 2/schema 3 验证后迁移，以及当前 protocol 2/schema 4，保留原数量限制。当前新备份要求0.5.0或同时支持容器v1与schema4的版本读取；旧备份仍可迁移。0.3.0 已另行接入有持久化进度的 BLE 分批同步，详见 PROTOCOL.md。
+不含新魔数的文件按既有JSON备份读取：最多2MiB，要求严格UTF-8/JSON。phone protocol1/schema2及protocol2/schema3/4按原语义验证后迁移，当前为protocol2/schema5，保留原数量限制。新备份要求0.7.0或同时支持容器v1与schema5的版本读取；旧备份可迁移，旧等级为空并沿用旧规则。BLE分批同步见PROTOCOL.md。
 
 主机测试覆盖超过 2 MiB 及超过 12000 实例的完整往返、源快照不变、空备份、旧 JSON、截断、摘要错误、尾随内容、来源/修订混块、跨块重复、缺失或非空头、恶意长度、32 MiB 总量、记录上限、分块洪泛及流所有权。Android 合成数据库测试增加恢复幂等性和事件冲突后的计划/待同步修订回滚；测试包构建不代表已执行这些设备测试。
 

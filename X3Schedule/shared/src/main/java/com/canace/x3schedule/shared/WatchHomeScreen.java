@@ -17,7 +17,13 @@ final class WatchHomeScreen {
             AgendaCards.item(content, agenda.current, actions);
             if (agenda.current.kind == Kind.EXECUTION) {
                 ScheduleUi.primary(ScheduleUi.button(content, "刚刚完成",
-                        () -> actions.complete(agenda.current)));
+                        () -> {
+                            if (agenda.current.progress == null) {
+                                actions.complete(agenda.current);
+                            } else {
+                                actions.detail(agenda.current);
+                            }
+                        }));
             }
         }
         ScheduleUi.heading(content, "下一项");

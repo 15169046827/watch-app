@@ -27,7 +27,16 @@ final class PrivacyScreen {
         ScheduleUi.text(content, "手机可导出包含日程和完成记录的备份；文件未加密，仅写到你选择的位置。"
                 + "清除入口在“隐私与本机数据”。清除本机不会删除另一台设备的数据或已导出的文件；"
                 + "再次选择设备同步时，对方保留的数据可能重新传入。", 14);
-        ScheduleUi.text(content, "发布者：Ym_Li · 日程 0.6.0\n本应用没有账户口令或云端凭据。", 13);
+        ScheduleUi.text(content, "发布者：Ym_Li · 日程 " + version(content.getContext())
+                + "\n本应用没有账户口令或云端凭据。", 13);
+    }
+
+    private static String version(android.content.Context context) {
+        try {
+            return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
+        } catch (android.content.pm.PackageManager.NameNotFoundException error) {
+            return "版本不可用";
+        }
     }
 
     static void resetButton(Activity activity, LinearLayout content) {

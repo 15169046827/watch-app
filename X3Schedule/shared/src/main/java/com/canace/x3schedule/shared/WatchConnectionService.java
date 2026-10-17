@@ -39,8 +39,9 @@ public final class WatchConnectionService extends Service {
         PendingIntent open = PendingIntent.getActivity(this, 32, getPackageManager()
                 .getLaunchIntentForPackage(getPackageName()), PendingIntent.FLAG_IMMUTABLE | PendingIntent
                 .FLAG_UPDATE_CURRENT);
-        Notification n = new Notification.Builder(this, "connection").setSmallIcon(android.R.drawable
-                .ic_menu_my_calendar).setContentTitle("日程后台连接").setContentText("可与已配对手机自动补同步")
+        Notification n = new Notification.Builder(this, "connection")
+                .setSmallIcon(R.drawable.ic_schedule_notification).setContentTitle("日程后台连接")
+                .setContentText("可与已配对手机自动补同步")
                 .setContentIntent(open).setOngoing(true).setVisibility(Notification.VISIBILITY_PRIVATE).build();
         startForeground(32, n);
         SyncRuntime.get(this).acquire("watch-service");

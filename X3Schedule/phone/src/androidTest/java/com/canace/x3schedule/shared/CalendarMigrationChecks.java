@@ -26,13 +26,13 @@ final class CalendarMigrationChecks {
             String[] before = seed(name);
             try (Store upgraded = new Store(context, name, true)) {
                 SQLiteDatabase db = upgraded.getReadableDatabase();
-                check(db.getVersion() == 5);
+                check(db.getVersion() == 6);
                 check(before[0].equals(Wire.JSON.toJson(upgraded.plans())));
                 check(before[1].equals(Wire.JSON.toJson(upgraded.instances())));
                 check(before[2].equals(Wire.JSON.toJson(upgraded.events())));
                 check(before[3].equals(Wire.JSON.toJson(upgraded.settings())));
                 check(upgraded.meta("peer", "").equals("synthetic-peer"));
-                check(upgraded.meta("revision", "").equals("18"));
+                check(upgraded.meta("revision", "").equals("19"));
                 check(upgraded.meta("acked_revision", "").equals("9"));
                 check(DatabaseUtils.stringForQuery(db, "SELECT manifest FROM batch_receipts WHERE id='done'",
                         null).equals("retained-receipt"));

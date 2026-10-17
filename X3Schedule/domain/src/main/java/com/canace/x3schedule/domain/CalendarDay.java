@@ -15,7 +15,7 @@ public final class CalendarDay {
     public CalendarDay(List<Instance> source, LocalDate day, ZoneId zone, int width) {
         items = CalendarWindow.onDay(source, day, zone);
         for (Instance item : items) {
-            if (item.dateOnly) {
+            if (item.dateOnly || item.progress != null && item.progress.untimed) {
                 allDay.add(item);
             }
         }

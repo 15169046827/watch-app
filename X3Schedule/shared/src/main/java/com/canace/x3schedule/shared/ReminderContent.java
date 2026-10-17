@@ -22,7 +22,13 @@ final class ReminderContent {
             firstTitle = instance.title;
         }
         String reason;
-        if (purpose != Purpose.START) {
+        if (purpose == Purpose.RECOVERY_CONFLICT) {
+            reason = "未来七天备用补救存在冲突，请在手机处理";
+        } else if (purpose == Purpose.RECOVERY_START) {
+            reason = "正式补救时段开始";
+        } else if (purpose == Purpose.RECOVERY_END) {
+            reason = "补救结束，请反馈累计成果";
+        } else if (purpose != Purpose.START) {
             reason = purpose == Purpose.CONFIRMATION ? "延后时间已到，请确认完成情况" : "请确认完成情况";
         } else if (instance.kind == Kind.TODO) {
             reason = "待办到期提醒";

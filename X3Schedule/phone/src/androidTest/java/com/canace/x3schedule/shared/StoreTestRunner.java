@@ -47,6 +47,7 @@ public final class StoreTestRunner extends Instrumentation {
     private boolean uiState;
 
     private boolean calendarFixture;
+    private boolean progressFixture;
 
     private boolean saveLifecycle;
 
@@ -184,12 +185,17 @@ public final class StoreTestRunner extends Instrumentation {
         bleAwakeCpu = arguments != null && "true".equals(arguments.getString("bleAwakeCpu"));
         uiState = arguments != null && "true".equals(arguments.getString("uiState"));
         calendarFixture = arguments != null && "true".equals(arguments.getString("calendarFixture"));
+        progressFixture = enabled(arguments, "progressFixture");
         saveLifecycle = arguments != null && "true".equals(arguments.getString("saveLifecycle"));
         configuration = arguments != null && "true".equals(arguments.getString("configuration"));
         alarmState = arguments != null && "true".equals(arguments.getString("alarmState"));
         transactionCrash = arguments == null ? null : arguments.getString("transactionCrash");
         crashId = arguments == null ? null : arguments.getString("crashId");
         start();
+    }
+
+    private static boolean enabled(Bundle arguments, String option) {
+        return arguments != null && "true".equals(arguments.getString(option));
     }
 
     @Override
@@ -214,6 +220,10 @@ public final class StoreTestRunner extends Instrumentation {
     }
 
     private void runUiOrStoreChecks() {
+        if (progressFixture) {
+            new ProgressDeviceFixture().run(this);
+            return;
+        }
         if (configuration) {
             new ConfigurationChecks(this).run();
             return;
@@ -297,6 +307,7 @@ public final class StoreTestRunner extends Instrumentation {
             resumeAndTypeSync(phoneName, watchName);
             checks += new BatchStoreChecks(getTargetContext()).run();
             checks += new CalendarMigrationChecks(getTargetContext()).run();
+            checks += new ProgressStoreChecks(getTargetContext()).run();
             checks += LocalDataChecks.run(getTargetContext());
             checks += ReminderWorkChecks.run();
             checks += ReminderScopeStoreChecks.run(getTargetContext());
@@ -317,7 +328,7 @@ public final class StoreTestRunner extends Instrumentation {
                 db.setVersion(1);
             }
             try (Store upgraded = new Store(getTargetContext(), upgradeName, true)) {
-                check(upgraded.getReadableDatabase().getVersion() == 5);
+                check(upgraded.getReadableDatabase().getVersion() == 6);
                 check(upgraded.meta("synthetic", "").equals("retained"));
             }
             result.putString("stream", "Synthetic Android Store checks passed: " + checks);

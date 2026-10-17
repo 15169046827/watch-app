@@ -175,6 +175,7 @@ public final class Recurrence {
         i.reminderMinutes = p.reminderMinutes;
         i.reminderTargets = p.reminderTargets;
         i.disputed = WorkCalendar.disputed(p, d);
+        Progress.bind(i, p.progress);
         return i;
     }
 
@@ -214,7 +215,7 @@ public final class Recurrence {
     }
 
     public static boolean overlaps(Instance a, Instance b) {
-        if (a.cancelled || b.cancelled || !a.timed || !b.timed || a.id.equals(b.id)) {
+        if (!Progress.occupiesTime(a) || !Progress.occupiesTime(b) || a.id.equals(b.id)) {
             return false;
         }
         return a.start < Math.max(b.end, b.start + 1) && b.start < Math.max(a.end, a.start + 1);

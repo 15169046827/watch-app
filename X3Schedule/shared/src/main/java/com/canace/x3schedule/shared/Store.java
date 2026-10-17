@@ -20,6 +20,9 @@ import com.canace.x3schedule.domain.Models.Plan;
 import com.canace.x3schedule.domain.Models.Settings;
 import com.canace.x3schedule.domain.Optimizer;
 import com.canace.x3schedule.domain.PlanEdits;
+import com.canace.x3schedule.domain.Progress;
+import com.canace.x3schedule.domain.RecoveryConflicts;
+import com.canace.x3schedule.domain.RecoveryPlanner;
 import com.canace.x3schedule.domain.Recurrence;
 import com.canace.x3schedule.domain.Wire;
 import java.io.ByteArrayOutputStream;
@@ -36,6 +39,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+
 /**
  * All plan/event mutations and their pending revision are committed in the same SQLite transaction.
  */
@@ -50,7 +54,7 @@ public final class Store extends SQLiteOpenHelper {
     }
 
     Store(Context c, String databaseName, boolean phoneRole) {
-        super(c, checkedDatabaseName(databaseName), null, 5);
+        super(c, checkedDatabaseName(databaseName), null, 6);
         context = c.getApplicationContext();
         phone = phoneRole;
         setWriteAheadLoggingEnabled(true);
@@ -71,11 +75,12 @@ public final class Store extends SQLiteOpenHelper {
             script(db, "migration-3-4.sql");
         }
         script(db, "migration-4-5.sql");
+        script(db, "migration-5-6.sql");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int from, int to) {
-        if (from < 1 || from > 4 || to != 5) {
+        if (from < 1 || from > 5 || to != 6) {
             throw new SQLiteException("Unsupported migration");
         }
         if (from == 1) {
@@ -87,7 +92,10 @@ public final class Store extends SQLiteOpenHelper {
         if (db.getVersion() <= 3) {
             script(db, "migration-3-4.sql");
         }
-        script(db, "migration-4-5.sql");
+        if (from <= 4) {
+            script(db, "migration-4-5.sql");
+        }
+        script(db, "migration-5-6.sql");
     }
 
     @Override
@@ -230,9 +238,48 @@ public final class Store extends SQLiteOpenHelper {
                         || draft.version == prior.version, "待办已改变，请重新打开");
             }
             draft.version = prior == null ? 1 : prior.version + 1;
+            requireCommittedRecovery(draft);
             putPlan(draft);
             rebuild(System.currentTimeMillis());
             dirty();
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    private void requireCommittedRecovery(Plan draft) {
+        long now = System.currentTimeMillis();
+        LocalDate today = Instant.ofEpochMilli(now).atZone(ZoneId.of(draft.zone)).toLocalDate();
+        List<Instance> generated = Recurrence.generate(PlanEdits.withDefaults(draft, settings()),
+                today.minusDays(com.canace.x3schedule.domain.CalendarEditing.lookback(draft)), today.plusDays(180));
+        RecoveryPlanner.requireNoCommittedConflict(generated, instances(), events(), now);
+    }
+
+    public synchronized void saveWithConflictConsent(List<Plan> drafts, Set<String> accepted, boolean block) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            Set<String> known = new HashSet<>();
+            for (RecoveryConflicts.Conflict conflict
+                    : RecoveryConflicts.scan(instances(), events(),
+                            System.currentTimeMillis())) {
+                known.add(conflict.key);
+            }
+            saveAll(drafts);
+            for (RecoveryConflicts.Conflict conflict
+                    : RecoveryConflicts.scan(instances(), events(),
+                            System.currentTimeMillis())) {
+                if (!known.contains(conflict.key)) {
+                    require(!conflict.committed && accepted.contains(conflict.key),
+                            "出现新的补救冲突，请返回重新预览并选择处理方式");
+                    Progress.Entry decision = new Progress.Entry();
+                    decision.op = block ? Progress.Op.BLOCK_STANDBY
+                            : Progress.Op.ACK_CONFLICT;
+                    decision.conflictKey = conflict.key;
+                    recordProgress(conflict.item, decision);
+                }
+            }
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -318,6 +365,101 @@ public final class Store extends SQLiteOpenHelper {
         return Wire.copy(current, Instance.class);
     }
 
+    public synchronized void recordProgress(Instance displayed, Progress.Entry entry) {
+        require(!DataMaintenance.active(), "本机数据正在维护，请稍后重试");
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            Instance current = instances().stream().filter(i -> i.id.equals(displayed.id)).findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("任务已改变，请重新打开"));
+            require(current.planVersion == displayed.planVersion, "任务已改变，请重新打开");
+            long now = System.currentTimeMillis();
+            entry.recoveryParent = Progress.summarize(current, events()).recoveryHead;
+            Progress.requireRecord(current, events(), entry, now);
+            validateProgressChange(current, entry, now);
+            Event event = progressEvent(current, entry, now);
+            event.validate();
+            List<Event> history = events();
+            history.add(event);
+            com.canace.x3schedule.domain.ProgressHistory.validate(history);
+            if (entry.op == Progress.Op.LEAVE) {
+                List<Event> proposed = events();
+                proposed.add(event);
+                require(com.canace.x3schedule.domain.ProgressLeaves.accepted(proposed).contains(event.id),
+                        "请假额度已用完，或该时段已确认失约；可记录实际成果，不能撤销失约");
+            }
+            putEvent(event);
+            dirty();
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    private Event progressEvent(Instance instance, Progress.Entry entry, long now) {
+        Event event = new Event();
+        event.deviceId = deviceId();
+        event.instanceId = instance.id;
+        event.snapshot = Wire.copy(instance, Instance.class);
+        event.logical = number("clock") + 1;
+        event.confirmedAt = now;
+        event.action = Action.PROGRESS;
+        event.progress = Wire.copy(entry, Progress.Entry.class);
+        event.correction = entry.op == Progress.Op.CORRECT;
+        return event;
+    }
+
+    private void validateProgressChange(Instance item, Progress.Entry entry, long now) {
+        Progress.Op op = entry.op;
+        require(phone || entry.session != Progress.Session.MANUAL,
+                "自行补做与历史补录请使用手机");
+        require(phone || op != Progress.Op.CORRECT, "更正仅限手机");
+        require(phone || !Progress.summarize(item, events()).recoveryConflict,
+                "存在两端离线补救安排冲突，请前往手机核对");
+        require(phone || op != Progress.Op.CANCEL && op != Progress.Op.RESCHEDULE
+                && op != Progress.Op.STANDBY && op != Progress.Op.BLOCK_STANDBY
+                && op != Progress.Op.ACK_CONFLICT, "日程与冲突安排请使用手机");
+        require(op != Progress.Op.YIELD
+                && op != Progress.Op.REVOKE_YIELD, "让位须通过补救影响确认");
+        boolean enable = op == Progress.Op.ENABLE
+                || op == Progress.Op.RESCHEDULE;
+        if (enable) {
+            List<RecoveryPlanner.Impact> impacts =
+                    RecoveryPlanner.preview(item, entry.start, entry.end,
+                            instances(), events(), now);
+            require(phone || impacts.isEmpty(), "补救时段未能开启，存在日程冲突。请前往手机处理后重试。");
+            RecoveryPlanner.requireConsent(item, entry, impacts);
+            require(!Progress.summarize(item, events()).blocked
+                    .contains(entry.conflictKey), "你已选择当日备用补救不可启用，请先调整备用时段或冲突安排");
+        }
+        if (op == Progress.Op.CANCEL || enable) {
+            changeYield(item, entry, enable, now);
+        }
+    }
+
+    private void changeYield(Instance owner, Progress.Entry entry,
+            boolean enable, long now) {
+        Progress.Summary old =
+                Progress.summarize(owner, events());
+        for (Instance affected : instances()) {
+            if (affected.progress == null) {
+                continue;
+            }
+            boolean before = old.yieldedIds.contains(affected.id);
+            boolean after = enable && entry.yielded.contains(affected.id);
+            if (before == after) {
+                continue;
+            }
+            Progress.Entry fact = new Progress.Entry();
+            fact.op = after ? Progress.Op.YIELD
+                    : Progress.Op.REVOKE_YIELD;
+            fact.conflictKey = Wire.digest(owner.id.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Event event = progressEvent(affected, fact, now);
+            event.validate();
+            putEvent(event);
+        }
+    }
+
     private void validateEventPurposes(List<Event> incoming) {
         Map<String, Instance> current = new HashMap<>();
         for (Instance instance : instances()) {
@@ -339,7 +481,9 @@ public final class Store extends SQLiteOpenHelper {
             List<Instance> fresh = new ArrayList<>();
             Set<String> recorded = new HashSet<>();
             for (Event e : events()) {
-                recorded.add(e.instanceId);
+                if (Progress.freezes(e)) {
+                    recorded.add(e.instanceId);
+                }
             }
             for (Plan p : plans()) {
                 LocalDate today = Instant.ofEpochMilli(now).atZone(ZoneId.of(p.zone)).toLocalDate();
@@ -536,6 +680,7 @@ public final class Store extends SQLiteOpenHelper {
         validateEventPurposes(incoming);
         List<Event> oldEvents = events();
         List<Event> all = Wire.mergeEvents(oldEvents, incoming);
+        com.canace.x3schedule.domain.ProgressHistory.validate(all);
         Set<String> ids = new HashSet<>();
         for (Event e : oldEvents) {
             ids.add(e.id);
@@ -575,6 +720,7 @@ public final class Store extends SQLiteOpenHelper {
         validateEventPurposes(s.events);
         Set<String> ids = new HashSet<>();
         List<Event> existing = events();
+        com.canace.x3schedule.domain.ProgressHistory.validate(Wire.mergeEvents(existing, s.events));
         for (Event e : existing) {
             ids.add(e.id);
         }

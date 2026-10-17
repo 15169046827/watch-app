@@ -9,6 +9,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import com.canace.x3schedule.domain.CalendarDay;
 import com.canace.x3schedule.domain.Models.Instance;
+import com.canace.x3schedule.domain.Progress;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -25,6 +26,12 @@ final class CalendarTimeline {
     private final int offset;
     private final ZoneId zone;
     private final CalendarScreen.Actions actions;
+    private Map<String, Progress.Summary> progress = java.util.Collections.emptyMap();
+
+    CalendarTimeline progress(Map<String, Progress.Summary> values) {
+        progress = values;
+        return this;
+    }
 
     CalendarTimeline(Activity activity, LinearLayout parent, Map<LocalDate, CalendarDay> days,
             ZoneId zone, CalendarScreen.Actions actions, int width, int offset) {
@@ -106,7 +113,7 @@ final class CalendarTimeline {
 
     private void allDay(LinearLayout column, LocalDate day) {
         List<Instance> allDay = days.get(day).allDay;
-        Button button = ScheduleUi.button(column, allDay.isEmpty() ? "全天 · 无" : "全天 / 截止 · " + allDay.size(),
+        Button button = ScheduleUi.button(column, allDay.isEmpty() ? "全天 / 不定时 · 无" : "全天 / 不定时 · " + allDay.size(),
                 () -> showAllDay(day, allDay));
         button.setTextSize(12);
         button.setPadding(0, 0, 0, 0);
@@ -115,7 +122,7 @@ final class CalendarTimeline {
     }
 
     private void showAllDay(LocalDate day, List<Instance> allDay) {
-        CalendarItemDialog.show(activity, day + " 全天 / 按天截止", allDay, zone, actions::detail);
+        CalendarItemDialog.show(activity, day + " 全天 / 不定时 / 按天截止", allDay, zone, progress, actions::detail);
     }
 
     private void event(FrameLayout grid, CalendarDay.Block slot, int width) {
@@ -131,11 +138,14 @@ final class CalendarTimeline {
                 : slot.items.size() + "项日程\n点击查看全部");
         button.setContentDescription(button.getText());
         button.setBackground(ScheduleUi.surface(activity, R.color.schedule_subtle));
+        if (slot.items.size() == 1) {
+            ProgressAppearance.item(button, first, progress);
+        }
         button.setOnClickListener(view -> {
             if (slot.items.size() == 1) {
                 actions.detail(first);
             } else {
-                CalendarItemDialog.show(activity, "此时段的日程", slot.items, zone, actions::detail);
+                CalendarItemDialog.show(activity, "此时段的日程", slot.items, zone, progress, actions::detail);
             }
         });
         int left = dp(width) * slot.column / slot.columns;

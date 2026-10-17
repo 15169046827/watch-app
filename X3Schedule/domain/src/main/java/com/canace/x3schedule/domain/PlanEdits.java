@@ -27,6 +27,11 @@ public final class PlanEdits {
         require(!date.isBefore(Instant.ofEpochMilli(now).atZone(ZoneId.of(original.zone)).toLocalDate()), "修改仅影响未来");
         require(!date.isBefore(LocalDate.parse(original.anchor)), "生效日期早于计划起点");
         date = oneOffStart(original, draft, date, now);
+        List<Models.Instance> selected = Recurrence.generate(original, date, date);
+        if (selected.stream().anyMatch(i -> i.start <= now)) {
+            require(!CalendarEditing.once(original), "日程已开始，不能修改或删除");
+            date = date.plusDays(1);
+        }
         Plan result = Wire.copy(draft, Plan.class);
         result.previous = new ArrayList<>();
         List<Plan> earlier = new ArrayList<>(original.previous);
@@ -148,6 +153,8 @@ public final class PlanEdits {
         require(!date.isBefore(today), "修改仅影响未来");
         require(!plan.deleted, "已删除计划不能修改");
         require(plan.kind != Models.Kind.TODO, "待办不使用单次排班");
+        require(Recurrence.generate(plan, date, date).stream().noneMatch(i -> i.start <= now),
+                "日程已到原定开始时间，不能修改或删除");
     }
 
     static boolean covers(Plan segment, LocalDate date) {
@@ -173,6 +180,9 @@ public final class PlanEdits {
 
     public static Plan withDefaults(Plan plan, Settings settings) {
         Plan copy = Wire.copy(plan, Plan.class);
+        if (copy.progress != null) {
+            progressDefaults(copy, settings);
+        }
         if (copy.inheritReminders) {
             copy.reminderMinutes = settings.reminderMinutes;
             copy.reminderTargets = settings.reminderTargets;
@@ -184,5 +194,17 @@ public final class PlanEdits {
             copy.previous.set(n, withDefaults(copy.previous.get(n), settings));
         }
         return copy;
+    }
+
+    private static void progressDefaults(Plan copy, Settings settings) {
+        copy.progress.boundaryMinute = settings.taskDayStartMinute;
+        copy.progress.leaveWeek = copy.leaveWeek >= 0 ? copy.leaveWeek
+                : settings.categoryWeek.getOrDefault(copy.category, settings.leaveWeek);
+        copy.progress.leaveMonth = copy.leaveMonth >= 0 ? copy.leaveMonth
+                : settings.categoryMonth.getOrDefault(copy.category, settings.leaveMonth);
+        copy.progress.leaveWeekScope = copy.leaveWeek >= 0 ? "plan:" + copy.id
+                : settings.categoryWeek.containsKey(copy.category) ? "category:" + copy.category : "global";
+        copy.progress.leaveMonthScope = copy.leaveMonth >= 0 ? "plan:" + copy.id
+                : settings.categoryMonth.containsKey(copy.category) ? "category:" + copy.category : "global";
     }
 }
