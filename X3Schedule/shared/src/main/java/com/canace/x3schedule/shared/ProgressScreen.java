@@ -16,6 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 /** Phone and watch share feedback; timetable editing and manual recovery stay on the phone. */
 final class ProgressScreen {
@@ -23,16 +24,19 @@ final class ProgressScreen {
     private final LinearLayout section;
     private final Instance item;
     private final Runnable changed;
+    private final BooleanSupplier currentPage;
     private final AtomicBoolean saving = new AtomicBoolean();
     private boolean phone;
     private List<Event> events;
     private List<Instance> instances;
     private Progress.Summary state;
 
-    ProgressScreen(Activity activity, LinearLayout parent, Instance item, Runnable changed) {
+    ProgressScreen(Activity activity, LinearLayout parent, Instance item, Runnable changed,
+            BooleanSupplier currentPage) {
         this.activity = activity;
         this.item = item;
         this.changed = changed;
+        this.currentPage = currentPage;
         section = new LinearLayout(activity);
         section.setOrientation(LinearLayout.VERTICAL);
         parent.addView(section);
@@ -322,7 +326,7 @@ final class ProgressScreen {
             String message = error;
             activity.runOnUiThread(() -> {
                 saving.set(false);
-                if (active()) {
+                if (!activity.isDestroyed() && !activity.isFinishing() && currentPage.getAsBoolean()) {
                     if (message == null) {
                         changed.run();
                         suggestRecovery(entry);

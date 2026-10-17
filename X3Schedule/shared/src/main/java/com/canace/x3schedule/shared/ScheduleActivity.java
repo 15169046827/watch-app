@@ -684,7 +684,8 @@ public final class ScheduleActivity extends Activity {
 
     private void detailActions(Instance i) {
         if (i.progress != null) {
-            new ProgressScreen(this, content, i, () -> detail(i)).show();
+            new ProgressScreen(this, content, i, () -> detail(i),
+                    () -> "detail".equals(page) && i.id.equals(session.instanceId)).show();
             return;
         }
         if (i.kind == Kind.REMINDER) {

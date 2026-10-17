@@ -48,6 +48,11 @@ public final class StoreTestRunner extends Instrumentation {
 
     private boolean calendarFixture;
     private boolean progressFixture;
+    private boolean bleProgress;
+    private boolean recoveryFixture;
+    private boolean progressLifecycle;
+    private boolean progressConflictUi;
+    private String reminderFixture;
     private String uiText;
     private String uiField;
 
@@ -188,6 +193,11 @@ public final class StoreTestRunner extends Instrumentation {
         uiState = arguments != null && "true".equals(arguments.getString("uiState"));
         calendarFixture = arguments != null && "true".equals(arguments.getString("calendarFixture"));
         progressFixture = enabled(arguments, "progressFixture");
+        bleProgress = enabled(arguments, "bleProgress");
+        recoveryFixture = enabled(arguments, "recoveryFixture");
+        progressLifecycle = enabled(arguments, "progressLifecycle");
+        progressConflictUi = enabled(arguments, "progressConflictUi");
+        reminderFixture = option(arguments, "reminderFixture");
         uiText = option(arguments, "uiText");
         uiField = option(arguments, "uiField");
         saveLifecycle = arguments != null && "true".equals(arguments.getString("saveLifecycle"));
@@ -231,9 +241,32 @@ public final class StoreTestRunner extends Instrumentation {
         runUiOrStoreChecks();
     }
 
-    private void runUiOrStoreChecks() {
+    private boolean runProgressChecks() {
+        if (reminderFixture != null) {
+            new ReminderDeviceChecks().run(this, reminderFixture);
+            return true;
+        }
+        if (progressConflictUi) {
+            new ProgressLifecycleChecks(this).runConflict();
+            return true;
+        }
+        if (progressLifecycle) {
+            new ProgressLifecycleChecks(this).run();
+            return true;
+        }
+        if (recoveryFixture) {
+            new RecoveryDeviceFixture().run(this);
+            return true;
+        }
         if (progressFixture) {
             new ProgressDeviceFixture().run(this);
+            return true;
+        }
+        return false;
+    }
+
+    private void runUiOrStoreChecks() {
+        if (runProgressChecks()) {
             return;
         }
         if (configuration) {
@@ -253,7 +286,7 @@ public final class StoreTestRunner extends Instrumentation {
             return;
         }
         if (blePeer != null) {
-            new BleDeviceChecks(this).run(blePeer, bleRecovery, bleAwakeCpu, bleForeground);
+            new BleDeviceChecks(this).run(blePeer, bleRecovery, bleAwakeCpu, bleForeground, bleProgress);
             return;
         }
         runStoreChecks();

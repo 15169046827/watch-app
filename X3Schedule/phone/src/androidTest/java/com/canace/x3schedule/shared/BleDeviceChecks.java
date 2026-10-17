@@ -27,7 +27,7 @@ final class BleDeviceChecks {
         context = new SyntheticBleContext(instrumentation.getTargetContext());
     }
 
-    void run(String peer, String recoveryId, boolean awakeCpu, boolean foreground) {
+    void run(String peer, String recoveryId, boolean awakeCpu, boolean foreground, boolean progress) {
         String name = "schedule-test-ble-" + UUID.randomUUID() + ".db";
         Bundle result = new Bundle();
         int code = Activity.RESULT_OK;
@@ -42,19 +42,20 @@ final class BleDeviceChecks {
                     "Synthetic BLE namespace is not isolated");
             require(peer != null && peer.matches("(?i)[0-9a-f]{2}(:[0-9a-f]{2}){5}"), "Invalid peer");
             require(recoveryId == null || recoveryId.matches("[a-f0-9]{32}"), "Invalid recovery ID");
+            progressMode(progress, recoveryId);
             if (awakeCpu) {
                 require(recoveryId != null, "CPU control requires recovery mode");
                 wakeLock = diagnosticCpu();
             }
             store.putMeta("peer", peer);
             if (phone) {
-                seed(store);
+                seedMode(store, progress);
             }
             long started = System.currentTimeMillis();
             try (RecoveryControl control = new RecoveryControl(instrumentation, foreground);
                     BleLink link = new BleLink(context, store, () -> { }, () -> { })) {
                 link.start();
-                await(store, link, started);
+                awaitMode(store, link, started, progress);
                 // Give the final ATT response time to reach the other endpoint before teardown.
                 Thread.sleep(2000);
                 if (recoveryId != null) {
@@ -64,6 +65,7 @@ final class BleDeviceChecks {
                 result.putString("stream", "Synthetic bonded BLE passed; role=" + (phone ? "phone" : "watch")
                         + "; elapsedMs=" + (System.currentTimeMillis() - started)
                         + "; plans=" + store.plans().size() + "; events=" + store.events().size()
+                        + "; progress=" + progress
                         + "; recovery=" + (recoveryId != null));
             }
             // BleLink cleanup is serialized on its own worker before the database closes.
@@ -82,6 +84,26 @@ final class BleDeviceChecks {
             context.deleteDatabase(name);
         }
         instrumentation.finish(code, result);
+    }
+
+    private static void progressMode(boolean progress, String recoveryId) {
+        require(!progress || recoveryId == null, "Progress and transport recovery modes are separate");
+    }
+
+    private void seedMode(Store store, boolean progress) {
+        if (progress) {
+            ProgressBleChecks.seed(store);
+        } else {
+            seed(store);
+        }
+    }
+
+    private void awaitMode(Store store, BleLink link, long started, boolean progress) throws InterruptedException {
+        if (progress) {
+            ProgressBleChecks.await(store, link, started);
+        } else {
+            await(store, link, started);
+        }
     }
 
     private PowerManager.WakeLock diagnosticCpu() {

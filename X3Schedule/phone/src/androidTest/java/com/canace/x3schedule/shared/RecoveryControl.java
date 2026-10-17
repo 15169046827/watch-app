@@ -50,4 +50,8 @@ final class RecoveryControl implements AutoCloseable {
             runner.runOnMainSync(activity::finish);
         }
     }
+
+    Activity activity() {
+        return activity;
+    }
 }
