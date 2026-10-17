@@ -48,6 +48,8 @@ public final class StoreTestRunner extends Instrumentation {
 
     private boolean calendarFixture;
     private boolean progressFixture;
+    private String uiText;
+    private String uiField;
 
     private boolean saveLifecycle;
 
@@ -186,6 +188,8 @@ public final class StoreTestRunner extends Instrumentation {
         uiState = arguments != null && "true".equals(arguments.getString("uiState"));
         calendarFixture = arguments != null && "true".equals(arguments.getString("calendarFixture"));
         progressFixture = enabled(arguments, "progressFixture");
+        uiText = option(arguments, "uiText");
+        uiField = option(arguments, "uiField");
         saveLifecycle = arguments != null && "true".equals(arguments.getString("saveLifecycle"));
         configuration = arguments != null && "true".equals(arguments.getString("configuration"));
         alarmState = arguments != null && "true".equals(arguments.getString("alarmState"));
@@ -198,8 +202,16 @@ public final class StoreTestRunner extends Instrumentation {
         return arguments != null && "true".equals(arguments.getString(option));
     }
 
+    private static String option(Bundle arguments, String name) {
+        return arguments == null ? null : arguments.getString(name);
+    }
+
     @Override
     public void onStart() {
+        if (uiText != null) {
+            new UiTextChecks().run(this, uiField, uiText);
+            return;
+        }
         if (alarmState) {
             AlarmCapabilityChecks.run(this);
             return;

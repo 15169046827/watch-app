@@ -46,6 +46,10 @@ gradle -PscheduleTestBuildType=validation :phone:checkstyleAndroidTest :phone:li
 
 `-e configuration true` 仅在无同步伙伴的手机 validation 包中运行真实页面旋转检查：日视图宽度、选中日期/模式、周视图横向位置、编辑字段和选项、未确认预览以及排队保存时的确认状态。通过 Activity 请求方向并恢复原请求值，不修改设备全局旋转设置；成功后验收库增加一条关闭提醒的合成计划。
 
+`-e uiState true` 检查表单恢复及主按钮实际背景像素，包括首次显示、禁用和重新启用。实机发现部分框架会保留 Ripple 子背景的初始禁用色；组件安装背景后显式传播当前状态，避免白字落在浅色背景上。
+
+测试包的 `-e uiField <字段> -e uiText <合成值>` 仅通过公开无障碍接口填写指定任务字段或系统保存文件名，不更改输入法。运行者必须是独立 validation 包，前台只能是日程应用或系统文件选择器；字段必须唯一且在白名单内。任务值限 `QA07-` 前缀的 ASCII 合成文本，文件名限 `x3schedule-*.x3backup`；不能用于权限弹窗或任意应用。
+
 双端 validation 测试包支持由主机协助的 `-e transactionCrash before|after -e crashId <32位小写十六进制新ID>`。每次必须使用新 ID，测试只打开 `schedule-test-crash-<ID>.db`，不打开 `schedule.db`。主机等到 `Crash boundary armed`（或对应私有 `files/schedule-crash-<ID>-armed` 标记）后，在30秒内终止该验收包进程；随后以同一 ID 运行 `-e transactionCrash recover-before|recover-after`，核对数据库完整性、计划、实例、历史、设置和同步修订。手机可通过验收包自身 UID 终止进程，平台不支持时可用 `am force-stop <验收包名>`，须记录实际方式。`before` 用测试外层事务包住真实 `Store.saveAll`，在数据已修改但外层尚未提交时暂停；超时自动回滚。`after` 在真实批量保存返回后暂停。此检查证明受控事务边界的进程终止恢复，不等同于任意写入指令处强杀或物理断电；合成数据库和比对文件保留供核查。
 
 存储测试超过 30 秒仍未结束时，测试包输出执行线程栈辅助定位停滞；诊断不读取日程内容，也不自动将等待判为通过。

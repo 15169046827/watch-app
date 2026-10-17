@@ -3,6 +3,8 @@ package com.canace.x3schedule.shared;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.os.Bundle;
 import android.view.ContextThemeWrapper;
 import android.widget.ArrayAdapter;
@@ -32,7 +34,8 @@ final class UiStateChecks {
             result.putString("stream", "Synthetic UI state passed: " + checks);
             runner.finish(Activity.RESULT_OK, result);
         } catch (RuntimeException | AssertionError error) {
-            result.putString("stream", "Synthetic UI state failed: " + error.getClass().getSimpleName());
+            result.putString("stream", "Synthetic UI state failed after " + checks + ": "
+                    + (error.getCause() == null ? error.getMessage() : error.getCause().getMessage()));
             runner.finish(Activity.RESULT_CANCELED, result);
         }
     }
@@ -46,6 +49,7 @@ final class UiStateChecks {
 
     private void forms(Context target) {
         Context context = new ContextThemeWrapper(target, android.R.style.Theme_Material_Light);
+        primaryColors(context);
         LinearLayout first = new LinearLayout(context);
         EditText title = field(first, "名称", "  合成未保存草稿  ");
         EditText date = field(first, "日期", "2026-");
@@ -82,6 +86,34 @@ final class UiStateChecks {
         FormState.restore(second, restored);
         check(nextTitle.getText().length() == 0);
         check(commits[0] == 0);
+    }
+
+    private void primaryColors(Context context) {
+        LinearLayout parent = new LinearLayout(context);
+        Button button = ScheduleUi.button(parent, "QA07-color", () -> { });
+        ScheduleUi.primary(button);
+        check(button.isEnabled());
+        if (fill(button) != ScheduleUi.color(context, R.color.schedule_accent)) {
+            throw new AssertionError("Primary fill=" + Integer.toHexString(fill(button))
+                    + " expected=" + Integer.toHexString(ScheduleUi.color(context, R.color.schedule_accent))
+                    + " states=" + java.util.Arrays.toString(button.getDrawableState()));
+        }
+        check(fill(button) == ScheduleUi.color(context, R.color.schedule_accent));
+        button.setEnabled(false);
+        check(fill(button) == ScheduleUi.color(context, R.color.schedule_subtle));
+        button.setEnabled(true);
+        check(fill(button) == ScheduleUi.color(context, R.color.schedule_accent));
+    }
+
+    private int fill(Button button) {
+        Bitmap bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888);
+        try {
+            button.getBackground().setBounds(0, 0, 100, 100);
+            button.getBackground().draw(new Canvas(bitmap));
+            return bitmap.getPixel(50, 50);
+        } finally {
+            bitmap.recycle();
+        }
     }
 
     private EditText field(LinearLayout parent, String label, String value) {

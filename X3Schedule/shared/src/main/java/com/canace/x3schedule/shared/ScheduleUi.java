@@ -95,14 +95,17 @@ final class ScheduleUi {
             color(context, R.color.schedule_muted), color(context, foreground), color(context, foreground)
         }));
         android.graphics.drawable.StateListDrawable backgrounds = new android.graphics.drawable.StateListDrawable();
-        backgrounds.addState(states[0], surface(context, R.color.schedule_subtle));
+        backgrounds.addState(new int[] { -android.R.attr.state_enabled }, surface(context, R.color.schedule_subtle));
         GradientDrawable focused = surface(context, fill);
         focused.setStroke(dp(context, 2), color(context, foreground));
-        backgrounds.addState(states[1], focused);
-        backgrounds.addState(states[2], surface(context, fill));
+        backgrounds.addState(new int[] { android.R.attr.state_focused }, focused);
+        backgrounds.addState(new int[0], surface(context, fill));
         view.setBackgroundTintList(null);
         view.setBackground(new RippleDrawable(ColorStateList.valueOf(color(context, R.color.schedule_ripple)),
                 backgrounds, null));
+        // Some framework versions retain the child drawable's initial disabled state until a state change.
+        view.getBackground().setState(new int[0]);
+        view.getBackground().setState(view.getDrawableState());
     }
 
     static Button button(LinearLayout parent, String label, Runnable action) {
