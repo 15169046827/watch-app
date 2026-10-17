@@ -21,9 +21,15 @@ final class CalendarMigrationChecks {
     }
 
     int run() {
+        upgrade(4);
+        upgrade(5);
+        return checks;
+    }
+
+    private void upgrade(int from) {
         String name = "schedule-test-calendar-upgrade-" + UUID.randomUUID() + ".db";
         try {
-            String[] before = seed(name);
+            String[] before = seed(name, from);
             try (Store upgraded = new Store(context, name, true)) {
                 SQLiteDatabase db = upgraded.getReadableDatabase();
                 check(db.getVersion() == 6);
@@ -32,7 +38,7 @@ final class CalendarMigrationChecks {
                 check(before[2].equals(Wire.JSON.toJson(upgraded.events())));
                 check(before[3].equals(Wire.JSON.toJson(upgraded.settings())));
                 check(upgraded.meta("peer", "").equals("synthetic-peer"));
-                check(upgraded.meta("revision", "").equals("19"));
+                check(upgraded.meta("revision", "").equals(from == 4 ? "19" : "18"));
                 check(upgraded.meta("acked_revision", "").equals("9"));
                 check(DatabaseUtils.stringForQuery(db, "SELECT manifest FROM batch_receipts WHERE id='done'",
                         null).equals("retained-receipt"));
@@ -44,13 +50,17 @@ final class CalendarMigrationChecks {
                 }
                 check(upgraded.pending() > 0);
             }
-            return checks;
+            try (Store reopened = new Store(context, name, true)) {
+                check(reopened.getReadableDatabase().getVersion() == 6);
+                check(before[2].equals(Wire.JSON.toJson(reopened.events())));
+                check(reopened.meta("revision", "").equals(from == 4 ? "19" : "18"));
+            }
         } finally {
             context.deleteDatabase(name);
         }
     }
 
-    private String[] seed(String name) {
+    private String[] seed(String name, int version) {
         try (Store store = new Store(context, name, true)) {
             Plan plan = new Plan();
             plan.title = "合成迁移历史";
@@ -76,7 +86,7 @@ final class CalendarMigrationChecks {
             db.execSQL("INSERT INTO batch_in VALUES (1,'pending-in')");
             db.execSQL("INSERT INTO batch_in_parts VALUES (0,X'03','digest')");
             db.execSQL("INSERT INTO batch_receipts VALUES ('done','retained-receipt','retained-digests')");
-            db.setVersion(4);
+            db.setVersion(version);
             return before;
         }
     }

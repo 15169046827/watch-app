@@ -30,7 +30,7 @@ gradle checkstyleMain checkstyleTest checkstyleAndroidTest :domain:test :shared:
 python tools/test_schema.py
 ~~~
 
-仓库 Android CI 包含同等日程验证步骤。手机和手表 Android 测试包共用 StoreTestRunner，默认使用隔离的合成数据库执行存储回归，并在结束前清理测试数据库；测试包构建成功不代表设备测试已执行。存储回归包含合成非空 v4→v6 升级，核对业务、设置、配对元数据及收据保留，未完成传输清理和重新排队。新增 ProgressStoreChecks 验证原时段失约、手机自行补做、手表编辑权限、失败事务回滚及同步/恢复幂等；尚须在两端运行。
+仓库 Android CI 包含同等日程验证步骤。手机和手表 Android 测试包共用 StoreTestRunner，使用隔离合成数据库且结束前清理；构建成功不等于设备测试通过。存储回归包含非空v4/v5→v6升级与再次打开，核对业务、设置、配对元数据及收据保留，未完成传输清理和重新排队；ProgressStoreChecks覆盖失约、自行补做、手表权限、回滚和恢复/同步幂等。2026-10-17两端各202项真实检查通过；期间发现并修复迁移注释分号被当作SQL的故障，增加独占行注释过滤及回归。正式升级和新功能交互仍待验收。
 
 完整界面验收可使用 `validation` 构建类型；它与正式版本共用生产代码，但使用独立 UID/数据目录和“日程验收”名称。手机包名为 `com.canace.x3schedule.phone.validation.phone`，手表为 `com.canace.x3schedule.validation`，均使用共享 Debug 签名，不作为发布产物。
 

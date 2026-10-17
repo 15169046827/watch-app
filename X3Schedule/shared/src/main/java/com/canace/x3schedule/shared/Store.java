@@ -24,6 +24,7 @@ import com.canace.x3schedule.domain.Progress;
 import com.canace.x3schedule.domain.RecoveryConflicts;
 import com.canace.x3schedule.domain.RecoveryPlanner;
 import com.canace.x3schedule.domain.Recurrence;
+import com.canace.x3schedule.domain.SqlScript;
 import com.canace.x3schedule.domain.Wire;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -111,10 +112,8 @@ public final class Store extends SQLiteOpenHelper {
             while ((n = in.read(part)) != -1) {
                 b.write(part, 0, n);
             }
-            for (String sql : b.toString("UTF-8").split(";")) {
-                if (!sql.trim().isEmpty()) {
-                    db.execSQL(sql);
-                }
+            for (String sql : SqlScript.statements(b.toString("UTF-8"))) {
+                db.execSQL(sql);
             }
         } catch (IOException e) {
             throw new SQLiteException("Schema is unavailable");
