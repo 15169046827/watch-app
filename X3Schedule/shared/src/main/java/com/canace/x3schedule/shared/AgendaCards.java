@@ -11,6 +11,7 @@ import com.canace.x3schedule.domain.DayPrecision;
 import com.canace.x3schedule.domain.Kinds;
 import com.canace.x3schedule.domain.Models.Instance;
 import com.canace.x3schedule.domain.Models.State;
+import com.canace.x3schedule.domain.Progress;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -24,13 +25,21 @@ final class AgendaCards {
     }
 
     static void item(LinearLayout parent, Instance item, HomeActions actions, State state) {
+        item(parent, item, actions, state, null);
+    }
+
+    static void item(LinearLayout parent, Instance item, HomeActions actions, State state, Progress.Summary progress) {
         String date = Instant.ofEpochMilli(item.start).atZone(ZoneId.of(item.zone))
                 .format(DateTimeFormatter.ofPattern("MM-dd HH:mm"));
         if (item.dateOnly) {
             date = DayPrecision.day(item) + " · 全天";
+        } else if (item.progress != null && item.progress.untimed) {
+            date = item.taskDay + " · 不定时";
         }
         String label = item.title + "\n" + date + " · " + Kinds.label(item.kind);
-        if (state != null) {
+        if (progress != null) {
+            label += "\n" + progressLabel(item, progress);
+        } else if (state != null) {
             label += "\n" + stateLabel(state);
         }
         SpannableString styled = new SpannableString(label);
@@ -38,6 +47,16 @@ final class AgendaCards {
         Button button = ScheduleUi.button(parent, label, () -> actions.detail(item));
         button.setText(styled);
         button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        if (progress != null && item.start <= System.currentTimeMillis()) {
+            ProgressAppearance.grade(button, progress.grade, progress.exempt());
+        }
+    }
+
+    static String progressLabel(Instance item, Progress.Summary progress) {
+        if (item.start > System.currentTimeMillis()) {
+            return "待开始";
+        }
+        return Progress.describe(progress) + (progress.recoveryConflict ? " · 待手机核对补救" : "");
     }
 
     static String stateLabel(State s) {

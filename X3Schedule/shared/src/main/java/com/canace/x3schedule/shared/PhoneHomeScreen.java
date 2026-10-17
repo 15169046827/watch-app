@@ -16,10 +16,12 @@ final class PhoneHomeScreen {
         ScheduleUi.primary(ScheduleUi.button(content, "＋ 新建日程", () -> actions.open(HomeActions.Route.NEW)));
         ScheduleUi.heading(content, "当前与下一项");
         if (agenda.current != null) {
-            AgendaCards.item(content, agenda.current, actions);
+            AgendaCards.item(content, agenda.current, actions, agenda.states.get(agenda.current.id),
+                    agenda.progress.get(agenda.current.id));
         }
         if (agenda.next != null) {
-            AgendaCards.item(content, agenda.next, actions);
+            AgendaCards.item(content, agenda.next, actions, agenda.states.get(agenda.next.id),
+                    agenda.progress.get(agenda.next.id));
         }
         if (agenda.current == null && agenda.next == null) {
             ScheduleUi.text(content, "暂时没有要开始的日程。给接下来的时间留一个安排吧。", 15);
@@ -31,7 +33,7 @@ final class PhoneHomeScreen {
         int shown = 0;
         for (Instance item : agenda.today) {
             if (shown++ < 8) {
-                AgendaCards.item(content, item, actions, agenda.states.get(item.id));
+                AgendaCards.item(content, item, actions, agenda.states.get(item.id), agenda.progress.get(item.id));
             }
         }
         if (agenda.today.isEmpty()) {

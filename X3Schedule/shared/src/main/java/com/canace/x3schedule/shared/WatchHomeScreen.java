@@ -14,7 +14,8 @@ final class WatchHomeScreen {
         if (agenda.current == null) {
             ScheduleUi.text(content, "当前没有进行中的日程", 14);
         } else {
-            AgendaCards.item(content, agenda.current, actions);
+            AgendaCards.item(content, agenda.current, actions, agenda.states.get(agenda.current.id),
+                    agenda.progress.get(agenda.current.id));
             if (agenda.current.kind == Kind.EXECUTION) {
                 ScheduleUi.primary(ScheduleUi.button(content, "刚刚完成",
                         () -> {
@@ -30,7 +31,8 @@ final class WatchHomeScreen {
         if (agenda.next == null) {
             ScheduleUi.text(content, "暂无下一项\n可在手机创建并同步", 14);
         } else {
-            AgendaCards.item(content, agenda.next, actions);
+            AgendaCards.item(content, agenda.next, actions, agenda.states.get(agenda.next.id),
+                    agenda.progress.get(agenda.next.id));
         }
         ScheduleUi.heading(content, "日程清单");
         AgendaCards.route(content, "待确认 · " + agenda.pending, HomeActions.Route.PENDING, actions);

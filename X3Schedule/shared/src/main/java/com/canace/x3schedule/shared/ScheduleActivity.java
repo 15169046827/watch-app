@@ -582,7 +582,7 @@ public final class ScheduleActivity extends Activity {
     }
 
     private String instanceTime(Instance instance) {
-        if (instance.dateOnly) {
+        if (instance.dateOnly || instance.progress != null && instance.progress.untimed) {
             return CalendarScreen.label(instance, ZoneId.of(instance.zone));
         }
         if (instance.kind == Kind.TODO) {
@@ -626,7 +626,7 @@ public final class ScheduleActivity extends Activity {
             boolean match = pending ? (s == State.PENDING || s == State.OVERDUE) : (!i.cancelled
                     && i.kind != Kind.TODO && i.end >= now - 86400000L && i.start < now + 86400000L);
             if (match && shown++ < 100) {
-                button(instanceTime(i) + "\n" + i.title + " · " + stateLabel(s), () -> detail(i));
+                button(instanceTime(i) + "\n" + i.title + " · " + currentLabel(i, events, s), () -> detail(i));
             }
         }
         if (shown == 0) {
@@ -641,7 +641,8 @@ public final class ScheduleActivity extends Activity {
         session.calendarInstance = Wire.copy(i, Instance.class);
         text(Kinds.label(i.kind), 14);
         text(instanceTime(i), 14);
-        text(stateLabel(currentState(i, store.events(), System.currentTimeMillis())), 16);
+        List<Event> history = store.events();
+        text(currentLabel(i, history, currentState(i, history, System.currentTimeMillis())), 16);
         for (String step : i.steps) {
             text("• " + step, 14);
         }
@@ -665,6 +666,11 @@ public final class ScheduleActivity extends Activity {
     private State currentState(Instance item, List<Event> events, long now) {
         return item.progress == null ? Execution.state(item, Execution.winner(events, item.id), now)
                 : Progress.state(item, Progress.summarize(item, events), now);
+    }
+
+    private String currentLabel(Instance item, List<Event> events, State state) {
+        return item.progress == null ? stateLabel(state)
+                : AgendaCards.progressLabel(item, Progress.summarize(item, events));
     }
 
     private Instance restoredCalendarItem(ScreenSession state) {
