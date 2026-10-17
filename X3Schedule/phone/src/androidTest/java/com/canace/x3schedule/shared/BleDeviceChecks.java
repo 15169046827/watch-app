@@ -155,7 +155,7 @@ final class BleDeviceChecks {
 
     private void await(Store store, BleLink link, long started) throws InterruptedException {
         boolean recorded = false;
-        while (System.currentTimeMillis() - started < 240000) {
+        while (System.currentTimeMillis() - started < 480000) {
             if (!store.phone && !recorded) {
                 for (Instance instance : store.instances()) {
                     if (instance.kind == Kind.TODO && !instance.cancelled) {

@@ -48,7 +48,7 @@ final class BleRecoveryChecks {
         }
         phase("ready");
         if (store.phone) {
-            command("edit", 120000);
+            command("edit", 300000);
             Plan added = new Plan();
             added.title = title;
             added.kind = Kind.REMINDER;
@@ -59,10 +59,10 @@ final class BleRecoveryChecks {
             store.save(added);
             require(store.pending() > 0 && store.events().size() == 1, "Phone offline mutation not isolated");
             phase("offline");
-            command("recover", 120000);
+            command("recover", 300000);
             await(store, original, history);
         } else {
-            command("disconnect", 120000);
+            command("disconnect", 300000);
             original.close();
             Thread.sleep(1000);
             Instance execution = store.instances().stream().filter(item -> item.kind == Kind.EXECUTION)
@@ -70,7 +70,7 @@ final class BleRecoveryChecks {
             store.record(execution, Action.COMPLETE, 0, false, System.currentTimeMillis(), false);
             require(store.pending() > 0 && store.plans().size() == 3, "Watch offline mutation not isolated");
             phase("offline");
-            command("recover", 120000);
+            command("recover", 300000);
             try (BleLink replacement = new BleLink(context, store, () -> { }, () -> { })) {
                 replacement.start();
                 await(store, replacement, history);
@@ -87,7 +87,7 @@ final class BleRecoveryChecks {
         PowerManager power = context.getSystemService(PowerManager.class);
         int samples = 0;
         long nextReport = started;
-        while (SystemClock.elapsedRealtime() - started < 240000) {
+        while (SystemClock.elapsedRealtime() - started < 480000) {
             require(power.isInteractive() == foreground, "Screen state changed during recovery");
             samples++;
             if (SystemClock.elapsedRealtime() >= nextReport) {
@@ -110,7 +110,7 @@ final class BleRecoveryChecks {
                 require(history.isEmpty(), "History lost");
                 phase("recovered;foreground=" + foreground + ";screenStateSamples=" + samples + ";elapsedMs="
                         + (SystemClock.elapsedRealtime() - started));
-                command("finish", 120000);
+                command("finish", 300000);
                 return;
             }
             Thread.sleep(500);

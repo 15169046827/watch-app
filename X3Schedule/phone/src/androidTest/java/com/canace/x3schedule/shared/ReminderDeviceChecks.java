@@ -26,8 +26,8 @@ final class ReminderDeviceChecks {
         try {
             require(runner.getTargetContext().getPackageName()
                     .equals("com.canace.x3schedule.phone.validation.phone"), "Validation phone only");
-            if (mode.equals("seed")) {
-                result.putString("stream", seed(runner));
+            if (mode.equals("seed") || mode.equals("seed2")) {
+                result.putString("stream", seed(runner, mode.equals("seed2") ? TITLE + "-2" : TITLE));
             } else {
                 require(mode.equals("inspect"), "Unsupported reminder mode");
                 result.putString("stream", inspect(runner));
@@ -39,19 +39,19 @@ final class ReminderDeviceChecks {
         runner.finish(code, result);
     }
 
-    private String seed(Instrumentation runner) {
+    private String seed(Instrumentation runner, String title) {
         ZonedDateTime start = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).plusMinutes(3)
                 .withSecond(0).withNano(0);
         try (Store store = new Store(runner.getTargetContext())) {
             require(store.meta("peer", "").isEmpty(), "Unpaired validation required");
-            require(store.plans().stream().noneMatch(p -> p.title.equals(TITLE)), "Reminder fixture exists");
+            require(store.plans().stream().noneMatch(p -> p.title.equals(title)), "Reminder fixture exists");
             Settings settings = store.settings();
             settings.quietStart = 0;
             settings.quietEnd = 0;
             settings.phoneRemindersEnabled = true;
             store.settings(settings);
             Plan plan = new Plan();
-            plan.title = TITLE;
+            plan.title = title;
             plan.anchor = start.toLocalDate().toString();
             plan.rule = Rule.DAYS;
             plan.count = 1;
@@ -63,7 +63,7 @@ final class ReminderDeviceChecks {
             store.save(plan);
         }
         ReminderReceiver.schedule(runner.getTargetContext(), false);
-        return "QA07 reminder ready; validation quiet hours disabled only; start=" + start.toInstant().toEpochMilli()
+        return title + " ready; validation quiet hours disabled only; start=" + start.toInstant().toEpochMilli()
                 + "; end=" + start.plusMinutes(1).toInstant().toEpochMilli();
     }
 
@@ -72,7 +72,7 @@ final class ReminderDeviceChecks {
         for (StatusBarNotification active : manager.getActiveNotifications()) {
             Notification notification = active.getNotification();
             String title = String.valueOf(notification.extras.getCharSequence(Notification.EXTRA_TITLE));
-            if (title.equals(TITLE)) {
+            if (title.equals(TITLE) || title.equals(TITLE + "-2")) {
                 require(notification.contentIntent != null && (Build.VERSION.SDK_INT < 31
                         || notification.contentIntent.isImmutable()),
                         "Missing immutable content route");
