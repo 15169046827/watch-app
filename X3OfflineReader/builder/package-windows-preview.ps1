@@ -153,7 +153,7 @@ Copy-Tree (Join-Path $project 'samples\builder-inputs') `
     (Join-Path $app 'builder-inputs')
 if (-not $WithoutMelo) {
     & (Join-Path $app '.tools\melo\python.exe') `
-        (Join-Path $app 'builder\melo\worker.py') --self-test
+        -B (Join-Path $app 'builder\melo\worker.py') --self-test
     if ($LASTEXITCODE -ne 0) {
         throw 'Packaged Melo sanitizer self-test failed'
     }
