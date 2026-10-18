@@ -39,7 +39,7 @@ if(-not(Test-Path -LiteralPath $icon -PathType Leaf)){throw '听读工坊图标�
 if($LASTEXITCODE -ne 0){throw 'Builder compilation failed'}
 $uiRoot=Join-Path $PSScriptRoot 'ui'
 Push-Location $uiRoot
-try { & npm.cmd run tauri build } finally { Pop-Location }
+try { & npm.cmd run desktop:build } finally { Pop-Location }
 if($LASTEXITCODE -ne 0){throw 'Vue/Tauri compilation failed'}
 $tauriExecutable=Join-Path $uiRoot 'src-tauri\target\release\tingdu-workshop.exe'
 if(-not(Test-Path -LiteralPath $tauriExecutable -PathType Leaf)){throw 'Tauri executable not found'}

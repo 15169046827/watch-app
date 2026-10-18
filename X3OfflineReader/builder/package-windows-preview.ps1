@@ -72,7 +72,7 @@ if ($LASTEXITCODE -ne 0) {
 $uiRoot = Join-Path $PSScriptRoot 'ui'
 Push-Location $uiRoot
 try {
-    & npm.cmd run tauri build
+    & npm.cmd run desktop:build
 } finally {
     Pop-Location
 }

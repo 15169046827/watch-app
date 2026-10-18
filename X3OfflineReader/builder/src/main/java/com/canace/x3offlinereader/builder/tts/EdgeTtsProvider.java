@@ -1,6 +1,7 @@
 package com.canace.x3offlinereader.builder.tts;
 
 import com.canace.x3offlinereader.builder.BuildControl;
+import com.canace.x3offlinereader.builder.EdgeClientUpdater;
 import com.canace.x3offlinereader.builder.audio.FfmpegAudioEncoder;
 import com.canace.x3offlinereader.builder.audio.WaveSupport;
 import com.canace.x3offlinereader.builder.model.SynthesisRequest;
@@ -18,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /** Online Chinese voices exposed by Microsoft Edge. No account or API key is stored. */
@@ -35,6 +37,11 @@ public final class EdgeTtsProvider implements TtsProvider {
     private static final long[] RETRY_DELAYS_MILLIS = {2_000L, 5_000L, 10_000L, 20_000L, 40_000L};
 
     private static final int MAX_ATTEMPTS = 25;
+
+    private static final Pattern ACCESS_REJECTION =
+            Pattern.compile(
+                    "(?i)(?:\"httpStatus\"\\s*:\\s*|\"error\"\\s*:\\s*\""
+                            + "|HTTP\\s+|WSServerHandshakeError:\\s*)(?:401|403)\\b");
 
     @FunctionalInterface
     interface CheckedAction {
@@ -66,6 +73,10 @@ public final class EdgeTtsProvider implements TtsProvider {
 
     private final int parallelism;
 
+    private final Path componentStore;
+
+    private final String clientSelection;
+
     public EdgeTtsProvider(Path root) {
         this(root, 1);
     }
@@ -76,6 +87,8 @@ public final class EdgeTtsProvider implements TtsProvider {
         }
         this.root = root.toAbsolutePath().normalize();
         this.parallelism = parallelism;
+        this.componentStore = EdgeClientUpdater.store(this.root);
+        this.clientSelection = EdgeClientUpdater.selection(componentStore);
     }
 
     @Override
@@ -153,6 +166,9 @@ public final class EdgeTtsProvider implements TtsProvider {
             throw interrupted;
         } catch (Exception failure) {
             Files.deleteIfExists(mp3);
+            if (serviceAccessRejected(failure)) {
+                throw new BuildControl.PauseRequestedException(accessPauseMessage(failure));
+            }
             throw new IllegalStateException("在线语音参数或配置错误：" + failure.getMessage(), failure);
         }
         new FfmpegAudioEncoder(null, root).decodeToWave(mp3, wav);
@@ -162,11 +178,9 @@ public final class EdgeTtsProvider implements TtsProvider {
 
     private JsonNode run(Map<String, ?> request, int timeoutSeconds) throws Exception {
         ProcessBuilder builder = new ProcessBuilder(python().toString(), worker().toString());
-        Path packages = root.resolve(".tools/edge-tts/site-packages");
-        builder.environment().put("PYTHONPATH", packages.toString());
-        builder.environment()
-                .put("SSL_CERT_FILE", packages.resolve("certifi/cacert.pem").toString());
-        builder.environment().put("PYTHONUTF8", "1");
+        EdgeClientUpdater.environment(builder.environment(), root);
+        builder.environment().put("X3_EDGE_COMPONENT_ROOT", componentStore.toString());
+        builder.environment().put("X3_EDGE_CLIENT", clientSelection);
         Process process = builder.redirectErrorStream(false).start();
         process.getOutputStream().write(JSON.writeValueAsBytes(request));
         process.getOutputStream().close();
@@ -208,6 +222,9 @@ public final class EdgeTtsProvider implements TtsProvider {
     }
 
     static boolean shouldRetry(Throwable failure) {
+        if (serviceAccessRejected(failure)) {
+            return false;
+        }
         StringBuilder diagnosis = new StringBuilder();
         for (Throwable current = failure; current != null; current = current.getCause()) {
             diagnosis
@@ -235,6 +252,21 @@ public final class EdgeTtsProvider implements TtsProvider {
                         "504",
                         "长时间没有响应")
                 .anyMatch(value -> diagnosis.indexOf(value) >= 0);
+    }
+
+    static boolean serviceAccessRejected(Throwable failure) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            if (ACCESS_REJECTION.matcher(String.valueOf(current.getMessage())).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static String accessPauseMessage(Throwable failure) {
+        return "Edge 在线语音握手被服务拒绝（HTTP 401/403）：已自动保存并暂停。"
+                + "请更新在线语音组件或检查服务可用性后继续；重复等待不会修复协议不兼容。诊断："
+                + sanitize(failure == null ? null : failure.getMessage());
     }
 
     static int runWithRecovery(CheckedAction action, Sleeper sleeper, int maximumAttempts)
@@ -315,6 +347,7 @@ public final class EdgeTtsProvider implements TtsProvider {
         if (structured >= 0) {
             clean = clean.substring(structured);
         }
+        clean = clean.replaceAll("(?i)(?:https?|wss?)://[^\\s\"']+", "[service-url]");
         return clean.isBlank()
                 ? "服务未返回诊断"
                 : clean.length() > 600 ? clean.substring(clean.length() - 600) : clean;

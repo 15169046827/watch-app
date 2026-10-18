@@ -15,6 +15,8 @@
 
 ## 构建与验证
 
+听读工坊的 Edge 连接组件可独立自动更新，无需为兼容的客户端变更重新编译。启动时每天最多检查一次；“存储管理 → 在线语音组件”可关闭自动检查、手动检查并查看版本。只有通过官方包哈希、兼容性和公开短句音频验证的组件才会在空闲时启用，失败保留原组件。详见 [安全更新边界](specification/EDGE_CLIENT_UPDATES.md)。
+
 ```powershell
 .\gradlew.bat :builder:test :builder:installDist :watch:testDebugUnitTest :watch:assembleDebug :watch:lintDebug
 
@@ -45,6 +47,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\create-start-m
 ```
 
 ## 当前状态
+
+EPUB 转换已补充正文编号章节识别与跨 spine 续文合并，防止合并型 EPUB 仅按 HTML 文件数量生成章节；内部代码型 HTML 标题不再进入 TTS。规则与旧文件重新转换说明见 [EPUB 逻辑章节与标题](specification/EPUB_CHAPTERS.md)。
 
 听读 0.8.0 增加首次离线数据说明与“数据和迁移”，可导出/恢复进度、收藏与播放设置并分类清理 App 本机数据；源 `.opbook`、音乐和 LRC 不进入备份，App 级清理也不删除这些源文件。听读工坊 0.7.0 补充首次数据说明、界面设置/最近来源历史清理、过期任务删除确认、独立的未签名 GitHub 便携预览轨道，以及 GUI/CLI 双启动程序的正式 Authenticode 签名和独立验签。完整边界见 [`specification/DATA_LIFECYCLE.md`](specification/DATA_LIFECYCLE.md)。
 

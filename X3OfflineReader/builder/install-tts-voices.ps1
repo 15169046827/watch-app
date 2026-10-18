@@ -56,7 +56,7 @@ if(-not $SkipOnlineClient){
             if(-not $_.FullName.StartsWith($siteBoundary,[StringComparison]::OrdinalIgnoreCase)){throw 'Edge client cleanup escaped its tool directory'}
             Remove-Item -LiteralPath $_.FullName -Recurse -Force
         }
-    & $python -m pip install --upgrade --target $sitePackages 'edge-tts==7.2.8'
+    & $python -m pip install --upgrade --target $sitePackages 'edge-tts==7.3.1'
     if($LASTEXITCODE -ne 0){throw 'edge-tts installation failed'}
 }
 Write-Host 'Additional TTS voices are installed. Online Edge voices still require a network connection during preview and conversion.'

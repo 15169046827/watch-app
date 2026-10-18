@@ -2,9 +2,29 @@
 
 流水线为：`Vue/PrimeVue GUI → Tauri 本地桥接 → Java CLI/BuilderCore → SourceParser → TextNormalizer/SentenceSegmenter → TtsProvider → WAV Timeline → FFmpeg → OpbookWriter`。
 
+桌面 GUI 必须用 `ui` 目录下的 `npm run desktop:build` 构建（Tauri CLI + `custom-protocol`），将生产页面内嵌到 EXE。普通 `cargo build --release` 缺少该选项会直接失败，不能把仅带开发页面地址的 EXE 部署给用户。两个打包脚本统一调用同一入口；验收必须在未启动 Vite 时确认实际制作页、存储页和更新状态正常，不能仅用进程存在/窗口响应判定通过。Release Rust 验证需带 `--features custom-protocol`。
+
+便携升级验证使用 `builder/test-portable-upgrade.ps1 -OldApp '<旧版程序绝对路径>' -NewApp '<新版程序绝对路径>'`（PowerShell 7）。脚本仅在随机临时目录生成公开 tone 样本：旧版中途保存、新版续作，核对缓存哈希和修改时间均不变，并验证输出包；另直接执行预览打包脚本的原有提交事务，注入归档工具缺失和校验文件提交失败，确认旧程序、旧 ZIP 与校验文件均恢复。只测回退可使用 `-RollbackOnly`；不会读取、恢复或清理真实书籍任务。
+
 已实现：
 
+## EPUB 逻辑章节修复
+
+- 根据正文中的独立编号标题拆分逻辑章节；一个 EPUB spine 文件可以包含多章，拆分文件开头的续文可继续归入上一章。同章的重复英文标题不会额外产生章节。
+- 章节名优先使用正文标题与 NCX / EPUB 3 导航名称，拒绝把 HTML 页面的哈希或内部代码当成可朗读标题；保留卷首和简介内容。
+- 完整规则、兼容边界及旧文件处理见 [EPUB 逻辑章节与标题](../specification/EPUB_CHAPTERS.md)。本机修复统一沿用原有“听读工坊”入口；测试结束后清理测试样本和临时入口。
+
+## Edge 握手 403 修复
+
+- 随包客户端基线为 edge-tts 7.3.1，使用上游修正后的 Sec-MS-GEC v2 协议。7.2.8 的旧握手在服务变更后可能持续返回 403，无法靠延长等待恢复。
+- HTTP 401/403 立即保存并暂停，提示更新组件或检查服务，不再误报成“持续恢复 20 分钟仍未收到音频”。空音频、限流和临时网络错误仍按原策略重试。
+- 诊断包含 HTTP 状态及客户端版本，握手错误不再输出带请求参数的完整 URL。原音色、句子缓存和 EPUB 章节修复保持兼容。
+
 ## 0.7.0 公共安装版数据与签名
+
+- Edge 连接组件支持独立自动更新，不必为兼容的客户端更新重新编译工坊。“存储管理 → 在线语音组件”显示实际版本和检查结果，可关闭自动检查或手动检查；启动时每天最多检查一次，转换中不切换。
+- 仅从官方 PyPI 下载同主版本正式 wheel，校验 SHA-256、路径/大小、Python 与现有依赖兼容性，再用固定公开中文短句合成并解码验证，成功才原子启用。不运行 pip，不改模型、缓存或断点；失败保留当前组件。
+- 握手 401/403 保存并停止后，自动检查开启时会额外检查一次，但不自动恢复私人转换。跨主版本、依赖不兼容或未知协议仍可能需要更新工坊；详细边界见 [在线组件更新](../specification/EDGE_CLIENT_UPDATES.md)。
 
 - 首次启动明确说明本机断点、缓存、界面偏好和最近 50 项来源识别历史；在线 Edge 仍对每个新任务单独确认，离线 Provider 不发送正文。
 - “存储管理”可清除界面设置与来源识别历史；清理超过 30 天的未完成任务新增明确确认。缓存、断点、源文件和输出文件的影响分别标示，完整边界见 [`../specification/DATA_LIFECYCLE.md`](../specification/DATA_LIFECYCLE.md)。
@@ -71,7 +91,7 @@
 - 0.3.0 会预取后续章节的句级语音，在当前章节编码 M4A 时继续使用 Melo worker，减少章节边界的空闲时间；缓存键、Timeline 顺序和包内顺序不变。
 - 随包提供 286 条版本化试听：Melo 1、Kokoro 中文 100、AISHELL-3 174、Edge 中文 11。以上样本点击后直接播放 16 kHz 单声道 PCM WAV；Windows 系统语音不随包复制音频，而是在本机实时生成短句。所有样本保持 Provider 的 1× 自然速率；不会把长句强行加速。
 - 在线 Edge 转换会把待朗读正文发送给 Microsoft 服务。GUI 会在开始前再次确认，CLI 必须显式传入 `--allow-online-tts`；Builder 不保存 API Key、账号或正文日志。安装额外组件运行 `builder\install-tts-voices.ps1`，许可与数据来源见 [`THIRD_PARTY_TTS.md`](THIRD_PARTY_TTS.md)。
-- Edge online conversion pins edge-tts 7.2.8 and uses a Windows-compatible event loop. 本次真实 RCA 证明 `NoAudioReceived` 不一定是上游瞬时故障：旧切句器会在句号处截断，把随后的右引号/右括号拆成纯标点“句子”，这类确定性不可发音请求重试 25 次仍必然失败。切句器现在把闭合标点并回前句、过滤纯标点片段；Edge Provider 还会在联网前快速拒绝不含文字或数字的请求，并正确识别引号/括号内的句末标点。只有包含可发音内容却收到空音频的请求才进入可中断的 25 次恢复窗口；缓存、音色和正文均不会被静默替换。
+- Edge online conversion pins edge-tts 7.3.1 and uses a Windows-compatible event loop. 本次真实 RCA 证明 `NoAudioReceived` 不一定是上游瞬时故障：旧切句器会在句号处截断，把随后的右引号/右括号拆成纯标点“句子”，这类确定性不可发音请求重试 25 次仍必然失败。切句器现在把闭合标点并回前句、过滤纯标点片段；Edge Provider 还会在联网前快速拒绝不含文字或数字的请求，并正确识别引号/括号内的句末标点。只有包含可发音内容却收到空音频的请求才进入可中断的 25 次恢复窗口；缓存、音色和正文均不会被静默替换。
 - 声音使用选择框；存在预生成索引时仅显示通过时长门槛的可试听音色。当前 Melo 中文仅有 `ZH`，Windows `System.Speech` 动态列出本机中文声音并支持实时试听，tone 仅用于测试且不会出现在 GUI。
 - 进度区同时显示开始时间、总耗时和当前阶段耗时；超过一小时明确写“小时/分”。连续 10 分钟无真实进度会提示观察，Melo 单句、FFmpeg 单 Track 超过 12 分钟会只重启该步骤并自动重试一次，打包失败只重建 staging，已完成缓存保留。
 - 合并输出默认命名为 `书名 [作者].opbook`；标题为空时使用首个源文件名，作者为空时使用“未署名”。Windows 文件名非法字符会安全替换，用户手动选定的名称仍会保留。
