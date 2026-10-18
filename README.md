@@ -65,6 +65,7 @@ Windows 听读工坊的正式生产 EXE/MSI 必须通过 Authenticode 验证，�
 ## 参与和安全
 
 - 提交改动前请阅读 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
+- 自动化开发 Agent 应先阅读 [`AI Agent 维护指南`](./docs/maintenance/AI_AGENT_MAINTENANCE.md)；本机专属路径、任务和凭据入口由未纳入 Git 的根 `AGENTS.md` 提供。
 - 安全问题请按 [`SECURITY.md`](./SECURITY.md) 私下报告，不要在公开 Issue 中附带 Token、页面 ID、设备日志或个人数据。
 
 ## 许可说明
