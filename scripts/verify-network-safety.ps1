@@ -23,18 +23,33 @@ foreach ($name in @(
 )
 
 $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-$pendingDirectories = [System.Collections.Generic.Stack[string]]::new()
-$pendingDirectories.Push($resolvedRoot)
-while ($pendingDirectories.Count -gt 0) {
-    $directory = $pendingDirectories.Pop()
-    foreach ($item in Get-ChildItem -LiteralPath $directory -Force) {
-        if ($item.PSIsContainer) {
-            if (-not $excludedDirectoryNames.Contains($item.Name) -and
-                    -not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
-                $pendingDirectories.Push($item.FullName)
+$gitDirectory = Join-Path $resolvedRoot '.git'
+if (Test-Path -LiteralPath $gitDirectory) {
+    $relativePaths = @(& git -C $resolvedRoot ls-files --cached --others --exclude-standard)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to enumerate tracked and non-ignored source files.'
+    }
+    foreach ($relativePath in $relativePaths) {
+        $candidate = Join-Path $resolvedRoot $relativePath
+        if ((Test-Path -LiteralPath $candidate -PathType Leaf) -and
+                $executableExtensions -contains [System.IO.Path]::GetExtension($candidate)) {
+            $files.Add((Get-Item -LiteralPath $candidate))
+        }
+    }
+} else {
+    $pendingDirectories = [System.Collections.Generic.Stack[string]]::new()
+    $pendingDirectories.Push($resolvedRoot)
+    while ($pendingDirectories.Count -gt 0) {
+        $directory = $pendingDirectories.Pop()
+        foreach ($item in Get-ChildItem -LiteralPath $directory -Force) {
+            if ($item.PSIsContainer) {
+                if (-not $excludedDirectoryNames.Contains($item.Name) -and
+                        -not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+                    $pendingDirectories.Push($item.FullName)
+                }
+            } elseif ($executableExtensions -contains $item.Extension) {
+                $files.Add($item)
             }
-        } elseif ($executableExtensions -contains $item.Extension) {
-            $files.Add($item)
         }
     }
 }

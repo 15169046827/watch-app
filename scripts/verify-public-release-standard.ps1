@@ -6,9 +6,19 @@ $ErrorActionPreference = 'Stop'
 $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path
 $configPath = Join-Path $resolvedRoot 'config\release\wars-1.0.json'
 $documentPath = Join-Path $resolvedRoot 'docs\release\WARS_1_0.md'
+$checklistPath = Join-Path $resolvedRoot 'docs\release\PRODUCTION_ACCEPTANCE_CHECKLIST.md'
+$readmePath = Join-Path $resolvedRoot 'README.md'
+$securityPath = Join-Path $resolvedRoot 'SECURITY.md'
+$contributingPath = Join-Path $resolvedRoot 'CONTRIBUTING.md'
+$sourceStatusPath = Join-Path $resolvedRoot 'docs\release\PUBLIC_SOURCE_STATUS.md'
 $requiredAssets = @(
     $configPath,
     $documentPath,
+    $checklistPath,
+    $readmePath,
+    $securityPath,
+    $contributingPath,
+    $sourceStatusPath,
     (Join-Path $resolvedRoot 'gradle\shared-release-signing-v1.gradle'),
     (Join-Path $resolvedRoot 'scripts\verify-release-signatures.ps1'),
     (Join-Path $resolvedRoot 'scripts\verify-authenticode.ps1'),
@@ -54,6 +64,34 @@ if ($config.releaseIdentity.publisherType -ne 'individual' -or
         $config.releaseIdentity.channel -ne 'github_direct_download') {
     throw 'WARS release identity or distribution channel is invalid.'
 }
+$expectedPublicProducts = @(
+    'x3_voice_ledger_watch',
+    'x3_voice_ledger_phone',
+    'x3_wolai_notes',
+    'x3_offline_reader',
+    'x3_schedule_phone',
+    'x3_schedule_watch',
+    'windows_audiobook_builder'
+)
+foreach ($product in $expectedPublicProducts) {
+    if ($product -notin $config.publicProducts) {
+        throw "Required WARS public product is missing: $product"
+    }
+}
+$schedule = $config.productSpecificControls.x3Schedule
+if ($schedule.publicArtifacts.Count -ne 2 -or
+        'x3_schedule_phone' -notin $schedule.publicArtifacts -or
+        'x3_schedule_watch' -notin $schedule.publicArtifacts -or
+        $schedule.debugToReleaseMigration -ne
+            'verified_backup_then_explicit_uninstall_then_release_install_restore_and_reauthorize' -or
+        $schedule.debugToReleaseInPlaceUpgradeAllowed -or
+        $schedule.debugCertificateLineageAllowed -or
+        $schedule.validationArtifactsAreReleaseArtifacts -or
+        -not $schedule.releaseToReleaseUpgradeRequiredAfterInitialRelease -or
+        'wolai_oauth' -notin $schedule.notApplicableProductionControls -or
+        'windows_authenticode' -notin $schedule.notApplicableProductionControls) {
+    throw 'X3Schedule release-artifact, signing-migration, or applicability controls are incomplete.'
+}
 $preview = $config.distributionTracks.personalGithubPreview
 $token = $preview.wolaiPersonalToken
 $portable = $preview.windowsPortable
@@ -80,11 +118,54 @@ foreach ($requiredText in @(
         '版本：1.1.0',
         '个人 GitHub 预览版',
         '同一把独立 Release Key',
+        'X3Schedule',
+        '六个 Android',
         '正式 OAuth',
         '默认关闭、单独授权',
         'Authenticode')) {
     if ($document -notmatch [regex]::Escape($requiredText)) {
         throw "WARS document is missing required text: $requiredText"
+    }
+}
+
+$readme = Get-Content -LiteralPath $readmePath -Raw
+foreach ($requiredText in @(
+        'X3Schedule',
+        'LIMITED_PREVIEW',
+        '保留所有权利',
+        'SECURITY.md')) {
+    if ($readme -notmatch [regex]::Escape($requiredText)) {
+        throw "Public repository README is missing required disclosure: $requiredText"
+    }
+}
+$security = Get-Content -LiteralPath $securityPath -Raw
+foreach ($requiredText in @('Private vulnerability reporting', 'LIMITED_PREVIEW')) {
+    if ($security -notmatch [regex]::Escape($requiredText)) {
+        throw "Security policy is missing required disclosure: $requiredText"
+    }
+}
+$contributing = Get-Content -LiteralPath $contributingPath -Raw
+if ($contributing -notmatch [regex]::Escape('暂不接收外部代码贡献')) {
+    throw 'Contribution policy must preserve the no-license boundary.'
+}
+$sourceStatus = Get-Content -LiteralPath $sourceStatusPath -Raw
+foreach ($requiredText in @(
+        'PASS — PUBLIC SOURCE READY',
+        '不等同于每个二进制产品',
+        '没有统一开源许可证')) {
+    if ($sourceStatus -notmatch [regex]::Escape($requiredText)) {
+        throw "Public source status is missing required boundary: $requiredText"
+    }
+}
+$checklist = Get-Content -LiteralPath $checklistPath -Raw
+foreach ($requiredText in @(
+        '日程手表端',
+        '日程手机端',
+        'Debug→Release',
+        'Release→Release',
+        'Wolai OAuth 与 Windows Authenticode 已登记为不适用')) {
+    if ($checklist -notmatch [regex]::Escape($requiredText)) {
+        throw "Production acceptance checklist is missing X3Schedule control: $requiredText"
     }
 }
 

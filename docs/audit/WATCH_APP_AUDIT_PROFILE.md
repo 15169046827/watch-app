@@ -9,7 +9,7 @@
 
 ## 1. 项目范围
 
-- `X3VoiceLedger`、`X3WolaiNotes`、`X3OfflineReader` 手表端及听读工坊：面向普通用户的 OPPO Watch X3 公共产品；
+- `X3VoiceLedger`、`X3WolaiNotes`、`X3OfflineReader`、`X3Schedule` 手表端、配套手机端及听读工坊：面向普通用户的公共产品；
 - `X3AccessibilityProbe`：内部诊断工具，不纳入公共产品发布定位；
 - 共享基础设施；
 - 后续加入本仓库的手表应用及配套工具。
@@ -17,9 +17,9 @@
 ## 2. 标准轨道与任务边界
 
 - WACAS 1.1：代码审计与整改轨道；
-- WARS 1.0：面向普通用户的公共安装版发布标准化轨道，规范文件为 `docs/release/WARS_1_0.md`；
+- WARS 1.1：面向普通用户的公共安装版发布标准化轨道，规范文件为 `docs/release/WARS_1_0.md`；
 - 两套标准并行但结论分离。不得把发布改造混入尚未完成的根仓库或 `X3AccessibilityProbe` 审计整改；
-- 当前审计整改顺序保持为：根仓库/共享控制与 Probe、VoiceLedger、WolaiNotes、X3OfflineReader；
+- 当前审计整改顺序保持为：根仓库/共享控制与 Probe、VoiceLedger、WolaiNotes、X3OfflineReader、X3Schedule；
 - WARS/WACAS 标准变更权属于协调任务。其他产品任务发现缺口时必须反馈，不得自行修改标准定义。
 
 ## 3. 手表端专项必审项

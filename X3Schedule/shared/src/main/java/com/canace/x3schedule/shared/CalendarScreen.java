@@ -224,8 +224,9 @@ final class CalendarScreen {
         if (score == null || score.results == 0 && score.pending == 0) {
             return;
         }
-        button.setText(day.getDayOfMonth() + "\n"
-                + (score.score() == null ? "○" : (int) Math.floor(score.score()) + (score.pending > 0 ? "○" : "·")));
+        String marker = score.score() == null
+                ? "○" : (int) Math.floor(score.score()) + (score.pending > 0 ? "○" : "·");
+        button.setText(activity.getString(R.string.schedule_day_score, day.getDayOfMonth(), marker));
         button.setContentDescription(button.getContentDescription() + "，计划执行得分"
                 + ProgressReport.display(score.score()) + "，待确认" + score.pending);
         if (!day.equals(selected)) {

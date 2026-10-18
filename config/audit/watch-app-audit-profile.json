@@ -12,6 +12,7 @@
     "voice_ledger",
     "wolai_notes",
     "x3_offline_reader",
+    "x3_schedule",
     "windows_audiobook_builder"
   ],
   "productClassification": {
@@ -19,6 +20,7 @@
       "x3_voice_ledger",
       "x3_wolai_notes",
       "x3_offline_reader",
+      "x3_schedule",
       "windows_audiobook_builder"
     ],
     "internalDiagnosticTools": [
@@ -36,7 +38,8 @@
     "repository_shared_controls_and_probe",
     "x3_voice_ledger",
     "x3_wolai_notes",
-    "x3_offline_reader"
+    "x3_offline_reader",
+    "x3_schedule"
   ],
   "requiredRiskAreas": [
     "round_screen_and_wear_input",

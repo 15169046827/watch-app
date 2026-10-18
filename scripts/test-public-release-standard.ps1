@@ -18,8 +18,13 @@ try {
         New-Item -ItemType Directory -Path (Join-Path $testRoot $path) -Force | Out-Null
     }
     $assets = @(
+        'README.md',
+        'SECURITY.md',
+        'CONTRIBUTING.md',
         'config\release\wars-1.0.json',
         'docs\release\WARS_1_0.md',
+        'docs\release\PRODUCTION_ACCEPTANCE_CHECKLIST.md',
+        'docs\release\PUBLIC_SOURCE_STATUS.md',
         'gradle\shared-release-signing-v1.gradle',
         'scripts\verify-release-signatures.ps1',
         'scripts\verify-authenticode.ps1',
@@ -33,6 +38,35 @@ try {
     & $gate -Root $testRoot | Out-Null
 
     $configPath = Join-Path $testRoot 'config\release\wars-1.0.json'
+    $sourceConfigPath = Join-Path $sourceRoot 'config\release\wars-1.0.json'
+    $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    $config.publicProducts = @($config.publicProducts | Where-Object {
+            $_ -notin @('x3_schedule_phone', 'x3_schedule_watch')
+        })
+    $config | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath
+    $missingScheduleRejected = $false
+    try {
+        & $gate -Root $testRoot | Out-Null
+    } catch {
+        $missingScheduleRejected = $true
+    }
+    if (-not $missingScheduleRejected) {
+        throw 'WARS gate accepted a public-product list without X3Schedule.'
+    }
+    Copy-Item -LiteralPath $sourceConfigPath -Destination $configPath -Force
+    $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    $config.productSpecificControls.x3Schedule.debugToReleaseInPlaceUpgradeAllowed = $true
+    $config | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath
+    $unsafeScheduleMigrationRejected = $false
+    try {
+        & $gate -Root $testRoot | Out-Null
+    } catch {
+        $unsafeScheduleMigrationRejected = $true
+    }
+    if (-not $unsafeScheduleMigrationRejected) {
+        throw 'WARS gate accepted an in-place X3Schedule Debug-to-Release upgrade.'
+    }
+    Copy-Item -LiteralPath $sourceConfigPath -Destination $configPath -Force
     $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     $config.distributionTracks.formalPublicProduction.windowsAuthenticodeRequired = $false
     $config | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath
@@ -45,7 +79,7 @@ try {
     if (-not $negativeRejected) {
         throw 'WARS gate accepted weakened formal-production Authenticode.'
     }
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'config\release\wars-1.0.json') -Destination $configPath -Force
+    Copy-Item -LiteralPath $sourceConfigPath -Destination $configPath -Force
     $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     $config.distributionTracks.personalGithubPreview.wolaiPersonalToken.encryptedLocalStorageRequired = $false
     $config | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath
@@ -58,7 +92,7 @@ try {
     if (-not $unsafeTokenRejected) {
         throw 'WARS gate accepted unencrypted personal-token storage.'
     }
-    Write-Host 'PUBLIC_RELEASE_STANDARD_TESTS_OK positive=accepted negatives=2_rejected'
+    Write-Host 'PUBLIC_RELEASE_STANDARD_TESTS_OK positive=accepted negatives=4_rejected'
 } finally {
     if (Test-Path -LiteralPath $testRoot) {
         $resolvedTestRoot = (Resolve-Path -LiteralPath $testRoot).Path

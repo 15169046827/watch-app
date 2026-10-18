@@ -97,4 +97,4 @@ adb shell am instrument -w com.canace.x3wolainotes.test/com.canace.x3wolainotes.
 
 ## 当前发布结论
 
-当前代码支持 WARS 1.1 的个人 GitHub 预览轨道。0.6.1 Release APK 已使用预登记正式证书构建并独立验签；目标 OPPO Watch X3 已完成保数据覆盖、合成迁移、无常驻敏感配置输入框和圆屏人工显示验收。当前产物来自保留未提交成果的工作树，仍须从已审核干净提交重建并完成发布批次证据后才能上传 GitHub。正式公共生产版仍因 Wolai 官方 OAuth 和完整生产验收而保持 FAIL / NOT READY；Debug 文件注入路径仅用于受控开发验证。
+当前代码支持 WARS 1.1 的个人 GitHub 预览轨道。0.6.1 Release APK 已从审核提交 `86bae2d` 构建，使用预登记正式证书并完成独立验签；目标 OPPO Watch X3 已完成保数据覆盖、合成迁移、无常驻敏感配置输入框和圆屏人工显示验收。该 APK 已包含在 [`Watch App LIMITED_PREVIEW 2026-09-21`](https://github.com/15169046827/watch-app/releases/tag/watch-app-preview-2026-09-21-86bae2d) 中。正式公共生产版仍因 Wolai 官方 OAuth 和完整生产验收而保持 FAIL / NOT READY；Debug 文件注入路径仅用于受控开发验证。

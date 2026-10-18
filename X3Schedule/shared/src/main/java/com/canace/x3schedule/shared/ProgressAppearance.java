@@ -59,7 +59,8 @@ final class ProgressAppearance {
             return;
         }
         grade(view, state.grade, state.exempt());
-        view.setText(view.getText() + "\n" + Progress.describe(state));
+        view.setText(view.getContext().getString(R.string.schedule_progress_summary,
+                view.getText(), Progress.describe(state)));
         view.setContentDescription(view.getText());
     }
 

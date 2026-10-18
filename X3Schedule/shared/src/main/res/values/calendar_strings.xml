@@ -3,6 +3,9 @@
     <string name="schedule_confirm_save">确认保存</string>
     <string name="schedule_item_summary">%1$s\n%2$s</string>
     <string name="schedule_option_summary">%1$s\n%2$s  ›</string>
+    <string name="schedule_day_score">%1$d\n%2$s</string>
+    <string name="schedule_progress_summary">%1$s\n%2$s</string>
+    <string name="schedule_recovery_yield">确认本次让位豁免：%1$s</string>
     <string name="schedule_reminder_label">提醒</string>
     <string name="schedule_deadline_label">截止</string>
     <string name="schedule_weekday_label">星期%1$s</string>

@@ -294,7 +294,7 @@ final class ProgressScreen {
         for (RecoveryPlanner.Impact impact : impacts) {
             ScheduleUi.text(panel, impact.label(), 14);
             android.widget.Switch yield = new android.widget.Switch(activity);
-            yield.setText("确认本次让位豁免：" + impact.item.title);
+            yield.setText(activity.getString(R.string.schedule_recovery_yield, impact.item.title));
             yield.setMinHeight(ScheduleUi.dp(activity, 48));
             panel.addView(yield);
             choices.add(yield);

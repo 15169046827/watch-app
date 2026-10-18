@@ -28,7 +28,9 @@ jobs:
 
       - name: Validate watch-app audit profile
         shell: pwsh
-        run: ./scripts/verify-watch-app-audit-profile.ps1
+        run: |
+          ./scripts/verify-watch-app-audit-profile.ps1
+          ./scripts/test-watch-app-audit-profile.ps1
 
       - name: Validate public release standard and fixtures
         shell: pwsh
@@ -41,6 +43,12 @@ jobs:
         run: |
           ./scripts/verify-network-safety.ps1
           ./scripts/test-network-safety.ps1
+
+      - name: Validate public source boundary and fixtures
+        shell: pwsh
+        run: |
+          ./scripts/verify-public-source-boundary.ps1
+          ./scripts/test-public-source-boundary.ps1
 
       - name: Materialize validated Debug signing input
         shell: pwsh
@@ -96,6 +104,7 @@ jobs:
         shell: pwsh
         run: |
           npm --prefix X3OfflineReader/builder/ui ci
+          npm --prefix X3OfflineReader/builder/ui audit --audit-level=high
           npm --prefix X3OfflineReader/builder/ui run lint
           npm --prefix X3OfflineReader/builder/ui run build
 
@@ -121,7 +130,16 @@ jobs:
               throw "$($script.FullName): $($errors.Message -join '; ')"
             }
           }
-          python -m compileall -q X3OfflineReader/builder X3OfflineReader/specification/tools
+          python -m compileall -q -x "(build|node_modules|target|__pycache__)" X3OfflineReader/builder X3OfflineReader/specification/tools
+
+      - name: Check Schedule conventions, tests, Lint, and Debug artifacts
+        shell: pwsh
+        run: |
+          gradle --no-daemon -p X3Schedule checkstyleMain checkstyleTest checkstyleAndroidTest :domain:test :shared:testDebugUnitTest :phone:testDebugUnitTest :watch:testDebugUnitTest :shared:lintDebug :phone:lintDebug :watch:lintDebug :phone:assembleDebug :watch:assembleDebug :phone:assembleDebugAndroidTest :watch:assembleDebugAndroidTest
+          if ($LASTEXITCODE -ne 0) { throw 'Schedule quality checks failed.' }
+          python X3Schedule/tools/test_schema.py
+          if ($LASTEXITCODE -ne 0) { throw 'Schedule schema tests failed.' }
+
 
       - name: Verify every Debug APK signer
         shell: pwsh
