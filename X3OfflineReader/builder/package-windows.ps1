@@ -28,7 +28,7 @@ $signingCertificate=Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object {
 if(-not $signingCertificate){throw '当前用户证书库中未找到指定 SHA-256 且含私钥的 Authenticode 证书。'}
 function Copy-Tree([string]$Source,[string]$Destination){
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /NFL /NDL /NJH /NJS /NP | Out-Null
+    & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /XD __pycache__ .pytest_cache .git .work conda-meta /XF *.pyc *.pyo *.log *.tmp *.bak /NFL /NDL /NJH /NJS /NP | Out-Null
     if($LASTEXITCODE -ge 8){throw "Copy failed ($LASTEXITCODE): $Source"}
 }
 $gradle=Join-Path $project 'gradlew.bat'

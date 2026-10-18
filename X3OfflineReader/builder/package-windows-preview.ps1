@@ -50,7 +50,8 @@ if ($running.Count -gt 0) {
 function Copy-Tree([string]$Source, [string]$Destination) {
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 `
-        /NFL /NDL /NJH /NJS /NP | Out-Null
+        /XD __pycache__ .pytest_cache .git .work conda-meta `
+        /XF *.pyc *.pyo *.log *.tmp *.bak /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) {
         throw "Copy failed ($LASTEXITCODE): $Source"
     }
@@ -214,7 +215,9 @@ try {
     $entries = @(& $tar.Source -tf $archiveNext)
     if ($LASTEXITCODE -ne 0 -or
             'X3AudiobookBuilder/UNSIGNED-PREVIEW.txt' -notin $entries -or
-            @($entries | Where-Object { $_ -match '(?i)\.msi$|/(setup|install)\.exe$' }).Count -gt 0) {
+            @($entries | Where-Object {
+                $_ -match '(?i)\.msi$|/(setup|install)\.exe$|/(__pycache__|\.pytest_cache|\.git|\.work|conda-meta)/|\.(pyc|pyo|log|tmp|bak)$'
+            }).Count -gt 0) {
         throw 'Unsigned preview ZIP content verification failed.'
     }
     $hash = (Get-FileHash -LiteralPath $archiveNext -Algorithm SHA256).Hash.ToUpperInvariant()
