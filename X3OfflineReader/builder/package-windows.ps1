@@ -28,7 +28,7 @@ $signingCertificate=Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object {
 if(-not $signingCertificate){throw '当前用户证书库中未找到指定 SHA-256 且含私钥的 Authenticode 证书。'}
 function Copy-Tree([string]$Source,[string]$Destination){
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /NFL /NDL /NJH /NJS /NP | Out-Null
+    & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /XD __pycache__ .pytest_cache .git .work conda-meta /XF *.pyc *.pyo *.log *.tmp *.bak /NFL /NDL /NJH /NJS /NP | Out-Null
     if($LASTEXITCODE -ge 8){throw "Copy failed ($LASTEXITCODE): $Source"}
 }
 $gradle=Join-Path $project 'gradlew.bat'
@@ -39,7 +39,7 @@ if(-not(Test-Path -LiteralPath $icon -PathType Leaf)){throw '听读工坊图标�
 if($LASTEXITCODE -ne 0){throw 'Builder compilation failed'}
 $uiRoot=Join-Path $PSScriptRoot 'ui'
 Push-Location $uiRoot
-try { & npm.cmd run tauri build } finally { Pop-Location }
+try { & npm.cmd run desktop:build } finally { Pop-Location }
 if($LASTEXITCODE -ne 0){throw 'Vue/Tauri compilation failed'}
 $tauriExecutable=Join-Path $uiRoot 'src-tauri\target\release\tingdu-workshop.exe'
 if(-not(Test-Path -LiteralPath $tauriExecutable -PathType Leaf)){throw 'Tauri executable not found'}
@@ -98,7 +98,7 @@ if(-not $WithoutAdditionalVoices){
 }
 Copy-Tree (Join-Path $project 'samples\builder-inputs') (Join-Path $app 'builder-inputs')
 if(-not $WithoutMelo){
-    & (Join-Path $app '.tools\melo\python.exe') (Join-Path $app 'builder\melo\worker.py') --self-test
+    & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\melo\worker.py') --self-test
     if($LASTEXITCODE -ne 0){throw 'Packaged Melo sanitizer self-test failed'}
 }
 $signedLaunchers=@(

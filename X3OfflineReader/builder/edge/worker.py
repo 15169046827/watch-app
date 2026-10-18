@@ -19,7 +19,12 @@ def _portable_context(*args, **kwargs):
 
 ssl.create_default_context = _portable_context
 
+from component_store import activate_import  # noqa: E402
+
+activate_import()
+
 import edge_tts  # noqa: E402
+from aiohttp import ClientResponseError  # noqa: E402
 
 sys.stdin.reconfigure(encoding="utf-8")
 sys.stdout.reconfigure(encoding="utf-8")
@@ -40,13 +45,25 @@ async def main():
     json.dump({"ok": True}, sys.stdout)
 
 
+def failure_details(failure):
+    """Keep actionable HTTP status without logging per-request service URLs."""
+    message = failure.message if isinstance(failure, ClientResponseError) else str(failure)
+    details = {
+        "errorType": type(failure).__name__,
+        "error": " ".join(message.split())[:500] or "服务未返回诊断",
+        "clientVersion": edge_tts.__version__,
+    }
+    if isinstance(failure, ClientResponseError):
+        details["httpStatus"] = failure.status
+    return details
+
+
 def run():
     try:
         asyncio.run(main())
     except Exception as failure:
-        message = " ".join(str(failure).split())[:500]
         json.dump(
-            {"errorType": type(failure).__name__, "error": message or "服务未返回诊断"},
+            failure_details(failure),
             sys.stderr,
             ensure_ascii=False,
         )

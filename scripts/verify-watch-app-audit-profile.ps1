@@ -40,10 +40,24 @@ if ($config.usageGate.doNotStartNewModificationAtOrBelowRemainingPercent -ne 5 -
         -not $config.usageGate.mustPropagateToProductTasks) {
     throw 'The mandatory Watch App usage gate is invalid.'
 }
+$expectedProjects = @(
+    'shared_probe',
+    'voice_ledger',
+    'wolai_notes',
+    'x3_offline_reader',
+    'x3_schedule',
+    'windows_audiobook_builder'
+)
+foreach ($project in $expectedProjects) {
+    if ($project -notin $config.projects) {
+        throw "Required watch-app project is missing: $project"
+    }
+}
 $expectedPublicProducts = @(
     'x3_voice_ledger',
     'x3_wolai_notes',
     'x3_offline_reader',
+    'x3_schedule',
     'windows_audiobook_builder'
 )
 foreach ($product in $expectedPublicProducts) {
@@ -53,6 +67,9 @@ foreach ($product in $expectedPublicProducts) {
 }
 if ('x3_accessibility_probe' -notin $config.productClassification.internalDiagnosticTools) {
     throw 'X3AccessibilityProbe must remain classified as an internal diagnostic tool.'
+}
+if ('x3_schedule' -notin $config.auditOrder) {
+    throw 'X3Schedule must remain in the coordinated audit order.'
 }
 
 $requiredRiskAreas = @(
@@ -95,6 +112,9 @@ if ($profile -notmatch [regex]::Escape("版本：$($config.version)")) {
 }
 if ($profile -notmatch [regex]::Escape("UPARS $($config.baseStandard.version)")) {
     throw 'The profile document does not match its declared UPARS version.'
+}
+if ($profile -notmatch [regex]::Escape('X3Schedule')) {
+    throw 'The profile document is missing X3Schedule.'
 }
 
 Write-Host (

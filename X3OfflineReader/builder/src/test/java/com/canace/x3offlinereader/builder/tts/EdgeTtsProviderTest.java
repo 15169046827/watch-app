@@ -66,6 +66,45 @@ final class EdgeTtsProviderTest {
     }
 
     @Test
+    void accessRejectionDoesNotEnterTwentyMinuteRetryLoop() {
+        AtomicInteger calls = new AtomicInteger();
+        AtomicInteger sleeps = new AtomicInteger();
+        String diagnosis =
+                "{\"errorType\":\"WSServerHandshakeError\","
+                        + "\"error\":\"Invalid response status\",\"httpStatus\":403}";
+        assertThrows(
+                IllegalStateException.class,
+                () -> EdgeTtsProvider.runWithRecovery(
+                        () -> {
+                            calls.incrementAndGet();
+                            throw new IllegalStateException(diagnosis);
+                        },
+                        millis -> sleeps.incrementAndGet(),
+                        25));
+        assertEquals(1, calls.get());
+        assertEquals(0, sleeps.get());
+        assertTrue(EdgeTtsProvider.accessPauseMessage(new Exception(diagnosis))
+                .contains("已自动保存并暂停"));
+    }
+
+    @Test
+    void detectsLegacyAccessErrorsAndPreservesTransientRecovery() {
+        assertFalse(EdgeTtsProvider.shouldRetry(new IllegalStateException(
+                "{\"errorType\":\"WSServerHandshakeError\","
+                        + "\"error\":\"403, message='Invalid response status', "
+                        + "url='wss://example.invalid/?ConnectionId=abc'\"}")));
+        assertFalse(EdgeTtsProvider.shouldRetry(
+                new Exception("wrapper", new Exception("HTTP 401 Unauthorized"))));
+        assertTrue(EdgeTtsProvider.shouldRetry(new IllegalStateException(
+                "{\"errorType\":\"WSServerHandshakeError\","
+                        + "\"error\":\"Invalid response status\",\"httpStatus\":429}")));
+        assertTrue(EdgeTtsProvider.shouldRetry(
+                new Exception("WSServerHandshakeError: 503, Service Unavailable")));
+        assertFalse(EdgeTtsProvider.sanitize("wss://example.invalid/?ConnectionId=abc")
+                .contains("ConnectionId"));
+    }
+
+    @Test
     void spokenCopyAddsOnlyNaturalTerminalPunctuation() {
         assertEquals("今天天气好。", EdgeTtsProvider.spokenText("今天天气好"));
         assertEquals("你好吗？", EdgeTtsProvider.spokenText("你好吗？"));

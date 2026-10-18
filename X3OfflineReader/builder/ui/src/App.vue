@@ -19,6 +19,13 @@ type CacheStats = { sentenceFiles: number; sentenceBytes: number; unfinishedDire
 type Checkpoint = { id: string; state: string; percent: number; message: string; elapsedSeconds?: number; provider: string; online: boolean; output: string; inputs: string[] }
 type BridgeState = { version: string; providers: Provider[]; cache: CacheStats; checkpoint?: Checkpoint }
 type BuilderEvent = { type: string; percent?: number; message?: string; seconds?: number; estimateSeconds?: number; taskElapsedSeconds?: number; runElapsedSeconds?: number; outputs?: string[] }
+type EdgeUpdate = { state: string; version: string; message: string; lastChecked?: number }
+
+const edgeUpdate = ref<EdgeUpdate>({ state: 'ready', version: '—', message: '尚未检查更新' })
+const edgeUpdating = ref(false)
+const autoEdgeUpdate = ref(localStorage.getItem('tingdu-edge-auto-update') !== 'off')
+let updateAfterPause = false
+watch(autoEdgeUpdate, value => localStorage.setItem('tingdu-edge-auto-update', value ? 'on' : 'off'))
 
 const page = ref<'build' | 'voices' | 'tasks' | 'storage'>('build')
 const loading = ref(true)
@@ -53,7 +60,7 @@ const form = reactive({
 const lastInputDirectory = ref('')
 const lastCoverDirectory = ref('')
 const preferencesStorageKey = 'tingdu-builder-preferences'
-const dataNoticeStorageKey = 'tingdu-builder-data-notice-v1'
+const dataNoticeStorageKey = 'tingdu-builder-data-notice-v2'
 
 const nav = [
   { id: 'build', icon: 'pi-sparkles', label: '制作新书' },
@@ -65,7 +72,7 @@ const selectedProvider = computed(() => providers.value.find(item => item.id ===
 const selectedVoice = computed(() => selectedProvider.value?.voices.find(item => item.id === form.voice))
 const voiceOptions = computed(() => selectedProvider.value?.voices.map(item => ({ label: item.id, value: item.id, preview: item.preview, previewType: item.previewType })) ?? [])
 const providerOptions = computed(() => providers.value.map(item => ({ label: `${item.label} · ${item.throughputLabel}`, value: item.id, online: item.online })))
-const canStart = computed(() => !busy.value && form.inputs.length > 0 && (form.outputToSource || !!form.output))
+const canStart = computed(() => !busy.value && !edgeUpdating.value && form.inputs.length > 0 && (form.outputToSource || !!form.output))
 const remaining = computed(() => Math.max(0, Math.round(projectedTotal.value - elapsedSeconds.value)))
 const progressLabel = computed(() => busy.value ? `${progress.value}%` : progress.value === 100 ? '已完成' : '等待开始')
 
@@ -86,6 +93,7 @@ onMounted(async () => {
     unlisten = await listen<BuilderEvent>('builder-event', event => { void handleEvent(event.payload) })
     await refreshState()
     status.value = '准备就绪'
+    void checkEdgeUpdate(autoEdgeUpdate.value ? 'auto' : 'status')
   } catch (error) {
     status.value = `无法连接转换核心：${errorText(error)}`
   } finally { loading.value = false }
@@ -104,6 +112,16 @@ async function refreshState() {
   if (!providers.value.some(item => item.id === form.tts)) form.tts = providers.value[0]?.id ?? 'melo'
   const provider = selectedProvider.value
   if (provider && !provider.voices.some(item => item.id === form.voice)) form.voice = provider.defaultVoice
+}
+
+async function checkEdgeUpdate(action: 'auto' | 'force' | 'status' = 'force') {
+  if (edgeUpdating.value || busy.value) return
+  edgeUpdating.value = true
+  try {
+    edgeUpdate.value = await invoke<EdgeUpdate>('edge_update', { action })
+  } catch (error) {
+    edgeUpdate.value = { ...edgeUpdate.value, state: 'failed', message: errorText(error) }
+  } finally { edgeUpdating.value = false }
 }
 
 async function addInputs() {
@@ -129,7 +147,7 @@ function moveInput(index: number, delta: number) {
 function removeInput(index: number) { form.inputs.splice(index, 1) }
 
 async function startBuild(resume = false) {
-  if (busy.value) return
+  if (busy.value || edgeUpdating.value) return
   const provider = selectedProvider.value
   if (!resume && provider?.online) {
     const ok = window.confirm('该音色需要把待朗读正文发送到在线服务。确认你拥有内容授权并同意继续吗？')
@@ -204,6 +222,13 @@ function clearInterfaceData() {
   status.value = '界面设置与来源识别历史已清除'
 }
 async function handleEvent(event: BuilderEvent) {
+  if (event.type === 'idle') {
+    if (updateAfterPause && autoEdgeUpdate.value) {
+      updateAfterPause = false
+      void checkEdgeUpdate('force')
+    }
+    return
+  }
   if (event.type === 'estimate') {
     const estimatedTotal = elapsedSeconds.value + (event.seconds ?? 0)
     initialEstimate.value = estimatedTotal
@@ -232,6 +257,7 @@ async function handleEvent(event: BuilderEvent) {
     status.value = '转换完成，可以把 .opbook 传入手表'
     await refreshState()
   } else if (event.type === 'paused') {
+    updateAfterPause = /HTTP 401\/403/.test(event.message ?? '')
     busy.value = false; pausing.value = false; status.value = event.message ?? '进度已安全保存，可随时恢复'
     await refreshState()
   } else if (event.type === 'failed') {
@@ -352,8 +378,9 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
       </header>
 
       <Message v-if="status && (status.includes('失败') || status.includes('无法'))" severity="error" :closable="false">{{ status }}</Message>
+      <Message v-if="edgeUpdating" severity="info" :closable="false">正在检查在线语音组件并验证音频，完成后可开始或恢复转换。</Message>
       <Message v-if="showDataNotice" severity="info" :closable="false">
-        工坊默认在本机处理源文件，并在用户数据目录保存断点、缓存、界面设置和最多 50 项来源识别历史。只有选用在线 Edge 音色并逐次确认后，待朗读正文才会发送给在线服务；清理操作不会删除电子书源文件或已输出的 .opbook。
+        工坊默认在本机处理源文件，并在用户数据目录保存断点、缓存、界面设置和最多 50 项来源识别历史。只有选用在线 Edge 音色并逐次确认后，待朗读正文才会发送给在线服务。在线组件自动更新会访问官方 Python 包索引，并仅发送公开短句验证连接，可在存储管理关闭；清理操作不会删除电子书源文件或已输出的 .opbook。
         <Button label="知道了" size="small" text @click="acceptDataNotice" />
       </Message>
 
@@ -460,7 +487,7 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
             <div v-if="checkpoint" class="checkpoint-card">
               <div class="checkpoint-icon"><i class="pi pi-bookmark" /></div>
               <div><Tag :value="checkpoint.state === 'paused' ? '已保存' : checkpoint.state" severity="info" /><h3>{{ basename(checkpoint.inputs[0] ?? '未完成任务') }}</h3><p>{{ checkpoint.message }}</p><small>{{ checkpoint.output }}</small></div>
-              <div class="checkpoint-progress"><strong>{{ checkpoint.percent }}%</strong><ProgressBar :value="checkpoint.percent" :showValue="false" /><Button label="从断点继续" icon="pi pi-play" :disabled="busy" @click="startBuild(true)" /></div>
+              <div class="checkpoint-progress"><strong>{{ checkpoint.percent }}%</strong><ProgressBar :value="checkpoint.percent" :showValue="false" /><Button label="从断点继续" icon="pi pi-play" :disabled="busy || edgeUpdating" @click="startBuild(true)" /></div>
             </div>
             <div v-else class="empty-state"><i class="pi pi-check-circle" /><h3>没有待续任务</h3><p>转换过程中可随时保存进度，下次从这里继续。</p></div>
           </template>
@@ -468,6 +495,18 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
       </section>
 
       <section v-else class="single-page storage-page">
+        <Card>
+          <template #title>在线语音组件</template>
+          <template #content>
+            <p class="storage-note">Edge 连接组件 {{ edgeUpdate.version }} · {{ edgeUpdating ? '正在检查并验证更新…' : edgeUpdate.message }}</p>
+            <p v-if="edgeUpdate.lastChecked" class="storage-note">上次检查：{{ new Date(edgeUpdate.lastChecked * 1000).toLocaleString() }}</p>
+            <div class="storage-actions">
+              <label for="edge-auto-update">启动时自动检查（每天最多一次）</label><ToggleSwitch v-model="autoEdgeUpdate" inputId="edge-auto-update" />
+              <Button label="检查更新" icon="pi pi-refresh" :loading="edgeUpdating" :disabled="busy || edgeUpdating" @click="checkEdgeUpdate('force')" />
+            </div>
+            <p class="storage-note">仅从官方 Python 包索引下载同主版本组件，校验后使用公开短句验证。转换中不切换，失败保留原组件；不上传你的书籍或断点。跨主版本或依赖不兼容时仍需更新工坊。</p>
+          </template>
+        </Card>
         <div class="storage-cards">
           <Card><template #content><i class="pi pi-wave-pulse metric-icon coral" /><span>句子音频缓存</span><strong>{{ humanBytes(cache.sentenceBytes) }}</strong><small>{{ cache.sentenceFiles.toLocaleString() }} 个可复用片段</small></template></Card>
           <Card><template #content><i class="pi pi-folder metric-icon ochre" /><span>未完成工作区</span><strong>{{ humanBytes(cache.unfinishedBytes) }}</strong><small>{{ cache.unfinishedDirectories }} 个任务目录</small></template></Card>

@@ -1,0 +1,32 @@
+<resources>
+    <bool name="schedule_phone">true</bool>
+    <color name="schedule_background">#F6F8F7</color>
+    <color name="schedule_card">#FFFFFF</color>
+    <color name="schedule_subtle">#F6E9EF</color>
+    <color name="schedule_text">#13251E</color>
+    <color name="schedule_muted">#5E6D66</color>
+    <color name="schedule_border">#E1E8E4</color>
+    <color name="schedule_accent">#8E4F69</color>
+    <color name="schedule_on_accent">#FFFFFF</color>
+    <color name="schedule_error">#A52E46</color>
+    <color name="schedule_ripple">#248E4F69</color>
+    <style name="SchedulePhoneBase" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/schedule_accent</item>
+        <item name="android:windowBackground">@color/schedule_background</item>
+        <item name="android:statusBarColor">@color/schedule_background</item>
+        <item name="android:navigationBarColor">@color/schedule_text</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:textColorPrimary">@color/schedule_text</item>
+        <item name="android:textColorSecondary">@color/schedule_muted</item>
+    </style>
+    <style name="SchedulePhoneTheme" parent="SchedulePhoneBase" />
+    <style name="ScheduleWatchTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/schedule_accent</item>
+        <item name="android:windowBackground">@color/schedule_background</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:textColorPrimary">@color/schedule_text</item>
+        <item name="android:textColorSecondary">@color/schedule_muted</item>
+    </style>
+</resources>

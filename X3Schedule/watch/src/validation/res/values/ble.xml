@@ -1,0 +1,6 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Must match the phone validation namespace, never the public application. -->
+    <!-- BleLink reads these variant overrides through shared R; app-only Lint misses that reference. -->
+    <string tools:ignore="UnusedResources" name="schedule_ble_service" translatable="false">bcb71eb0-7600-46ea-8cf0-4838947ac001</string>
+    <string tools:ignore="UnusedResources" name="schedule_ble_data" translatable="false">bcb71eb0-7600-46ea-8cf0-4838947ac002</string>
+</resources>

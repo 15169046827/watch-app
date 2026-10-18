@@ -1,0 +1,22 @@
+plugins { id 'com.android.library' }
+def reminderDiagnostics = providers.gradleProperty('scheduleReminderDiagnostics').getOrElse('false')
+if (!(reminderDiagnostics in ['true', 'false'])) throw new GradleException('Invalid reminder diagnostics flag.')
+def alarmClockExperiment = providers.gradleProperty('scheduleAlarmClockExperiment').getOrElse('false')
+if (!(alarmClockExperiment in ['true', 'false']) || (alarmClockExperiment == 'true' && reminderDiagnostics != 'true')) {
+    throw new GradleException('Alarm clock experiment requires reminder diagnostics.')
+}
+android {
+    lint { warningsAsErrors true }
+    namespace 'com.canace.x3schedule.shared'
+    compileSdk 35
+    buildFeatures { buildConfig true }
+    defaultConfig {
+        minSdk 26
+        buildConfigField 'boolean', 'REMINDER_DIAGNOSTICS', reminderDiagnostics
+        buildConfigField 'boolean', 'ALARM_CLOCK_EXPERIMENT', alarmClockExperiment
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
+}
+dependencies { api project(':domain'); testImplementation 'junit:junit:4.13.2' }
+
+apply from: rootProject.file('../gradle/android-java-quality.gradle')

@@ -33,6 +33,8 @@
 
 ## 预览分发与公共安装版签名
 
+在线连接组件独立保存在工作目录的 components/edge，包含已验证版本、原子 active.json 指针、上一版本标记和检查状态，不含书籍正文。原随包组件与以前版本保留；普通缓存/历史清理不删除组件。自动检查默认开启，每天最多一次，访问官方 PyPI；新组件只使用固定公开短句验证 Microsoft 服务，不读取或提交私人源文件。WebView 本地存储独立保存自动检查开关，可在存储管理关闭；关闭不影响手动检查。新任务仍需逐次同意正文外发。详见 [更新边界](EDGE_CLIENT_UPDATES.md)。
+
 手表 Release 构建只接受工作区共享 Android Release 证书配置，缺失时失败；Debug 仍固定使用工作区共享 Debug Key。Windows 正式打包必须在开始构建和替换程序前提供预期证书 SHA-256、HTTPS 时间戳地址和 `signtool.exe`，并在当前用户证书库找到相同 SHA-256 且含私钥的证书。最终 `X3AudiobookBuilder.exe` 与 `X3BuilderCLI.exe` 均签名，再由独立脚本确认 Authenticode 状态为 `Valid` 且签名者 SHA-256 完全一致。缺少任何条件时不生成或覆盖正式包。
 
 WARS 1.1 允许个人 GitHub 未签名便携预览：仅从已审核的干净 X3OfflineReader 工作树生成，GUI/CLI 必须均为 `NotSigned`，文件名和随包说明含 `UNSIGNED-PREVIEW`，并公布源提交及 ZIP SHA-256。该路径不生成 MSI/EXE 安装器、不创建开始菜单、不迁移私人工作目录、不覆盖正式包，发布结论只能是 `LIMITED_PREVIEW`。正式生产的 Authenticode 门禁保持不变。

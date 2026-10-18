@@ -14,6 +14,8 @@
     "x3_voice_ledger_phone",
     "x3_wolai_notes",
     "x3_offline_reader",
+    "x3_schedule_phone",
+    "x3_schedule_watch",
     "windows_audiobook_builder"
   ],
   "internalProducts": [
@@ -44,6 +46,23 @@
     "failClosedWhenReleaseRequested": true,
     "independentArtifactVerificationRequired": true,
     "registeredCertificateSha256": "3ef6162e5c749caf81d222642997ef306380fc96696c9661b77b72a829dc3f73"
+  },
+  "productSpecificControls": {
+    "x3Schedule": {
+      "publicArtifacts": [
+        "x3_schedule_phone",
+        "x3_schedule_watch"
+      ],
+      "debugToReleaseMigration": "verified_backup_then_explicit_uninstall_then_release_install_restore_and_reauthorize",
+      "debugToReleaseInPlaceUpgradeAllowed": false,
+      "debugCertificateLineageAllowed": false,
+      "validationArtifactsAreReleaseArtifacts": false,
+      "releaseToReleaseUpgradeRequiredAfterInitialRelease": true,
+      "notApplicableProductionControls": [
+        "wolai_oauth",
+        "windows_authenticode"
+      ]
+    }
   },
   "windowsReleaseSigning": {
     "authenticodeStatus": "Valid",

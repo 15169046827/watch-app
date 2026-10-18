@@ -6,7 +6,10 @@ use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{Emitter, Manager, Runtime, WindowEvent};
@@ -24,7 +27,15 @@ struct ActiveBuild {
 }
 
 #[derive(Default)]
-struct RuntimeState(Mutex<Option<ActiveBuild>>);
+struct RuntimeState(Mutex<Option<ActiveBuild>>, AtomicBool);
+
+struct UpdateGuard<'a>(&'a AtomicBool);
+
+impl Drop for UpdateGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
 
 fn project_root() -> Result<PathBuf, String> {
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
@@ -119,6 +130,31 @@ fn bridge_state() -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn edge_update(app: tauri::AppHandle, action: String) -> Result<Value, String> {
+    if !matches!(action.as_str(), "status" | "auto" | "force") {
+        return Err("未知的在线语音组件操作".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<RuntimeState>();
+        let guard = state
+            .0
+            .try_lock()
+            .map_err(|_| "工坊正在处理任务，请稍后检查更新")?;
+        if guard.is_some() {
+            return Err("转换中不会切换在线组件，请在任务结束后检查更新".into());
+        }
+        if state.1.swap(true, Ordering::AcqRel) {
+            return Err("在线语音组件正在检查更新".into());
+        }
+        let _updating = UpdateGuard(&state.1);
+        drop(guard);
+        capture(vec!["bridge-edge-update".into(), action])
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 fn preview_audio(provider: String, voice: String) -> Result<Value, String> {
     capture(vec!["bridge-preview".into(), provider, voice])
 }
@@ -168,7 +204,7 @@ fn launch_build<R: Runtime>(
     .map_err(|error| format!("无法保存任务请求：{error}"))?;
 
     let mut active = state.0.lock().map_err(|_| "任务状态不可用")?;
-    if active.is_some() {
+    if active.is_some() || state.1.load(Ordering::Acquire) {
         return Err("已有转换任务正在运行".into());
     }
     let args = vec![
@@ -210,6 +246,7 @@ fn launch_build<R: Runtime>(
             };
             let _ = fs::remove_file(cleanup_request);
             let _ = fs::remove_file(cleanup_control);
+            let _ = app.emit("builder-event", json!({"type":"idle"}));
             if let Ok(status) = result {
                 if !status.success() {
                     let _ = app.emit(
@@ -259,6 +296,7 @@ pub fn run() {
         .manage(RuntimeState::default())
         .invoke_handler(tauri::generate_handler![
             bridge_state,
+            edge_update,
             preview_audio,
             cache_action,
             start_build,

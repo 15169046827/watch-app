@@ -69,6 +69,13 @@ final class BuilderBridge {
 
     static int run(Path root, String[] args) throws Exception {
         return switch (args[0]) {
+            case "bridge-edge-update" -> {
+                if (args.length != 2) {
+                    throw new IllegalArgumentException("bridge-edge-update requires action");
+                }
+                emit(EdgeClientUpdater.run(root, args[1]));
+                yield 0;
+            }
             case "bridge-state" -> {
                 emit(state(root));
                 yield 0;

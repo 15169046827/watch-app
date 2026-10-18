@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>日程 · 日常工具</title>
+  <path id="background" fill="#B56F8C" d="M0,0H48V48H0Z"/>
+  <g id="foreground">
+    <path fill="#F7F3EA" d="M13,11H35Q39,11 39,15V35Q39,39 35,39H13Q9,39 9,35V15Q9,11 13,11Z"/>
+    <path fill="#2F3437" d="M16,8H19V16H16ZM29,8H32V16H29ZM13,19H35V22H13Z"/>
+    <path fill="#2F3437" d="M14,26H25V28.5H14ZM14,32H22V34.5H14ZM26,31L28,29L31,32L35,27L37,29L31,36Z"/>
+  </g>
+</svg>

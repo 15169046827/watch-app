@@ -1,0 +1,5 @@
+<resources>
+    <!-- Preserve the public protocol identity for all existing installations. -->
+    <string name="schedule_ble_service" translatable="false">bcb71eb0-7600-46ea-8cf0-4838947ab001</string>
+    <string name="schedule_ble_data" translatable="false">bcb71eb0-7600-46ea-8cf0-4838947ab002</string>
+</resources>
