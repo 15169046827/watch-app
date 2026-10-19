@@ -120,14 +120,14 @@
 .\builder\melo\setup-melo.ps1
 ```
 
-脚本把 Python 3.9、官方 MeloTTS、中文模型、Hugging Face 与 NLTK 缓存固定在被忽略的 `.tools\melo`。安装/预取需要网络，之后转换不需要网络、API Key 或账号。详情见 [`melo/README.md`](melo/README.md)。
+脚本把 Python 3.11、固定提交且经 SHA-256 校验的官方 MeloTTS、中文模型、Hugging Face 与 NLTK 缓存放在被忽略的 `.tools\melo`。安装/预取需要网络，之后转换不需要网络、API Key 或账号。详情见 [`melo/README.md`](melo/README.md)。
 
 ```powershell
 .\builder\package-windows-preview.ps1
 .\builder\package-windows.ps1
 ```
 
-便携镜像内含 Java、FFmpeg 和所选离线模型；`-WithoutMelo` 可生成较小版本。预览脚本输出 `build\X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.zip` 及 `.sha256`，结论只能写 LIMITED_PREVIEW。正式程序的持久数据默认位于 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`，缓存键包含 provider、声音、语速和规范化句子；不得把私人正文、日志或生成包提交到源码。
+便携镜像内含 Java、FFmpeg 和所选离线模型。Edge 与 Sherpa 共用 Melo 目录中的便携 Python，因此较小版本必须同时指定 `-WithoutMelo -WithoutAdditionalVoices`；脚本拒绝会留下缺失运行时组件的组合。预览脚本输出 `build\X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.zip` 及 `.sha256`，结论只能写 LIMITED_PREVIEW。正式程序的持久数据默认位于 `%LOCALAPPDATA%\Canace\X3AudiobookBuilder\work`，缓存键包含 provider、声音、语速和规范化句子；不得把私人正文、日志或生成包提交到源码。
 
 重建便携镜像前，脚本会先验证 `X3_WINDOWS_SIGNING_CERT_SHA256`、`X3_WINDOWS_TIMESTAMP_URL`（HTTPS）和 `X3_WINDOWS_SIGNTOOL_PATH`，并确认当前用户证书库内有匹配 SHA-256 且含私钥的证书；条件不足时在构建和删除旧包前停止。成功构建后会签署并独立验证 `X3AudiobookBuilder.exe` 与 `X3BuilderCLI.exe`。
 

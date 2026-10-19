@@ -15,6 +15,8 @@
 
 ## 构建与验证
 
+Builder 测试需要 Python 3（安全策略夹具仅使用标准库，不加载模型或私人数据）；可用 `X3_BUILDER_TEST_PYTHON` 指定解释器。`:builder:test` 自动运行这组正反例，因此现有 CI 也会执行，无需改变仓库级工作流。
+
 听读工坊的 Edge 连接组件可独立自动更新，无需为兼容的客户端变更重新编译。启动时每天最多检查一次；“存储管理 → 在线语音组件”可关闭自动检查、手动检查并查看版本。只有通过官方包哈希、兼容性和公开短句音频验证的组件才会在空闲时启用，失败保留原组件。详见 [安全更新边界](specification/EDGE_CLIENT_UPDATES.md)。
 
 ```powershell
@@ -33,12 +35,16 @@ Windows 便携应用镜像：
 
 ```powershell
 .\builder\package-windows-preview.ps1  # 个人 GitHub 未签名便携预览 ZIP；只接受干净的已审核源码
+# 独立候选：-CandidateName security-test；不会覆盖默认预览目录或 ZIP。
+# 可通过 -MeloEnvironmentPath 与 -EdgePackagesPath 指向分别验收过的运行时/依赖目录。
 .\builder\package-windows.ps1          # 正式包；须配置 Authenticode 证书、HTTPS 时间戳和 signtool
-.\builder\package-windows.ps1 -WithoutMelo
+.\builder\package-windows.ps1 -WithoutMelo -WithoutAdditionalVoices
 .\builder\package-windows.ps1 -WorkRoot '<absolute-data-directory>' # 可选的绝对数据目录
 ```
 
 未签名预览产物为 `builder\build\X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.zip` 及其 `.sha256`，只用于 WARS 1.1 LIMITED_PREVIEW，不生成安装器、不覆盖正式目录，并随包写入未知发布者提示和源提交。正式产物位于 `builder\build\windows-package\X3AudiobookBuilder`。兼容 GUI 文件名为 `X3AudiobookBuilder.exe`，CLI 为 `X3BuilderCLI.exe`。Debug APK 位于 `watch\build\outputs\apk\debug\watch-debug.apk`，固定使用工作区共享 Debug Key；不得生成替代密钥。
+
+Edge 与 Sherpa 共用 `.tools\melo` 中的便携 Python；因此省略 Melo 运行时的精简包必须同时使用 `-WithoutAdditionalVoices`。脚本会拒绝只传 `-WithoutMelo` 的残缺组合，不会生成缺少 Python 的表面可用包。
 
 为当前 Windows 用户创建开始菜单入口：
 
@@ -47,6 +53,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\create-start-m
 ```
 
 ## 当前状态
+
+依赖安全整改将 Melo 安装基线调整为 Python 3.11、Transformers 5.10.1 和 PyTorch 2.13.0；旧环境不会被原地修改，打包会检查实际运行库并拒绝携带旧依赖。Tauri 的 glib 告警仍受上游 GTK 约束，但不进入当前 Windows 目标依赖树；其他平台构建暂时阻止。源码修复不代表旧预览 ZIP 已被替换，兼容性、可达性和复验命令见 [依赖安全边界](specification/DEPENDENCY_SECURITY.md)。
 
 EPUB 转换已补充正文编号章节识别与跨 spine 续文合并，防止合并型 EPUB 仅按 HTML 文件数量生成章节；内部代码型 HTML 标题不再进入 TTS。规则与旧文件重新转换说明见 [EPUB 逻辑章节与标题](specification/EPUB_CHAPTERS.md)。
 

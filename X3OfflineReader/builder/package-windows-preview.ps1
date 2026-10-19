@@ -2,6 +2,9 @@
 param(
     [switch]$WithoutMelo,
     [switch]$WithoutAdditionalVoices,
+    [string]$MeloEnvironmentPath,
+    [string]$EdgePackagesPath,
+    [string]$CandidateName,
     [string]$JpackagePath
 )
 
@@ -9,23 +12,33 @@ $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $repository = (Resolve-Path (Join-Path $project '..')).Path
 $buildRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build'))
-$outputRoot = [IO.Path]::GetFullPath((Join-Path $buildRoot 'windows-preview'))
-$stagingRoot = [IO.Path]::GetFullPath((Join-Path $buildRoot 'windows-preview-next'))
-$backupRoot = [IO.Path]::GetFullPath((Join-Path $buildRoot 'windows-preview-previous'))
-$archive = [IO.Path]::GetFullPath(
-    (Join-Path $buildRoot 'X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.zip'))
-$digestPath = $archive + '.sha256'
-$archiveNext = [IO.Path]::GetFullPath(
-    (Join-Path $buildRoot 'X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.next.zip'))
-$digestNext = $digestPath + '.next'
-$archiveBackup = $archive + '.previous'
-$digestBackup = $digestPath + '.previous'
+. (Join-Path $PSScriptRoot 'tools\packaging-policy.ps1')
+Assert-VoicePackagingOptions -WithoutMelo:$WithoutMelo `
+    -WithoutAdditionalVoices:$WithoutAdditionalVoices
+. (Join-Path $PSScriptRoot 'tools\preview-paths.ps1')
+$previewPaths = Get-PreviewPaths -BuildRoot $buildRoot -CandidateName $CandidateName
+foreach ($entry in $previewPaths.GetEnumerator()) {
+    Set-Variable -Name $entry.Key -Value $entry.Value
+}
+if (-not $CandidateName -and
+    ([IO.Path]::GetFileName($outputRoot) -ne 'windows-preview' -or
+        $digestPath -ne ($archive + '.sha256'))) {
+    throw 'Default preview layout contract changed.'
+}
 $allowed = $buildRoot + [IO.Path]::DirectorySeparatorChar
 
 foreach ($candidate in @($outputRoot, $stagingRoot, $backupRoot, $archive, $archiveNext,
         $digestPath, $digestNext, $archiveBackup, $digestBackup)) {
     if (-not $candidate.StartsWith($allowed, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'Unsafe preview output path'
+    }
+    $ancestor = $candidate
+    while ($ancestor) {
+        if ((Test-Path -LiteralPath $ancestor) -and
+            ((Get-Item -LiteralPath $ancestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Preview output paths must not traverse reparse points.'
+        }
+        $ancestor = [IO.Path]::GetDirectoryName($ancestor)
     }
 }
 
@@ -45,6 +58,17 @@ $running = @(Get-Process -Name 'X3AudiobookBuilder', 'X3BuilderCLI', 'tingdu-wor
         -ErrorAction SilentlyContinue)
 if ($running.Count -gt 0) {
     throw '请先关闭听读工坊及 X3BuilderCLI，再生成预览包。'
+}
+
+if (-not $MeloEnvironmentPath) { $MeloEnvironmentPath = Join-Path $project '.tools\melo' }
+if (-not $EdgePackagesPath) { $EdgePackagesPath = Join-Path $project '.tools\edge-tts' }
+if (-not $WithoutMelo) {
+    & (Join-Path $MeloEnvironmentPath 'python.exe') -B (Join-Path $PSScriptRoot 'melo\runtime_security.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Source Melo runtime security check failed; select a separately validated environment.' }
+}
+if (-not $WithoutAdditionalVoices) {
+    & (Join-Path $MeloEnvironmentPath 'python.exe') -B (Join-Path $PSScriptRoot 'edge\check_runtime.py') --packages $EdgePackagesPath
+    if ($LASTEXITCODE -ne 0) { throw 'Source Edge dependency/ABI check failed; select a fresh validated dependency root.' }
 }
 
 function Copy-Tree([string]$Source, [string]$Destination) {
@@ -138,10 +162,10 @@ Copy-Item -LiteralPath (Join-Path $project 'builder\THIRD_PARTY_TTS.md') `
 New-Item -ItemType Directory -Force -Path (Join-Path $app '.tools') | Out-Null
 Copy-Tree (Join-Path $project '.tools\ffmpeg') (Join-Path $app '.tools\ffmpeg')
 if (-not $WithoutMelo) {
-    Copy-Tree (Join-Path $project '.tools\melo') (Join-Path $app '.tools\melo')
+    Copy-Tree $MeloEnvironmentPath (Join-Path $app '.tools\melo')
 }
 if (-not $WithoutAdditionalVoices) {
-    Copy-Tree (Join-Path $project '.tools\edge-tts') (Join-Path $app '.tools\edge-tts')
+    Copy-Tree $EdgePackagesPath (Join-Path $app '.tools\edge-tts')
     Copy-Tree (Join-Path $project '.tools\sherpa-onnx\runtime') `
         (Join-Path $app '.tools\sherpa-onnx\runtime')
     Copy-Tree (Join-Path $project '.tools\sherpa-onnx\models') `
@@ -152,11 +176,28 @@ if (-not $WithoutAdditionalVoices) {
 Copy-Tree (Join-Path $project 'samples\builder-inputs') `
     (Join-Path $app 'builder-inputs')
 if (-not $WithoutMelo) {
+    . (Join-Path $PSScriptRoot 'tools\prepare-melo-package.ps1')
+    $pruned = Remove-RedundantPackagedBertWeights -App $app
+    Write-Host "Redundant packaged BERT legacy weights removed: $pruned"
+    & (Join-Path $app '.tools\melo\python.exe') `
+        -B (Join-Path $app 'builder\melo\runtime_security.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged Melo runtime security check failed' }
     & (Join-Path $app '.tools\melo\python.exe') `
         -B (Join-Path $app 'builder\melo\worker.py') --self-test
     if ($LASTEXITCODE -ne 0) {
         throw 'Packaged Melo sanitizer self-test failed'
     }
+    & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\melo\verify_runtime.py') --python (Join-Path $app '.tools\melo\python.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged offline Melo synthesis failed after cache pruning' }
+}
+if (-not $WithoutAdditionalVoices -and -not $WithoutMelo) {
+    & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\edge\check_runtime.py') --packages (Join-Path $app '.tools\edge-tts')
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged Edge dependency/ABI check failed' }
+}
+if (-not $WithoutMelo) {
+    $emptyCaches = Remove-EmptyPackagedPythonCaches -App $app
+    Write-Host "Empty generated Python cache directories removed: $emptyCaches"
+    Assert-PackagedContentBoundary -App $app
 }
 Remove-Item -LiteralPath $launcher -Force
 if (Test-Path -LiteralPath (Join-Path $app 'builder\.work')) {
