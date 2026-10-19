@@ -114,6 +114,10 @@ and require real network-blocked sample synthesis from the copied runtime after 
 before archive creation. Run `builder/tools/test-melo-package.ps1` for scoped/idempotent
 and corrupt-pair fixtures. Do not execute other acceptance tools inside a directory while
 it is being archived: subprocess imports may generate bytecode that the content gate rejects.
+librosa/Numba initialization can also create **empty** `__pycache__` directories even with
+bytecode disabled. After copied-runtime verification, packagers remove only empty cache
+directories (non-recursively) and reject other forbidden files/directories before compression,
+reporting relative examples. Nonempty caches are not silently deleted or shipped.
 
 The final environment scan also reports [GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp)
 in NLTK 3.10.3, with no published fix at review time. Its affected training/model-path

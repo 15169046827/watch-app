@@ -191,6 +191,11 @@ if (-not $WithoutAdditionalVoices -and -not $WithoutMelo) {
     & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\edge\check_runtime.py') --packages (Join-Path $app '.tools\edge-tts')
     if ($LASTEXITCODE -ne 0) { throw 'Packaged Edge dependency/ABI check failed' }
 }
+if (-not $WithoutMelo) {
+    $emptyCaches = Remove-EmptyPackagedPythonCaches -App $app
+    Write-Host "Empty generated Python cache directories removed: $emptyCaches"
+    Assert-PackagedContentBoundary -App $app
+}
 Remove-Item -LiteralPath $launcher -Force
 if (Test-Path -LiteralPath (Join-Path $app 'builder\.work')) {
     throw 'Persistent work must not be stored inside the preview app image.'

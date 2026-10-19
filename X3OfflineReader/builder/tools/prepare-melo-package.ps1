@@ -35,3 +35,41 @@ function Remove-RedundantPackagedBertWeights {
     }
     return $removed
 }
+
+function Remove-EmptyPackagedPythonCaches {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$App)
+    $root = [IO.Path]::GetFullPath($App)
+    $removed = 0
+    $directories = @(Get-ChildItem -LiteralPath $root -Directory -Recurse -Force -Filter '__pycache__' |
+        Sort-Object { $_.FullName.Length } -Descending)
+    foreach ($directory in $directories) {
+        if (-not $directory.FullName.StartsWith($root.TrimEnd([IO.Path]::DirectorySeparatorChar) +
+                [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+            $directory.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw 'Unsafe packaged cache path.'
+        }
+        if (@(Get-ChildItem -LiteralPath $directory.FullName -Force).Count -eq 0) {
+            # No recursive deletion: never discard nonempty caches or unknown data.
+            Remove-Item -LiteralPath $directory.FullName -Force
+            $removed++
+        }
+    }
+    return $removed
+}
+
+function Assert-PackagedContentBoundary {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$App)
+    $root = [IO.Path]::GetFullPath($App).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    $bad = @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object {
+        $relative = '/' + $_.FullName.Substring($root.Length + 1).Replace('\', '/')
+        if ($_.PSIsContainer) { $relative += '/' }
+        if ($relative -match '(?i)/(__pycache__|\.pytest_cache|\.git|\.work|conda-meta)/|\.(pyc|pyo|log|tmp|bak)$') {
+            $relative
+        }
+    })
+    if ($bad.Count -gt 0) {
+        throw ('Forbidden staged package entries: ' + (($bad | Select-Object -First 3) -join '; '))
+    }
+}

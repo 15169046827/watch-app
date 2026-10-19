@@ -27,7 +27,22 @@ try {
     if (-not $rejected -or -not (Test-Path -LiteralPath (Join-Path $snapshots 'paired/pytorch_model.bin'))) {
         throw 'Corrupt safetensors must not cause legacy weight removal.'
     }
-    Write-Output 'Melo package fixtures passed: pair-only pruning, safetensors unchanged, legacy-only retained, idempotence, corrupt-pair rejection.'
+    $empty = Join-Path $root 'empty/__pycache__'
+    $occupied = Join-Path $root 'occupied/__pycache__'
+    New-Item -ItemType Directory -Path $empty, $occupied -Force | Out-Null
+    $bytecode = Join-Path $occupied 'public.pyc'
+    [IO.File]::WriteAllText($bytecode, 'fixture')
+    if ((Remove-EmptyPackagedPythonCaches -App $root) -ne 1 -or
+        (Test-Path -LiteralPath $empty) -or -not (Test-Path -LiteralPath $bytecode)) {
+        throw 'Only empty generated cache directories may be removed.'
+    }
+    $blocked = $false
+    try { Assert-PackagedContentBoundary -App $root } catch { $blocked = $true }
+    if (-not $blocked) { throw 'Nonempty generated cache must fail before compression.' }
+    Remove-Item -LiteralPath $bytecode -Force
+    $null = Remove-EmptyPackagedPythonCaches -App $root
+    Assert-PackagedContentBoundary -App $root
+    Write-Output 'Melo package fixtures passed: scoped/idempotent pruning, corrupt-pair rejection, empty-only cache cleanup and pre-archive rejection.'
 } finally {
     $resolved = [IO.Path]::GetFullPath($root)
     if (-not $resolved.StartsWith($temporaryBase.TrimEnd([IO.Path]::DirectorySeparatorChar) +
