@@ -89,6 +89,21 @@ Gradle CI command also executes the policy fixtures. `X3_BUILDER_TEST_PYTHON` ma
 a local interpreter; the default is `python`. Real synthesis and complete graph checks
 remain separate acceptance checks, not claims made by those small unit fixtures.
 
+Portable preview packaging accepts `-CandidateName security-test` to isolate its app,
+staging, rollback and ZIP/checksum paths from the active default preview. Candidate names
+are restricted to lowercase ASCII letters, digits and hyphens (48 characters maximum),
+excluding reserved `next`/`previous` suffixes. Run `builder/tools/test-preview-paths.ps1`
+and `builder/test-portable-upgrade.ps1 -RollbackOnly` before packaging changes ship.
+`-EdgePackagesPath` selects a separately validated Edge dependency root containing
+`site-packages`; use wheels matching the selected Melo Python ABI rather than copying
+old compiled extensions. Neither option changes the installed shortcut or publishes a release.
+Install `builder/edge/requirements.txt` with the selected Python into a **fresh** isolated
+`site-packages` target (`pip install --target <target> --only-binary=:all: --no-compile -r ...`).
+The reviewed candidate pins aiohttp 3.14.5 and multidict 6.9.1 to include current advisory
+fixes; run a fresh dependency audit, compiled-parser import check, updater tests and actual
+public-sentence synthesis before using that directory for packaging. Do not upgrade the
+active user's dependency tree in place.
+
 The final environment scan also reports [GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp)
 in NLTK 3.10.3, with no published fix at review time. Its affected training/model-path
 import/export methods are not exposed by the Builder: `g2p_en` uses fixed dictionaries,

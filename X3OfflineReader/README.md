@@ -35,6 +35,8 @@ Windows 便携应用镜像：
 
 ```powershell
 .\builder\package-windows-preview.ps1  # 个人 GitHub 未签名便携预览 ZIP；只接受干净的已审核源码
+# 独立候选：-CandidateName security-test；不会覆盖默认预览目录或 ZIP。
+# 可通过 -MeloEnvironmentPath 与 -EdgePackagesPath 指向分别验收过的运行时/依赖目录。
 .\builder\package-windows.ps1          # 正式包；须配置 Authenticode 证书、HTTPS 时间戳和 signtool
 .\builder\package-windows.ps1 -WithoutMelo
 .\builder\package-windows.ps1 -WorkRoot '<absolute-data-directory>' # 可选的绝对数据目录

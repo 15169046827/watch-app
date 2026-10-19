@@ -3,6 +3,8 @@ param(
     [switch]$WithoutMelo,
     [switch]$WithoutAdditionalVoices,
     [string]$MeloEnvironmentPath,
+    [string]$EdgePackagesPath,
+    [string]$CandidateName,
     [string]$JpackagePath
 )
 
@@ -10,23 +12,25 @@ $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $repository = (Resolve-Path (Join-Path $project '..')).Path
 $buildRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build'))
-$outputRoot = [IO.Path]::GetFullPath((Join-Path $buildRoot 'windows-preview'))
-$stagingRoot = [IO.Path]::GetFullPath((Join-Path $buildRoot 'windows-preview-next'))
-$backupRoot = [IO.Path]::GetFullPath((Join-Path $buildRoot 'windows-preview-previous'))
-$archive = [IO.Path]::GetFullPath(
-    (Join-Path $buildRoot 'X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.zip'))
-$digestPath = $archive + '.sha256'
-$archiveNext = [IO.Path]::GetFullPath(
-    (Join-Path $buildRoot 'X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.next.zip'))
-$digestNext = $digestPath + '.next'
-$archiveBackup = $archive + '.previous'
-$digestBackup = $digestPath + '.previous'
+. (Join-Path $PSScriptRoot 'tools\preview-paths.ps1')
+$previewPaths = Get-PreviewPaths -BuildRoot $buildRoot -CandidateName $CandidateName
+foreach ($entry in $previewPaths.GetEnumerator()) {
+    Set-Variable -Name $entry.Key -Value $entry.Value
+}
 $allowed = $buildRoot + [IO.Path]::DirectorySeparatorChar
 
 foreach ($candidate in @($outputRoot, $stagingRoot, $backupRoot, $archive, $archiveNext,
         $digestPath, $digestNext, $archiveBackup, $digestBackup)) {
     if (-not $candidate.StartsWith($allowed, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'Unsafe preview output path'
+    }
+    $ancestor = $candidate
+    while ($ancestor) {
+        if ((Test-Path -LiteralPath $ancestor) -and
+            ((Get-Item -LiteralPath $ancestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Preview output paths must not traverse reparse points.'
+        }
+        $ancestor = [IO.Path]::GetDirectoryName($ancestor)
     }
 }
 
@@ -49,6 +53,7 @@ if ($running.Count -gt 0) {
 }
 
 if (-not $MeloEnvironmentPath) { $MeloEnvironmentPath = Join-Path $project '.tools\melo' }
+if (-not $EdgePackagesPath) { $EdgePackagesPath = Join-Path $project '.tools\edge-tts' }
 if (-not $WithoutMelo) {
     & (Join-Path $MeloEnvironmentPath 'python.exe') -B (Join-Path $PSScriptRoot 'melo\runtime_security.py')
     if ($LASTEXITCODE -ne 0) { throw 'Source Melo runtime security check failed; select a separately validated environment.' }
@@ -148,7 +153,7 @@ if (-not $WithoutMelo) {
     Copy-Tree $MeloEnvironmentPath (Join-Path $app '.tools\melo')
 }
 if (-not $WithoutAdditionalVoices) {
-    Copy-Tree (Join-Path $project '.tools\edge-tts') (Join-Path $app '.tools\edge-tts')
+    Copy-Tree $EdgePackagesPath (Join-Path $app '.tools\edge-tts')
     Copy-Tree (Join-Path $project '.tools\sherpa-onnx\runtime') `
         (Join-Path $app '.tools\sherpa-onnx\runtime')
     Copy-Tree (Join-Path $project '.tools\sherpa-onnx\models') `
