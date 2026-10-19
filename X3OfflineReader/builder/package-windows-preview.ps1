@@ -17,6 +17,11 @@ $previewPaths = Get-PreviewPaths -BuildRoot $buildRoot -CandidateName $Candidate
 foreach ($entry in $previewPaths.GetEnumerator()) {
     Set-Variable -Name $entry.Key -Value $entry.Value
 }
+if (-not $CandidateName -and
+    ([IO.Path]::GetFileName($outputRoot) -ne 'windows-preview' -or
+        $digestPath -ne ($archive + '.sha256'))) {
+    throw 'Default preview layout contract changed.'
+}
 $allowed = $buildRoot + [IO.Path]::DirectorySeparatorChar
 
 foreach ($candidate in @($outputRoot, $stagingRoot, $backupRoot, $archive, $archiveNext,
