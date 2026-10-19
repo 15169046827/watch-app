@@ -173,6 +173,9 @@ if (-not $WithoutAdditionalVoices) {
 Copy-Tree (Join-Path $project 'samples\builder-inputs') `
     (Join-Path $app 'builder-inputs')
 if (-not $WithoutMelo) {
+    . (Join-Path $PSScriptRoot 'tools\prepare-melo-package.ps1')
+    $pruned = Remove-RedundantPackagedBertWeights -App $app
+    Write-Host "Redundant packaged BERT legacy weights removed: $pruned"
     & (Join-Path $app '.tools\melo\python.exe') `
         -B (Join-Path $app 'builder\melo\runtime_security.py')
     if ($LASTEXITCODE -ne 0) { throw 'Packaged Melo runtime security check failed' }
@@ -181,6 +184,8 @@ if (-not $WithoutMelo) {
     if ($LASTEXITCODE -ne 0) {
         throw 'Packaged Melo sanitizer self-test failed'
     }
+    & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\melo\verify_runtime.py') --python (Join-Path $app '.tools\melo\python.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged offline Melo synthesis failed after cache pruning' }
 }
 if (-not $WithoutAdditionalVoices -and -not $WithoutMelo) {
     & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\edge\check_runtime.py') --packages (Join-Path $app '.tools\edge-tts')

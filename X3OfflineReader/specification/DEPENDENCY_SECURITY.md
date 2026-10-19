@@ -107,6 +107,14 @@ Both Windows packagers fail closed on stale Edge versions or missing compiled Py
 extensions before copying dependencies. This is a baseline/ABI check, not a replacement
 for current advisory scans or real synthesis. Formal signing requirements remain unchanged.
 
+The copied portable cache omits `pytorch_model.bin` only where its known multilingual
+BERT snapshot also contains nonempty `model.safetensors`. Source caches, other models,
+Melo checkpoints and lone legacy files are never removed. Packagers reject reparse points
+and require real network-blocked sample synthesis from the copied runtime after pruning,
+before archive creation. Run `builder/tools/test-melo-package.ps1` for scoped/idempotent
+and corrupt-pair fixtures. Do not execute other acceptance tools inside a directory while
+it is being archived: subprocess imports may generate bytecode that the content gate rejects.
+
 The final environment scan also reports [GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp)
 in NLTK 3.10.3, with no published fix at review time. Its affected training/model-path
 import/export methods are not exposed by the Builder: `g2p_en` uses fixed dictionaries,
