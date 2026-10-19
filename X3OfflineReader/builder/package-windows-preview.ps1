@@ -63,6 +63,10 @@ if (-not $WithoutMelo) {
     & (Join-Path $MeloEnvironmentPath 'python.exe') -B (Join-Path $PSScriptRoot 'melo\runtime_security.py')
     if ($LASTEXITCODE -ne 0) { throw 'Source Melo runtime security check failed; select a separately validated environment.' }
 }
+if (-not $WithoutAdditionalVoices) {
+    & (Join-Path $MeloEnvironmentPath 'python.exe') -B (Join-Path $PSScriptRoot 'edge\check_runtime.py') --packages $EdgePackagesPath
+    if ($LASTEXITCODE -ne 0) { throw 'Source Edge dependency/ABI check failed; select a fresh validated dependency root.' }
+}
 
 function Copy-Tree([string]$Source, [string]$Destination) {
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
@@ -177,6 +181,10 @@ if (-not $WithoutMelo) {
     if ($LASTEXITCODE -ne 0) {
         throw 'Packaged Melo sanitizer self-test failed'
     }
+}
+if (-not $WithoutAdditionalVoices -and -not $WithoutMelo) {
+    & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\edge\check_runtime.py') --packages (Join-Path $app '.tools\edge-tts')
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged Edge dependency/ABI check failed' }
 }
 Remove-Item -LiteralPath $launcher -Force
 if (Test-Path -LiteralPath (Join-Path $app 'builder\.work')) {

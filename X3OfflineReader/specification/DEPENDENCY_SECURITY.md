@@ -103,6 +103,9 @@ The reviewed candidate pins aiohttp 3.14.5 and multidict 6.9.1 to include curren
 fixes; run a fresh dependency audit, compiled-parser import check, updater tests and actual
 public-sentence synthesis before using that directory for packaging. Do not upgrade the
 active user's dependency tree in place.
+Both Windows packagers fail closed on stale Edge versions or missing compiled Python 3.11
+extensions before copying dependencies. This is a baseline/ABI check, not a replacement
+for current advisory scans or real synthesis. Formal signing requirements remain unchanged.
 
 The final environment scan also reports [GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp)
 in NLTK 3.10.3, with no published fix at review time. Its affected training/model-path

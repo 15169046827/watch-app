@@ -3,6 +3,7 @@ param(
     [switch]$WithoutMelo,
     [switch]$WithoutAdditionalVoices,
     [string]$MeloEnvironmentPath,
+    [string]$EdgePackagesPath,
     [string]$JpackagePath,
     [string]$WorkRoot,
     [string]$SignToolPath = $env:X3_WINDOWS_SIGNTOOL_PATH,
@@ -28,6 +29,7 @@ $signingCertificate=Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object {
 } | Select-Object -First 1
 if(-not $signingCertificate){throw '当前用户证书库中未找到指定 SHA-256 且含私钥的 Authenticode 证书。'}
 if(-not $MeloEnvironmentPath){$MeloEnvironmentPath=Join-Path $project '.tools\melo'}
+if(-not $EdgePackagesPath){$EdgePackagesPath=Join-Path $project '.tools\edge-tts'}
 if(-not $WithoutMelo){
     & (Join-Path $MeloEnvironmentPath 'python.exe') -B (Join-Path $PSScriptRoot 'melo\runtime_security.py')
     if($LASTEXITCODE -ne 0){throw 'Source Melo runtime security check failed; select a separately validated environment.'}
@@ -36,6 +38,10 @@ function Copy-Tree([string]$Source,[string]$Destination){
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /XD __pycache__ .pytest_cache .git .work conda-meta /XF *.pyc *.pyo *.log *.tmp *.bak /NFL /NDL /NJH /NJS /NP | Out-Null
     if($LASTEXITCODE -ge 8){throw "Copy failed ($LASTEXITCODE): $Source"}
+}
+if(-not $WithoutAdditionalVoices){
+    & (Join-Path $MeloEnvironmentPath 'python.exe') -B (Join-Path $PSScriptRoot 'edge\check_runtime.py') --packages $EdgePackagesPath
+    if($LASTEXITCODE -ne 0){throw 'Source Edge dependency/ABI check failed; select a fresh validated dependency root.'}
 }
 $gradle=Join-Path $project 'gradlew.bat'
 $icon=Join-Path $PSScriptRoot 'assets\tingdu-workshop-icon.ico'
@@ -97,7 +103,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $app '.tools') | Out-Null
 Copy-Tree (Join-Path $project '.tools\ffmpeg') (Join-Path $app '.tools\ffmpeg')
 if(-not $WithoutMelo){Copy-Tree $MeloEnvironmentPath (Join-Path $app '.tools\melo')}
 if(-not $WithoutAdditionalVoices){
-    Copy-Tree (Join-Path $project '.tools\edge-tts') (Join-Path $app '.tools\edge-tts')
+    Copy-Tree $EdgePackagesPath (Join-Path $app '.tools\edge-tts')
     Copy-Tree (Join-Path $project '.tools\sherpa-onnx\runtime') (Join-Path $app '.tools\sherpa-onnx\runtime')
     Copy-Tree (Join-Path $project '.tools\sherpa-onnx\models') (Join-Path $app '.tools\sherpa-onnx\models')
     Copy-Tree (Join-Path $project '.tools\sherpa-onnx\python') (Join-Path $app '.tools\sherpa-onnx\python')
@@ -108,6 +114,10 @@ if(-not $WithoutMelo){
     if($LASTEXITCODE -ne 0){throw 'Packaged Melo runtime security check failed'}
     & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\melo\worker.py') --self-test
     if($LASTEXITCODE -ne 0){throw 'Packaged Melo sanitizer self-test failed'}
+}
+if(-not $WithoutAdditionalVoices -and -not $WithoutMelo){
+    & (Join-Path $app '.tools\melo\python.exe') -B (Join-Path $app 'builder\edge\check_runtime.py') --packages (Join-Path $app '.tools\edge-tts')
+    if($LASTEXITCODE -ne 0){throw 'Packaged Edge dependency/ABI check failed'}
 }
 $signedLaunchers=@(
     (Join-Path $app 'X3AudiobookBuilder.exe'),
