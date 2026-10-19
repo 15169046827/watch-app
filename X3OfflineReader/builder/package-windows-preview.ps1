@@ -12,6 +12,9 @@ $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $repository = (Resolve-Path (Join-Path $project '..')).Path
 $buildRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build'))
+. (Join-Path $PSScriptRoot 'tools\packaging-policy.ps1')
+Assert-VoicePackagingOptions -WithoutMelo:$WithoutMelo `
+    -WithoutAdditionalVoices:$WithoutAdditionalVoices
 . (Join-Path $PSScriptRoot 'tools\preview-paths.ps1')
 $previewPaths = Get-PreviewPaths -BuildRoot $buildRoot -CandidateName $CandidateName
 foreach ($entry in $previewPaths.GetEnumerator()) {

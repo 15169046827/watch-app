@@ -38,11 +38,13 @@ Windows 便携应用镜像：
 # 独立候选：-CandidateName security-test；不会覆盖默认预览目录或 ZIP。
 # 可通过 -MeloEnvironmentPath 与 -EdgePackagesPath 指向分别验收过的运行时/依赖目录。
 .\builder\package-windows.ps1          # 正式包；须配置 Authenticode 证书、HTTPS 时间戳和 signtool
-.\builder\package-windows.ps1 -WithoutMelo
+.\builder\package-windows.ps1 -WithoutMelo -WithoutAdditionalVoices
 .\builder\package-windows.ps1 -WorkRoot '<absolute-data-directory>' # 可选的绝对数据目录
 ```
 
 未签名预览产物为 `builder\build\X3AudiobookBuilder-0.7.0-UNSIGNED-PREVIEW.zip` 及其 `.sha256`，只用于 WARS 1.1 LIMITED_PREVIEW，不生成安装器、不覆盖正式目录，并随包写入未知发布者提示和源提交。正式产物位于 `builder\build\windows-package\X3AudiobookBuilder`。兼容 GUI 文件名为 `X3AudiobookBuilder.exe`，CLI 为 `X3BuilderCLI.exe`。Debug APK 位于 `watch\build\outputs\apk\debug\watch-debug.apk`，固定使用工作区共享 Debug Key；不得生成替代密钥。
+
+Edge 与 Sherpa 共用 `.tools\melo` 中的便携 Python；因此省略 Melo 运行时的精简包必须同时使用 `-WithoutAdditionalVoices`。脚本会拒绝只传 `-WithoutMelo` 的残缺组合，不会生成缺少 Python 的表面可用包。
 
 为当前 Windows 用户创建开始菜单入口：
 

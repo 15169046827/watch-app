@@ -47,6 +47,16 @@ if (-not (Test-Path -LiteralPath $sourceArchive -PathType Leaf)) {
 if ((Get-FileHash -LiteralPath $sourceArchive -Algorithm SHA256).Hash -ne '3EDF1B2AB60E777691AB2EC5FBA837E278F60761C296BC5D753DA5AB8AB5754E') {
     throw 'MeloTTS source archive SHA-256 mismatch'
 }
+if (Test-Path -LiteralPath $source) {
+    $sourceItem = Get-Item -LiteralPath $source -Force
+    if (-not $sourceItem.PSIsContainer -or
+        $sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw 'Pinned Melo source path must be a regular generated directory.'
+    }
+    # Expand-Archive overlays existing trees. Remove the generated source copy first so
+    # untracked/stale files cannot survive beside the SHA-256-verified archive contents.
+    Remove-Item -LiteralPath $source -Recurse -Force
+}
 Expand-Archive -LiteralPath $sourceArchive -DestinationPath $tools -Force
 # torchaudio is unused by inference; its released wheels pin older torch versions.
 # Retain the mono loading helper using soundfile instead of an ABI-incompatible wheel.

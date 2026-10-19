@@ -12,6 +12,8 @@ param(
 )
 $ErrorActionPreference='Stop'
 $project=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'tools\packaging-policy.ps1')
+Assert-VoicePackagingOptions -WithoutMelo:$WithoutMelo -WithoutAdditionalVoices:$WithoutAdditionalVoices
 $outputRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\windows-package'))
 $stagingRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\windows-package-next'))
 $backupRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\windows-package-previous'))

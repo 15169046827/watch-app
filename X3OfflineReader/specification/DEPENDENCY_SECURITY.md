@@ -106,6 +106,10 @@ active user's dependency tree in place.
 Both Windows packagers fail closed on stale Edge versions or missing compiled Python 3.11
 extensions before copying dependencies. This is a baseline/ABI check, not a replacement
 for current advisory scans or real synthesis. Formal signing requirements remain unchanged.
+Edge and Sherpa use the portable Python stored under `.tools/melo`; consequently
+`-WithoutMelo` is valid only together with `-WithoutAdditionalVoices`. Both packagers run a
+shared policy fixture and fail before building if asked to create an image that keeps those
+providers but omits their interpreter.
 
 The copied portable cache omits `pytorch_model.bin` only where its known multilingual
 BERT snapshot also contains nonempty `model.safetensors`. Source caches, other models,
@@ -118,6 +122,9 @@ librosa/Numba initialization can also create **empty** `__pycache__` directories
 bytecode disabled. After copied-runtime verification, packagers remove only empty cache
 directories (non-recursively) and reject other forbidden files/directories before compression,
 reporting relative examples. Nonempty caches are not silently deleted or shipped.
+Setup removes only the generated pinned-source extraction directory before expanding the
+SHA-256-verified archive, after rejecting reparse points and active Builder/Melo processes.
+This prevents stale or locally added files from surviving `Expand-Archive -Force` overlays.
 
 The final environment scan also reports [GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp)
 in NLTK 3.10.3, with no published fix at review time. Its affected training/model-path
