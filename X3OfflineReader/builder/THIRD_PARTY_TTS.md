@@ -24,3 +24,5 @@
 每个下拉框中的声音都可用固定公开短句单独试听。在线试听只发送固定短句；正式在线转换会发送书籍正文。Builder 不需要也不保存 API Key、账号或私人正文日志。
 
 edge-tts 7.3.1 为随包基线；独立更新器可从官方 PyPI 更新兼容的同主版本正式客户端，实际版本在“存储管理 → 在线语音组件”显示。保留 wheel 中的许可与元数据，只安装 edge_tts 包，不执行安装脚本、不更新依赖。自动检查可关闭，验证仅发送公开短句，详见 [更新边界](../specification/EDGE_CLIENT_UPDATES.md)。
+
+新的 Melo 安装配方固定官方 MIT 源码提交 `209145371cff8fc3bd60d7be902ea69cbdb7965a`，以 Transformers 5.10.1（Apache-2.0）、PyTorch 2.13.0（BSD-style）、NumPy 1.26.4 与 librosa 0.11.0 构成推理环境。构建时调整推理依赖元数据，移除三个未用于推理的 torchaudio 导入，并用已有 soundfile/torch 实现独立的单声道文件加载辅助函数；模型权重、分词和推理算法不改动。保留上游许可，不将这部分适配冒称上游原样版本。旧预览包的实际依赖以其源提交和发布说明为准，详见 [依赖安全边界](../specification/DEPENDENCY_SECURITY.md)。

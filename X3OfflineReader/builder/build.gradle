@@ -26,6 +26,14 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
     environment 'X3_BUILDER_WORK_ROOT', ''
+    dependsOn 'testDependencySecurity'
+}
+
+tasks.register('testDependencySecurity', Exec) {
+    group = 'verification'
+    description = 'Run isolated, stdlib-only dependency security policy fixtures.'
+    commandLine providers.environmentVariable('X3_BUILDER_TEST_PYTHON').getOrElse('python'),
+            '-B', file('tools/run_security_tests.py').absolutePath
 }
 
 tasks.withType(JavaCompile).configureEach {

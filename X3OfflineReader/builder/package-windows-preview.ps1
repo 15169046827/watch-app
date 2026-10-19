@@ -2,6 +2,7 @@
 param(
     [switch]$WithoutMelo,
     [switch]$WithoutAdditionalVoices,
+    [string]$MeloEnvironmentPath,
     [string]$JpackagePath
 )
 
@@ -45,6 +46,12 @@ $running = @(Get-Process -Name 'X3AudiobookBuilder', 'X3BuilderCLI', 'tingdu-wor
         -ErrorAction SilentlyContinue)
 if ($running.Count -gt 0) {
     throw '请先关闭听读工坊及 X3BuilderCLI，再生成预览包。'
+}
+
+if (-not $MeloEnvironmentPath) { $MeloEnvironmentPath = Join-Path $project '.tools\melo' }
+if (-not $WithoutMelo) {
+    & (Join-Path $MeloEnvironmentPath 'python.exe') -B (Join-Path $PSScriptRoot 'melo\runtime_security.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Source Melo runtime security check failed; select a separately validated environment.' }
 }
 
 function Copy-Tree([string]$Source, [string]$Destination) {
@@ -138,7 +145,7 @@ Copy-Item -LiteralPath (Join-Path $project 'builder\THIRD_PARTY_TTS.md') `
 New-Item -ItemType Directory -Force -Path (Join-Path $app '.tools') | Out-Null
 Copy-Tree (Join-Path $project '.tools\ffmpeg') (Join-Path $app '.tools\ffmpeg')
 if (-not $WithoutMelo) {
-    Copy-Tree (Join-Path $project '.tools\melo') (Join-Path $app '.tools\melo')
+    Copy-Tree $MeloEnvironmentPath (Join-Path $app '.tools\melo')
 }
 if (-not $WithoutAdditionalVoices) {
     Copy-Tree (Join-Path $project '.tools\edge-tts') (Join-Path $app '.tools\edge-tts')
@@ -152,6 +159,9 @@ if (-not $WithoutAdditionalVoices) {
 Copy-Tree (Join-Path $project 'samples\builder-inputs') `
     (Join-Path $app 'builder-inputs')
 if (-not $WithoutMelo) {
+    & (Join-Path $app '.tools\melo\python.exe') `
+        -B (Join-Path $app 'builder\melo\runtime_security.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged Melo runtime security check failed' }
     & (Join-Path $app '.tools\melo\python.exe') `
         -B (Join-Path $app 'builder\melo\worker.py') --self-test
     if ($LASTEXITCODE -ne 0) {

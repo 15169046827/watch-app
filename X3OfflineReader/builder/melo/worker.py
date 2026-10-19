@@ -4,6 +4,7 @@ import base64
 import contextlib
 import os
 import sys
+import tempfile
 import traceback
 import unicodedata
 
@@ -64,11 +65,19 @@ def replace_unpronounceable_chinese(text):
 
 def model_for(language):
     with contextlib.redirect_stdout(sys.stderr):
+        from runtime_security import validate_runtime
+        validate_runtime()
+        # Preserve PyTorch's restricted checkpoint loader, including inherited environments.
+        os.environ.pop("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", None)
+        os.environ["TORCH_FORCE_WEIGHTS_ONLY_LOAD"] = "1"
         from melo.api import TTS
         return TTS(language=language, device="cpu")
 
 
 def main():
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
     parser.add_argument("--prefetch", metavar="LANGUAGE")
     parser.add_argument("--self-test", action="store_true")
@@ -80,7 +89,15 @@ def main():
         print("Melo sanitizer OK")
         return
     if args.prefetch:
-        model_for(args.prefetch)
+        model = model_for(args.prefetch)
+        with tempfile.TemporaryDirectory(prefix="melo-public-prefetch-") as temporary:
+            with contextlib.redirect_stdout(sys.stderr):
+                model.tts_to_file(
+                    "春风吹过山谷，清泉流向远方。",
+                    next(iter(model.hps.data.spk2id.values())),
+                    os.path.join(temporary, "public.wav"),
+                    quiet=True,
+                )
         print("Model ready")
         return
     models = {}
@@ -92,6 +109,8 @@ def main():
         try:
             output, voice, speed, encoded = line.split("\t", 3)
             language = voice.split("-", 1)[0].upper()
+            if language != "ZH":
+                raise ValueError("This Melo runtime supports only the packaged ZH model")
             if language not in models:
                 models[language] = model_for(language)
             model = models[language]
@@ -104,7 +123,7 @@ def main():
                 text, normalized_count = normalize_zh_mixed(text)
             try:
                 with contextlib.redirect_stdout(sys.stderr):
-                    model.tts_to_file(text, speakers[voice], output, speed=float(speed))
+                    model.tts_to_file(text, speakers[voice], output, speed=float(speed), quiet=True)
             except AssertionError:
                 if language != "ZH":
                     raise
@@ -113,7 +132,7 @@ def main():
                 if os.path.exists(output):
                     os.remove(output)
                 with contextlib.redirect_stdout(sys.stderr):
-                    model.tts_to_file(text, speakers[voice], output, speed=float(speed))
+                    model.tts_to_file(text, speakers[voice], output, speed=float(speed), quiet=True)
             if normalized_count:
                 print("Melo normalized unsupported characters: " + str(normalized_count), file=sys.stderr, flush=True)
             print("OK" + (" NORMALIZED " + str(normalized_count) if normalized_count else ""), flush=True)
