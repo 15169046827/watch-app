@@ -109,196 +109,277 @@
       "parentId": 97896551,
       "id": 97896602,
       "name": "90 规范与模型"
+    },
+    "desktop.bridge": {
+      "id": 97908205,
+      "name": "听读工坊 Java Bridge",
+      "parentId": 97896561
+    },
+    "http.reader": {
+      "id": 97908207,
+      "name": "听读工坊组件更新",
+      "parentId": 97896567
+    },
+    "desktop.cli": {
+      "name": "听读工坊 CLI",
+      "parentId": 97896561,
+      "id": 97909675
     }
   },
   "interfaces": {
     "ledger.ble.data": {
       "id": 427279,
-      "name": "读取待同步账目",
       "folderId": 97896553,
-      "sha256": "b23d579e2e3521f507a2e6f45c290e770a25bbd543cdca673695c83830bf5993"
+      "name": "读取待同步账目",
+      "sha256": "428e8b00f6c6475bcac0e24a792c176c26c1c03745594498e5230403b43f8af4"
     },
     "ledger.ble.ack": {
       "id": 427280,
-      "name": "确认账目已接收",
       "folderId": 97896553,
-      "sha256": "ed479f9fc3acc00ffd610af304d9cabb3386a14ce035e95d4f61f328736b9d2e"
+      "name": "确认账目已接收",
+      "sha256": "348a37cc02f9cf9e6e6caa94c579c5895433b19c0d32ba19ac1b5d80f0335382"
     },
     "ledger.ble.config": {
       "id": 427281,
-      "name": "下发记账配置",
       "folderId": 97896553,
-      "sha256": "1563699e8ebb72878c73a01880219e24405bbd0aacc0445bc611534b462dfdd2"
+      "name": "下发记账配置",
+      "sha256": "0e601639bc11f9c9eea53b16d3ac4041758c01db4437b5b624bffd844ea6fcb0"
     },
     "schedule.ble.batch": {
       "id": 427282,
-      "name": "传输日程批次页",
       "folderId": 97896555,
-      "sha256": "21ee06a8ff1e729db538ba7be97774e3f6670bb1db9e795aab1f8966f8098a75"
+      "name": "传输日程批次页",
+      "sha256": "33910d945d38e385561a4936641cd73c2d323ab05129ddd8c263f29269df6d0c"
     },
     "schedule.ble.ack": {
       "id": 427283,
-      "name": "确认日程批次页",
       "folderId": 97896555,
-      "sha256": "175ab679c8c8e1368b76ed081b329127ca53452f93d070160fe412ede94c06fe"
+      "name": "确认日程批次页",
+      "sha256": "fd71eed8efd33460d121bb2fade514086220db80643f221c1c85e51ca3f367b2"
     },
     "schedule.ble.pull": {
       "id": 427284,
-      "name": "请求下一待发批次",
       "folderId": 97896555,
-      "sha256": "fe261d672d15d9ed879f2c9c4dcfdfc8c457300bf1652bb88fb2b1c881768843"
+      "name": "请求下一待发批次",
+      "sha256": "322484b76f6af2ef92b013287c245371adfdbc7b516feb3de6a8b21a5ec96341"
     },
     "probe.ble.read": {
-      "sha256": "58368231925e012a3c7a017ae7067c5bc9f19f1c1e38b31c55e9a1789d951d57",
       "id": 427285,
       "folderId": 97896559,
-      "name": "读取 BLE 能力探针值"
+      "name": "读取 BLE 能力探针值",
+      "sha256": "45576239f100fa2960a6820f293e25a5b2a19b108041a6e82d9b28064ae046b6"
     },
     "reader.tauri.bridge-state": {
-      "sha256": "81cb23d41c3ebf2e7db118f0f6bae708e0acaae5a1c680fe83561511b1211158",
       "id": 427286,
       "folderId": 97896562,
-      "name": "读取听读工坊桥接状态"
+      "name": "读取听读工坊桥接状态",
+      "sha256": "43667fb74da71f718f56348cb86150ec115c1daec12c703327547814cefe8d6e"
     },
     "reader.tauri.edge-update": {
-      "sha256": "bc3357ddf58517cc223b49c63d66472a50d2072429581fb01a7d1ebe6a24915b",
       "id": 427287,
       "folderId": 97896562,
-      "name": "检查或更新 Edge 组件"
+      "name": "检查或更新 Edge 组件",
+      "sha256": "def8d246c11e11245287235576acfbe76c971fd0714c3a7b9b732c3c2c8532dc"
     },
     "reader.tauri.preview-audio": {
-      "sha256": "e0911374a2213125eb02cbb3061548c60e20ac43d352e0a545fdc053cae6ea88",
       "id": 427288,
       "folderId": 97896562,
-      "name": "生成或读取音色试听"
+      "name": "生成或读取音色试听",
+      "sha256": "e4355bf0e8dbc56c66496c905aa65b6b44e62e7c0e3f7c53eb5001e5dd6fcf6c"
     },
     "reader.tauri.cache-action": {
-      "sha256": "dbb37b2a4c2fd38de246ba75e560d99944cbdf63c05a3ea2045fad2a9b98ec96",
       "id": 427289,
       "folderId": 97896562,
-      "name": "执行工坊缓存操作"
+      "name": "执行工坊缓存操作",
+      "sha256": "c30c2b3e556416019e28edf34c646ccd06f19ea7a4e1c1f68fa3c430cb4259dd"
     },
     "reader.tauri.start-build": {
-      "sha256": "5162b1a1bb01ef037960611620833d9800a3b2ffad39325afd581cb203ff595e",
       "id": 427290,
       "folderId": 97896562,
-      "name": "开始听读转换"
+      "name": "开始听读转换",
+      "sha256": "b79816d84658e94a54c4e3bd96baa958132ee5a247903ee838198b4a10067f8c"
     },
     "reader.tauri.resume-build": {
-      "sha256": "da0e4833c8d3f994f53ef534f0c113a2fe04a47ecbc8139770a6fe814cb1ec75",
       "id": 427291,
       "folderId": 97896562,
-      "name": "续接听读转换"
+      "name": "续接听读转换",
+      "sha256": "2e271c3f8e635f05b7c2892b727e68b0cf11deecfb4dabffc6d925d048b63ffc"
     },
     "reader.tauri.pause-build": {
-      "sha256": "a239b6b32d1cea693bcf76b5189a21c9edc9ff3aa71ed76aeffaf83717208faa",
       "id": 427292,
       "folderId": 97896562,
-      "name": "保存听读转换进度"
+      "name": "保存听读转换进度",
+      "sha256": "da98442abb2bd5f540beaebec6a0ec263a9c00eef63c469b3ebbdd52dff740d2"
     },
     "reader.worker.edge": {
+      "id": 427293,
       "folderId": 97896565,
       "name": "Edge TTS 单次 Worker",
-      "id": 427293,
-      "sha256": "e87c8e3e13ddd77f11ff482a7fd7cb8927276a59980e7213672a41ae1564d241"
+      "sha256": "f1099be224f2c92349f935ef8bfa367cb3516cac719f23da37346ad0d2efffe3"
     },
     "reader.worker.melo": {
+      "id": 427294,
       "folderId": 97896565,
       "name": "Melo TTS 常驻 Worker",
-      "id": 427294,
-      "sha256": "59a5aa83f5a6e15910f50cb4591482901a08d4b28021049a457eccc9469cc729"
+      "sha256": "3469603c4e2587fced23464f3e4ba16aedc8333707581b9055f40573eb84c704"
     },
     "reader.worker.sherpa": {
+      "id": 427295,
       "folderId": 97896565,
       "name": "Sherpa TTS 常驻 Worker",
-      "id": 427295,
-      "sha256": "1fbe7853c6d58e93ae5343d772944dc8640e5505d2d603bea857bafa8b41fe9a"
+      "sha256": "ea64d53657e117a493f4f4d0a81393fd4211246d9ffd6d6bae13e732ac1113dd"
     },
     "reader.worker.windows": {
+      "id": 427296,
       "folderId": 97896565,
       "name": "Windows Speech 常驻 Worker",
-      "id": 427296,
-      "sha256": "4fd076c6ff2c70e7ea7138b1a66eb79d02bcd147c1ff0121aaf75ee0fe5c3476"
+      "sha256": "f262cd043961bc167b0a69309e52754f9b895defb731cd47a63e44eb1f414ba5"
     },
     "ledger.file.backup": {
+      "id": 427297,
       "folderId": 97896586,
       "name": "记账 JSON 备份 v1",
-      "id": 427297,
-      "sha256": "2a7713f5ee087386d1f9903fa7cceb973df2ae6c8aec3115918ad116bd2738fa"
+      "sha256": "d53ceb5deb53715629b8f003f0d284227a2b2265f166dbfadc0f63fd5fb56ba1"
     },
     "notes.file.backup": {
+      "id": 427298,
       "folderId": 97896589,
       "name": "Wolai 笔记 JSON 备份 v1",
-      "id": 427298,
-      "sha256": "dec67606458f302c1cb21a33b7f5e2387a079e46c409858d74774081cfccc9c9"
+      "sha256": "49eb0116b36728442606c54ee1ada13753333fbc8fd3f9106543e718f7d6f1fe"
     },
     "reader.file.opbook": {
+      "id": 427299,
       "folderId": 97896592,
       "name": "听读 .opbook 开放格式 v1",
-      "id": 427299,
-      "sha256": "2e7081f244e833feb9c7753d517fdb6e0937abc15976b333afa00430ba27af5b"
+      "sha256": "d35944a22d37339a50040ce2139cda24305d6985bb9fc8c87207f8f9ba01a63e"
     },
     "reader.file.backup": {
+      "id": 427300,
       "folderId": 97896592,
       "name": "听读手表 JSON 备份 v1",
-      "id": 427300,
-      "sha256": "57e8fa1225739df9f329769dd2d8fe8709efd56db695e33f69898ced96c46ba9"
+      "sha256": "a3650cf62f2159f97204e1d66b4b6a0872757a16a436bea7d273e817270d163e"
     },
     "schedule.file.backup": {
+      "id": 427301,
       "folderId": 97896594,
       "name": "日程分块备份 v1",
-      "id": 427301,
-      "sha256": "9f203783672b774072663cfa33a8f46760baff0089c2ce321b948a4acb4960fe"
+      "sha256": "b2f467ef0c2aaa474a0f38fb0893e2f026b180d23f31d4d73f802275d8a5afb0"
     },
     "ledger.android.accessibility": {
+      "id": 427302,
       "folderId": 97896598,
       "name": "接收支付宝无障碍事件",
-      "id": 427302,
-      "sha256": "cdb7ecc89bb70abed6d3622d7896a127007a9f3b30615c97ab15bade5c2db515"
+      "sha256": "a0bbe6bead43d2508cc8a41166f2d8a0a36c52e16bef2a64a88a8ab681ac4bad"
     },
     "ledger.android.share-import": {
+      "id": 427303,
       "folderId": 97896598,
       "name": "接收易木账本导出文件",
-      "id": 427303,
-      "sha256": "ef6243deddd3391e91511f5650f8d0b21fff1a1860c77406f60d723d8eb0d997"
+      "sha256": "8ffd156ef1cf1a3513be619eeed811f4645c9a0cb0c8144d4da969c758fff3fe"
     },
     "ledger.android.sync-wake": {
+      "id": 427304,
       "folderId": 97896598,
       "name": "接收记账同步唤醒广播",
-      "id": 427304,
-      "sha256": "877e69c3407aa886fa651f046b952c2bb2145906a0b1e367e9d5e1535d4f290e"
+      "sha256": "04a08275cbf1733cae194cd9df05e1c61acd3a1209cbf46c6eee18849d3955fa"
     },
     "schedule.android.presence": {
+      "id": 427305,
       "folderId": 97896600,
       "name": "接收日程伴侣设备在线状态",
-      "id": 427305,
-      "sha256": "392d869898a3734271b46fe121143c3610b2a556c82da92725aee44cb7f45487"
+      "sha256": "6eb31e8512d710545b5e6a3df187f8ae1bbbc339ff502f4e2aeb6dc56861cf02"
     },
     "schedule.android.reminder": {
+      "id": 427306,
       "folderId": 97896600,
       "name": "接收日程提醒与系统重调度事件",
-      "id": 427306,
-      "sha256": "955f7f8970198b1a40aab1efa35722233f590d839cd7d2525296ea5b2db3df0c"
+      "sha256": "cb51960a4ff84f1523996769e7d03a9ff4ed46cf7d5fdf960d7e7e2071c5ea21"
     },
     "probe.android.accessibility": {
+      "id": 427307,
       "folderId": 97896601,
       "name": "接收无障碍能力探针事件",
-      "id": 427307,
-      "sha256": "9d4d9eff6aec9ea208d6f0f6408717fb35f0b0e3652bf0f769ae890e467712a6"
+      "sha256": "c7bcd9baea292f1553a7b192c9321acf163fe5d7ac974e3fee936c926a39cb6f"
+    },
+    "reader.bridge.state": {
+      "id": 427316,
+      "folderId": 97908205,
+      "name": "Java Bridge 状态查询",
+      "sha256": "fd65d31afa0e757c7fda266ccd4b39436030a81b2380294205dd66a5f567c816"
+    },
+    "reader.bridge.edge-update": {
+      "id": 427317,
+      "folderId": 97908205,
+      "name": "Java Bridge Edge 组件更新",
+      "sha256": "45196a9b4e9983af9f1506875ca5128efb57226f111cda753d188ce214b8a5d7"
+    },
+    "reader.bridge.preview": {
+      "id": 427318,
+      "folderId": 97908205,
+      "name": "Java Bridge 音色试听",
+      "sha256": "29e6e6c4521dfc3ed035f8bda2a46ebd3fffd8dbaacda35429db4895c36a764a"
+    },
+    "reader.bridge.cache": {
+      "id": 427319,
+      "folderId": 97908205,
+      "name": "Java Bridge 缓存维护",
+      "sha256": "3fe2abd358ed6faf3107cf97bfd61e7490bf52d1106ac38b8dd2629e02ab822c"
+    },
+    "reader.bridge.build": {
+      "id": 427320,
+      "folderId": 97908205,
+      "name": "Java Bridge 转换任务",
+      "sha256": "9fcf7eb6ce5ad8e67467b87ee0649f94c85827509f9639012d3b59ee9ed1f36a"
+    },
+    "reader.service.edge": {
+      "id": 427321,
+      "folderId": 97896565,
+      "name": "Microsoft Edge 在线语音服务依赖",
+      "sha256": "fccaff315b65744df6cbe297983ab0bf6dd05ad9523faedbddd50ae55a7868fa"
+    },
+    "schedule.file.ics": {
+      "id": 427322,
+      "folderId": 97896594,
+      "name": "日程 ICS 2.0 单次事件子集",
+      "sha256": "ff4c355597a2a2bdc90454e082b2e71fbdb23cbebea99a41d29f4d74edd0a79d"
+    },
+    "ledger.android.yimu-addbill": {
+      "id": 427323,
+      "folderId": 97896598,
+      "name": "向一木记账发起账单导入",
+      "sha256": "69699ab37e3f7308d639338c06f90f458b7fde36a6a3db9feb6e77b0c1c65d01"
+    },
+    "reader.cli.build": {
+      "name": "听读工坊命令行构建",
+      "sha256": "11df66349b007759811c57461bfd1b9d994501e528a74c92eb5c9634ad5aa424",
+      "folderId": 97909675,
+      "id": 427326
+    },
+    "reader.cli.voices": {
+      "name": "列出 Windows 系统音色",
+      "sha256": "4ffc46176c0838d45e12a34e54178dbb8e7f4a68ee17f250ee4ae9a1a51d18fc",
+      "folderId": 97909675,
+      "id": 427327
+    },
+    "reader.cli.migrate-work": {
+      "name": "迁移听读工坊旧工作目录",
+      "sha256": "3cc288384b26bb9e77a63b59862e70f0b31527ec57c359b421d6d62b2823c71e",
+      "folderId": 97909675,
+      "id": 427328
     }
   },
   "documents": {
     "overview": {
-      "folderId": 97896602,
       "name": "Watch-App API 总览与维护边界",
-      "id": 9568340,
-      "sha256": "c44478d715ba00fee806aa5b8d0be5a47c538e9a55cad0b5366f78847e899b67"
+      "sha256": "09bf61a19491a11b8fc5598c60b5ae50d337c4ea10fd9ba042c4f8977b5000b8",
+      "folderId": 97896602,
+      "id": 9568340
     },
     "models": {
-      "folderId": 97896602,
       "name": "协议版本、容量与权限矩阵",
-      "id": 9568341,
-      "sha256": "88682509c57b506dd4075e72734772012a7032167fbb94e0471b3343e240b283"
+      "sha256": "1985420e69cc9f3e47b99ae604239b61c6a4fd0c930e2375e331563c9266eec2",
+      "folderId": 97896602,
+      "id": 9568341
     }
   },
   "httpEndpoints": {
@@ -319,6 +400,18 @@
       "folderId": 97896992,
       "sourceSha256": "24014e8f9350da0dec69524a05e6d6a0094dd948dbb3e48585a4475cb9f516ce",
       "remoteSha256": "523d2133b2d7d034a889f363d3f15ec401a1ff3d468d000fcb5c366e3a4de036"
+    },
+    "GET /pypi/edge-tts/json": {
+      "remoteSha256": "cf12c46784d22018b6bf0008b882f8789e905590487a3909f62915b5138e3a9e",
+      "folderId": 97908207,
+      "id": 526701427,
+      "sourceSha256": "43fc3063957245b08aebae7e229850cdeff4603d4b15f3187ff3f547bb857d83"
+    },
+    "GET /packages/{shard1}/{shard2}/{digest}/{filename}": {
+      "remoteSha256": "816c8860eac4de1af2c77a980de5b564799aa6b255d05389d4eee750e3a59424",
+      "folderId": 97908207,
+      "id": 526701428,
+      "sourceSha256": "43fc3063957245b08aebae7e229850cdeff4603d4b15f3187ff3f547bb857d83"
     }
   }
 }

@@ -1,10 +1,9 @@
-param([switch]$Apply)
+param([switch]$Apply, [switch]$RecoverImportedHttp)
 
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path $PSScriptRoot -Parent
 $layoutPath = Join-Path $repository 'docs/api/apifox-layout.json'
 $manifestPath = Join-Path $repository 'docs/api/apifox-manifest.json'
-$openApiPath = Join-Path $repository 'docs/api/wolai-openapi.json'
 $helper = Join-Path $PSScriptRoot 'apifox-mcp.ps1'
 $projectId = 8948095
 $branchId = 8751743
@@ -218,94 +217,145 @@ foreach ($document in $layout.documents) {
     Write-Output "VERIFIED document $($document.key) id=$id"
 }
 
-# Real HTTP endpoints: import OpenAPI into the verified Wolai folder.
-$httpImportFolderId = $manifest.folders[$layout.httpImportFolder].id
-$httpEndpointFolderId = $manifest.folders[$layout.httpEndpointFolder].id
-$openApiText = Get-Content -LiteralPath $openApiPath -Raw
-$openApi = $openApiText | ConvertFrom-Json -AsHashtable -Depth 100
-$sourceHash = Get-Hash $openApiText
-$expectedHttp = @()
-foreach ($path in $openApi.paths.Keys) {
-    foreach ($method in @($openApi.paths[$path].Keys | Where-Object { $_ -in @('get','post','put','patch','delete','head','options') })) {
-        $expectedHttp += @{ key = "$($method.ToUpperInvariant()) $path"; method = $method.ToUpperInvariant(); path = $path }
-    }
-}
-$structure = Call-Apifox 'getStructureInfo' @{
-    projectId = $projectId; branchId = $branchId; entityType = 'endpoint'
-}
-$needImport = $false
-foreach ($endpoint in $expectedHttp) {
-    $state = $manifest.httpEndpoints[$endpoint.key]
-    if (-not $state) {
-        $collision = @($structure.data.entities | Where-Object {
-            $_.path -eq $endpoint.path -and ([string]$_.method).ToUpperInvariant() -eq $endpoint.method
-        })
-        if ($collision.Count) { throw "Unmanaged HTTP endpoint collision: $($endpoint.key)" }
-        $needImport = $true
-        continue
-    }
-    $actual = (Call-Apifox 'readEntityDetails' @{
-        projectId = $projectId; branchId = $branchId; entityType = 'endpoint'; entityId = $state.id
-    }).data
-    $remoteHash = Get-Hash (Get-DefinitionText $actual.definition)
-    if ($state.remoteSha256 -and $remoteHash -ne $state.remoteSha256) {
-        throw "Remote HTTP endpoint was edited: $($endpoint.key)"
-    }
-    $detail = (Call-Apifox 'getHttpEndpoint' @{
-        pathParams = @{ projectId = $projectId; httpApiId = $state.id }
-        queryParams = @{}; headers = @{ 'X-Project-Id' = [string]$projectId }
-    }).data
-    if ([string]$detail.folderId -ne [string]$httpEndpointFolderId) {
-        throw "Remote HTTP endpoint moved: $($endpoint.key)"
-    }
-    if ($state.sourceSha256 -ne $sourceHash) { $needImport = $true }
-}
-if ($needImport) {
-    if (-not $httpImportFolderId -or -not $httpEndpointFolderId) {
-        if ($Apply) { throw 'Missing verified Wolai HTTP folder.' }
-        Write-Output 'PLAN HTTP import (after folders)'
-    } elseif (-not $Apply) {
-        Write-Output "PLAN HTTP import ($($expectedHttp.Count) endpoints)"
-    } else {
-        # Direct importData POST: Watch-App path/header binding, reviewed OpenAPI body, no URL/auth.
-        $null = Call-Apifox 'importData' @{
-            pathParams = @{ projectId = [string]$projectId }
-            queryParams = @{}
-            headers = @{ 'X-Project-Id' = [string]$projectId }
-            body = @{
-                importFormat = 'openapi'; data = $openApiText
-                apiOverwriteMode = 'methodAndPath'; schemaOverwriteMode = 'ignore'
-                syncApiFolder = $false; apiFolderId = [int]$httpImportFolderId; importBasePath = $false
+# Real HTTP endpoints: import each reviewed OpenAPI document into its verified product folder.
+$httpTotal = 0
+foreach ($catalog in $layout.httpCatalogs) {
+    $httpImportFolderId = $manifest.folders[$catalog.importFolder].id
+    $httpEndpointFolderId = $manifest.folders[$catalog.endpointFolder].id
+    $openApiPath = Join-Path (Join-Path $repository 'docs/api') $catalog.file
+    $openApiText = Get-Content -LiteralPath $openApiPath -Raw
+    $openApi = $openApiText | ConvertFrom-Json -AsHashtable -Depth 100
+    $sourceHash = Get-Hash $openApiText
+    $expectedHttp = @()
+    foreach ($path in $openApi.paths.Keys) {
+        foreach ($method in @($openApi.paths[$path].Keys | Where-Object { $_ -in @('get','post','put','patch','delete','head','options') })) {
+            $expectedHttp += @{
+                key = "$($method.ToUpperInvariant()) $path"
+                method = $method.ToUpperInvariant()
+                path = $path
+                name = [string]$openApi.paths[$path][$method].summary
             }
-        } $true
-        $structure = Call-Apifox 'getStructureInfo' @{
-            projectId = $projectId; branchId = $branchId; entityType = 'endpoint'
         }
-        foreach ($endpoint in $expectedHttp) {
-            $matches = @($structure.data.entities | Where-Object {
+    }
+    $httpTotal += $expectedHttp.Count
+    $structure = Call-Apifox 'getStructureInfo' @{
+        projectId = $projectId; branchId = $branchId; entityType = 'endpoint'
+    }
+    $needImport = $false
+    foreach ($endpoint in $expectedHttp) {
+        $state = $manifest.httpEndpoints[$endpoint.key]
+        if (-not $state) {
+            $collision = @($structure.data.entities | Where-Object {
                 $_.path -eq $endpoint.path -and ([string]$_.method).ToUpperInvariant() -eq $endpoint.method
             })
-            if ($matches.Count -ne 1) { throw "HTTP import readback mismatch: $($endpoint.key)" }
-            $actual = (Call-Apifox 'readEntityDetails' @{
-                projectId = $projectId; branchId = $branchId; entityType = 'endpoint'; entityId = $matches[0].id
-            }).data
-            $detail = (Call-Apifox 'getHttpEndpoint' @{
-                pathParams = @{ projectId = $projectId; httpApiId = $matches[0].entityId }
-                queryParams = @{}; headers = @{ 'X-Project-Id' = [string]$projectId }
-            }).data
-            if ([string]$detail.folderId -ne [string]$httpEndpointFolderId) {
-                throw "HTTP endpoint folder mismatch: $($endpoint.key)"
+            if ($collision.Count) {
+                if (-not $RecoverImportedHttp -or $collision.Count -ne 1) {
+                    throw "Unmanaged HTTP endpoint collision: $($endpoint.key)"
+                }
+                $candidateId = $collision[0].entityId
+                $actual = (Call-Apifox 'readEntityDetails' @{
+                    projectId = $projectId; branchId = $branchId
+                    entityType = 'endpoint'; entityId = $candidateId
+                }).data
+                $methodKey = $endpoint.method.ToLowerInvariant()
+                $hasContract = $actual.definition.paths.ContainsKey($endpoint.path) -and
+                    $actual.definition.paths[$endpoint.path].ContainsKey($methodKey)
+                if ($hasContract) {
+                    $remoteOperation = $actual.definition.paths[$endpoint.path][$methodKey]
+                    $localOperation = $openApi.paths[$endpoint.path][$methodKey]
+                    $remoteServers = @($remoteOperation.servers | ForEach-Object url) -join '|'
+                    $localServers = @($localOperation.servers | ForEach-Object url) -join '|'
+                    $hasContract = $remoteOperation.operationId -eq $localOperation.operationId -and
+                        $remoteOperation.summary -eq $localOperation.summary -and
+                        $remoteServers -eq $localServers
+                }
+                $detail = (Call-Apifox 'getHttpEndpoint' @{
+                    pathParams = @{ projectId = $projectId; httpApiId = $candidateId }
+                    queryParams = @{}; headers = @{ 'X-Project-Id' = [string]$projectId }
+                }).data
+                if (-not $candidateId -or -not $hasContract -or
+                    $collision[0].name -ne $endpoint.name -or
+                    [string]$detail.folderId -ne [string]$httpEndpointFolderId) {
+                    throw "HTTP recovery verification failed: $($endpoint.key)"
+                }
+                $manifest.httpEndpoints[$endpoint.key] = @{
+                    id = $candidateId; folderId = $httpEndpointFolderId
+                    sourceSha256 = $sourceHash
+                    remoteSha256 = Get-Hash (Get-DefinitionText $actual.definition)
+                }
+                Save-Manifest
+                Write-Output "RECOVERED HTTP $($catalog.key) $($endpoint.key) id=$candidateId"
+                continue
             }
-            $manifest.httpEndpoints[$endpoint.key] = @{
-                id = $matches[0].entityId; folderId = $httpEndpointFolderId; sourceSha256 = $sourceHash
-                remoteSha256 = Get-Hash (Get-DefinitionText $actual.definition)
+            $needImport = $true
+            continue
+        }
+        $actual = (Call-Apifox 'readEntityDetails' @{
+            projectId = $projectId; branchId = $branchId; entityType = 'endpoint'; entityId = $state.id
+        }).data
+        $remoteHash = Get-Hash (Get-DefinitionText $actual.definition)
+        if ($state.remoteSha256 -and $remoteHash -ne $state.remoteSha256) {
+            throw "Remote HTTP endpoint was edited: $($endpoint.key)"
+        }
+        $detail = (Call-Apifox 'getHttpEndpoint' @{
+            pathParams = @{ projectId = $projectId; httpApiId = $state.id }
+            queryParams = @{}; headers = @{ 'X-Project-Id' = [string]$projectId }
+        }).data
+        if ([string]$detail.folderId -ne [string]$httpEndpointFolderId) {
+            throw "Remote HTTP endpoint moved: $($endpoint.key)"
+        }
+        if ($state.sourceSha256 -ne $sourceHash) { $needImport = $true }
+    }
+    if ($needImport) {
+        if (-not $httpImportFolderId -or -not $httpEndpointFolderId) {
+            if ($Apply) { throw "Missing verified HTTP folder for catalog $($catalog.key)." }
+            Write-Output "PLAN HTTP $($catalog.key) import (after folders)"
+        } elseif (-not $Apply) {
+            Write-Output "PLAN HTTP $($catalog.key) import ($($expectedHttp.Count) endpoints)"
+        } else {
+            # Direct importData POST: fixed Watch-App binding and reviewed local OpenAPI only.
+            $null = Call-Apifox 'importData' @{
+                pathParams = @{ projectId = [string]$projectId }
+                queryParams = @{}
+                headers = @{ 'X-Project-Id' = [string]$projectId }
+                body = @{
+                    importFormat = 'openapi'; data = $openApiText
+                    apiOverwriteMode = 'methodAndPath'; schemaOverwriteMode = 'ignore'
+                    syncApiFolder = $false; apiFolderId = [int]$httpImportFolderId; importBasePath = $false
+                }
+            } $true
+            $structure = Call-Apifox 'getStructureInfo' @{
+                projectId = $projectId; branchId = $branchId; entityType = 'endpoint'
             }
-            Save-Manifest
-            Write-Output "VERIFIED HTTP $($endpoint.key) id=$($matches[0].entityId)"
+            foreach ($endpoint in $expectedHttp) {
+                $matches = @($structure.data.entities | Where-Object {
+                    $_.path -eq $endpoint.path -and ([string]$_.method).ToUpperInvariant() -eq $endpoint.method
+                })
+                if ($matches.Count -ne 1) { throw "HTTP import readback mismatch: $($endpoint.key)" }
+                $actual = (Call-Apifox 'readEntityDetails' @{
+                    projectId = $projectId; branchId = $branchId; entityType = 'endpoint'; entityId = $matches[0].entityId
+                }).data
+                $detail = (Call-Apifox 'getHttpEndpoint' @{
+                    pathParams = @{ projectId = $projectId; httpApiId = $matches[0].entityId }
+                    queryParams = @{}; headers = @{ 'X-Project-Id' = [string]$projectId }
+                }).data
+                if ([string]$detail.folderId -ne [string]$httpEndpointFolderId) {
+                    throw "HTTP endpoint folder mismatch: $($endpoint.key)"
+                }
+                $manifest.httpEndpoints[$endpoint.key] = @{
+                    id = $matches[0].entityId; folderId = $httpEndpointFolderId
+                    sourceSha256 = $sourceHash
+                    remoteSha256 = Get-Hash (Get-DefinitionText $actual.definition)
+                }
+                Save-Manifest
+                Write-Output "VERIFIED HTTP $($catalog.key) $($endpoint.key) id=$($matches[0].entityId)"
+            }
+        }
+    } else {
+        foreach ($endpoint in $expectedHttp) {
+            Write-Output "UNCHANGED HTTP $($catalog.key) $($endpoint.key)"
         }
     }
-} else {
-    foreach ($endpoint in $expectedHttp) { Write-Output "UNCHANGED HTTP $($endpoint.key)" }
 }
 
-Write-Output "SUMMARY folders=$($layout.folders.Count) interfaces=$($layout.interfaces.Count) documents=$($layout.documents.Count) http=$($expectedHttp.Count) apply=$Apply"
+Write-Output "SUMMARY folders=$($layout.folders.Count) interfaces=$($layout.interfaces.Count) documents=$($layout.documents.Count) http=$httpTotal apply=$Apply recover=$RecoverImportedHttp"
