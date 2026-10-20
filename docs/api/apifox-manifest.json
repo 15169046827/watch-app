@@ -1,0 +1,324 @@
+{
+  "projectId": 8948095,
+  "branchId": 8751743,
+  "moduleId": 8741710,
+  "rootFolderId": 97896551,
+  "sourceCommit": "39091c44c3c65f1f6ca469c8b4ccb2503d56cc22",
+  "folders": {
+    "root": {
+      "parentId": 0,
+      "id": 97896551,
+      "name": "Watch-App API"
+    },
+    "ble": {
+      "parentId": 97896551,
+      "id": 97896552,
+      "name": "01 跨设备 BLE"
+    },
+    "ble.ledger": {
+      "parentId": 97896552,
+      "id": 97896553,
+      "name": "记账"
+    },
+    "ble.schedule": {
+      "parentId": 97896552,
+      "id": 97896555,
+      "name": "日程"
+    },
+    "ble.probe": {
+      "parentId": 97896552,
+      "id": 97896559,
+      "name": "能力探针"
+    },
+    "desktop": {
+      "parentId": 97896551,
+      "id": 97896561,
+      "name": "02 Windows IPC 与 Worker"
+    },
+    "desktop.tauri": {
+      "parentId": 97896561,
+      "id": 97896562,
+      "name": "听读工坊 Tauri IPC"
+    },
+    "desktop.worker": {
+      "parentId": 97896561,
+      "id": 97896565,
+      "name": "听读工坊 TTS Worker"
+    },
+    "http": {
+      "parentId": 97896551,
+      "id": 97896567,
+      "name": "03 HTTP 外部集成"
+    },
+    "http.wolai": {
+      "parentId": 97896567,
+      "id": 97896570,
+      "name": "Wolai 笔记"
+    },
+    "http.wolai.api": {
+      "parentId": 97896570,
+      "id": 97896992,
+      "name": "Wolai Open API"
+    },
+    "file": {
+      "parentId": 97896551,
+      "id": 97896584,
+      "name": "04 文件与备份协议"
+    },
+    "file.ledger": {
+      "parentId": 97896584,
+      "id": 97896586,
+      "name": "记账"
+    },
+    "file.notes": {
+      "parentId": 97896584,
+      "id": 97896589,
+      "name": "笔记"
+    },
+    "file.reader": {
+      "parentId": 97896584,
+      "id": 97896592,
+      "name": "听读"
+    },
+    "file.schedule": {
+      "parentId": 97896584,
+      "id": 97896594,
+      "name": "日程"
+    },
+    "android": {
+      "parentId": 97896551,
+      "id": 97896597,
+      "name": "05 Android 系统回调"
+    },
+    "android.ledger": {
+      "parentId": 97896597,
+      "id": 97896598,
+      "name": "记账"
+    },
+    "android.schedule": {
+      "parentId": 97896597,
+      "id": 97896600,
+      "name": "日程"
+    },
+    "android.probe": {
+      "parentId": 97896597,
+      "id": 97896601,
+      "name": "能力探针"
+    },
+    "guide": {
+      "parentId": 97896551,
+      "id": 97896602,
+      "name": "90 规范与模型"
+    }
+  },
+  "interfaces": {
+    "ledger.ble.data": {
+      "id": 427279,
+      "name": "读取待同步账目",
+      "folderId": 97896553,
+      "sha256": "b23d579e2e3521f507a2e6f45c290e770a25bbd543cdca673695c83830bf5993"
+    },
+    "ledger.ble.ack": {
+      "id": 427280,
+      "name": "确认账目已接收",
+      "folderId": 97896553,
+      "sha256": "ed479f9fc3acc00ffd610af304d9cabb3386a14ce035e95d4f61f328736b9d2e"
+    },
+    "ledger.ble.config": {
+      "id": 427281,
+      "name": "下发记账配置",
+      "folderId": 97896553,
+      "sha256": "1563699e8ebb72878c73a01880219e24405bbd0aacc0445bc611534b462dfdd2"
+    },
+    "schedule.ble.batch": {
+      "id": 427282,
+      "name": "传输日程批次页",
+      "folderId": 97896555,
+      "sha256": "21ee06a8ff1e729db538ba7be97774e3f6670bb1db9e795aab1f8966f8098a75"
+    },
+    "schedule.ble.ack": {
+      "id": 427283,
+      "name": "确认日程批次页",
+      "folderId": 97896555,
+      "sha256": "175ab679c8c8e1368b76ed081b329127ca53452f93d070160fe412ede94c06fe"
+    },
+    "schedule.ble.pull": {
+      "id": 427284,
+      "name": "请求下一待发批次",
+      "folderId": 97896555,
+      "sha256": "fe261d672d15d9ed879f2c9c4dcfdfc8c457300bf1652bb88fb2b1c881768843"
+    },
+    "probe.ble.read": {
+      "sha256": "58368231925e012a3c7a017ae7067c5bc9f19f1c1e38b31c55e9a1789d951d57",
+      "id": 427285,
+      "folderId": 97896559,
+      "name": "读取 BLE 能力探针值"
+    },
+    "reader.tauri.bridge-state": {
+      "sha256": "81cb23d41c3ebf2e7db118f0f6bae708e0acaae5a1c680fe83561511b1211158",
+      "id": 427286,
+      "folderId": 97896562,
+      "name": "读取听读工坊桥接状态"
+    },
+    "reader.tauri.edge-update": {
+      "sha256": "bc3357ddf58517cc223b49c63d66472a50d2072429581fb01a7d1ebe6a24915b",
+      "id": 427287,
+      "folderId": 97896562,
+      "name": "检查或更新 Edge 组件"
+    },
+    "reader.tauri.preview-audio": {
+      "sha256": "e0911374a2213125eb02cbb3061548c60e20ac43d352e0a545fdc053cae6ea88",
+      "id": 427288,
+      "folderId": 97896562,
+      "name": "生成或读取音色试听"
+    },
+    "reader.tauri.cache-action": {
+      "sha256": "dbb37b2a4c2fd38de246ba75e560d99944cbdf63c05a3ea2045fad2a9b98ec96",
+      "id": 427289,
+      "folderId": 97896562,
+      "name": "执行工坊缓存操作"
+    },
+    "reader.tauri.start-build": {
+      "sha256": "5162b1a1bb01ef037960611620833d9800a3b2ffad39325afd581cb203ff595e",
+      "id": 427290,
+      "folderId": 97896562,
+      "name": "开始听读转换"
+    },
+    "reader.tauri.resume-build": {
+      "sha256": "da0e4833c8d3f994f53ef534f0c113a2fe04a47ecbc8139770a6fe814cb1ec75",
+      "id": 427291,
+      "folderId": 97896562,
+      "name": "续接听读转换"
+    },
+    "reader.tauri.pause-build": {
+      "sha256": "a239b6b32d1cea693bcf76b5189a21c9edc9ff3aa71ed76aeffaf83717208faa",
+      "id": 427292,
+      "folderId": 97896562,
+      "name": "保存听读转换进度"
+    },
+    "reader.worker.edge": {
+      "folderId": 97896565,
+      "name": "Edge TTS 单次 Worker",
+      "id": 427293,
+      "sha256": "e87c8e3e13ddd77f11ff482a7fd7cb8927276a59980e7213672a41ae1564d241"
+    },
+    "reader.worker.melo": {
+      "folderId": 97896565,
+      "name": "Melo TTS 常驻 Worker",
+      "id": 427294,
+      "sha256": "59a5aa83f5a6e15910f50cb4591482901a08d4b28021049a457eccc9469cc729"
+    },
+    "reader.worker.sherpa": {
+      "folderId": 97896565,
+      "name": "Sherpa TTS 常驻 Worker",
+      "id": 427295,
+      "sha256": "1fbe7853c6d58e93ae5343d772944dc8640e5505d2d603bea857bafa8b41fe9a"
+    },
+    "reader.worker.windows": {
+      "folderId": 97896565,
+      "name": "Windows Speech 常驻 Worker",
+      "id": 427296,
+      "sha256": "4fd076c6ff2c70e7ea7138b1a66eb79d02bcd147c1ff0121aaf75ee0fe5c3476"
+    },
+    "ledger.file.backup": {
+      "folderId": 97896586,
+      "name": "记账 JSON 备份 v1",
+      "id": 427297,
+      "sha256": "2a7713f5ee087386d1f9903fa7cceb973df2ae6c8aec3115918ad116bd2738fa"
+    },
+    "notes.file.backup": {
+      "folderId": 97896589,
+      "name": "Wolai 笔记 JSON 备份 v1",
+      "id": 427298,
+      "sha256": "dec67606458f302c1cb21a33b7f5e2387a079e46c409858d74774081cfccc9c9"
+    },
+    "reader.file.opbook": {
+      "folderId": 97896592,
+      "name": "听读 .opbook 开放格式 v1",
+      "id": 427299,
+      "sha256": "2e7081f244e833feb9c7753d517fdb6e0937abc15976b333afa00430ba27af5b"
+    },
+    "reader.file.backup": {
+      "folderId": 97896592,
+      "name": "听读手表 JSON 备份 v1",
+      "id": 427300,
+      "sha256": "57e8fa1225739df9f329769dd2d8fe8709efd56db695e33f69898ced96c46ba9"
+    },
+    "schedule.file.backup": {
+      "folderId": 97896594,
+      "name": "日程分块备份 v1",
+      "id": 427301,
+      "sha256": "9f203783672b774072663cfa33a8f46760baff0089c2ce321b948a4acb4960fe"
+    },
+    "ledger.android.accessibility": {
+      "folderId": 97896598,
+      "name": "接收支付宝无障碍事件",
+      "id": 427302,
+      "sha256": "cdb7ecc89bb70abed6d3622d7896a127007a9f3b30615c97ab15bade5c2db515"
+    },
+    "ledger.android.share-import": {
+      "folderId": 97896598,
+      "name": "接收易木账本导出文件",
+      "id": 427303,
+      "sha256": "ef6243deddd3391e91511f5650f8d0b21fff1a1860c77406f60d723d8eb0d997"
+    },
+    "ledger.android.sync-wake": {
+      "folderId": 97896598,
+      "name": "接收记账同步唤醒广播",
+      "id": 427304,
+      "sha256": "877e69c3407aa886fa651f046b952c2bb2145906a0b1e367e9d5e1535d4f290e"
+    },
+    "schedule.android.presence": {
+      "folderId": 97896600,
+      "name": "接收日程伴侣设备在线状态",
+      "id": 427305,
+      "sha256": "392d869898a3734271b46fe121143c3610b2a556c82da92725aee44cb7f45487"
+    },
+    "schedule.android.reminder": {
+      "folderId": 97896600,
+      "name": "接收日程提醒与系统重调度事件",
+      "id": 427306,
+      "sha256": "955f7f8970198b1a40aab1efa35722233f590d839cd7d2525296ea5b2db3df0c"
+    },
+    "probe.android.accessibility": {
+      "folderId": 97896601,
+      "name": "接收无障碍能力探针事件",
+      "id": 427307,
+      "sha256": "9d4d9eff6aec9ea208d6f0f6408717fb35f0b0e3652bf0f769ae890e467712a6"
+    }
+  },
+  "documents": {
+    "overview": {
+      "folderId": 97896602,
+      "name": "Watch-App API 总览与维护边界",
+      "id": 9568340,
+      "sha256": "c44478d715ba00fee806aa5b8d0be5a47c538e9a55cad0b5366f78847e899b67"
+    },
+    "models": {
+      "folderId": 97896602,
+      "name": "协议版本、容量与权限矩阵",
+      "id": 9568341,
+      "sha256": "88682509c57b506dd4075e72734772012a7032167fbb94e0471b3343e240b283"
+    }
+  },
+  "httpEndpoints": {
+    "GET /blocks/{pageId}/children": {
+      "id": 526628893,
+      "folderId": 97896992,
+      "sourceSha256": "24014e8f9350da0dec69524a05e6d6a0094dd948dbb3e48585a4475cb9f516ce",
+      "remoteSha256": "e806f8201fa2aca6a599f203fe1bd439af17b0517eb143d0edbdd64a497722d6"
+    },
+    "GET /databases/{databaseId}": {
+      "id": 526628894,
+      "folderId": 97896992,
+      "sourceSha256": "24014e8f9350da0dec69524a05e6d6a0094dd948dbb3e48585a4475cb9f516ce",
+      "remoteSha256": "4c0477c51a758198e3020b84b1e49bbfaff7d992b55bb1d85faf9ebd1360e4bd"
+    },
+    "POST /blocks": {
+      "id": 526628895,
+      "folderId": 97896992,
+      "sourceSha256": "24014e8f9350da0dec69524a05e6d6a0094dd948dbb3e48585a4475cb9f516ce",
+      "remoteSha256": "523d2133b2d7d034a889f363d3f15ec401a1ff3d468d000fcb5c366e3a4de036"
+    }
+  }
+}
