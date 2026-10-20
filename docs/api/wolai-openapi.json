@@ -1,0 +1,178 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Watch-App Wolai Open API integration",
+    "version": "1.0.0",
+    "description": "X3WolaiNotes 调用的 Wolai 官方 HTTP 接口子集。个人 Token 只在运行时从 Android Keystore 解密，文档与示例不含真实凭据。"
+  },
+  "servers": [
+    {
+      "url": "https://openapi.wolai.com/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/blocks/{pageId}/children": {
+      "get": {
+        "operationId": "listPageChildren",
+        "summary": "读取页面子块",
+        "tags": [
+          "Wolai Open API"
+        ],
+        "parameters": [
+          {
+            "name": "pageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "用户配置的页面 ID；不得写入公开配置。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wolai 子块列表 JSON。客户端限制响应体最大 1 MiB。"
+          },
+          "401": {
+            "description": "Token 无效或失效。"
+          },
+          "403": {
+            "description": "无页面访问权限。"
+          },
+          "404": {
+            "description": "页面不存在。"
+          },
+          "default": {
+            "description": "非 2xx 均作为失败处理。"
+          }
+        }
+      }
+    },
+    "/databases/{databaseId}": {
+      "get": {
+        "operationId": "getDatabase",
+        "summary": "读取数据库元数据与行",
+        "tags": [
+          "Wolai Open API"
+        ],
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "用户配置的数据库或收藏页 ID。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wolai 数据库 JSON。客户端限制响应体最大 1 MiB。"
+          },
+          "401": {
+            "description": "Token 无效或失效。"
+          },
+          "403": {
+            "description": "无访问权限。"
+          },
+          "404": {
+            "description": "数据库不存在。"
+          },
+          "default": {
+            "description": "非 2xx 均作为失败处理。"
+          }
+        }
+      }
+    },
+    "/blocks": {
+      "post": {
+        "operationId": "createTextBlock",
+        "summary": "在同步页创建文本块",
+        "tags": [
+          "Wolai Open API"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "parent_id",
+                  "blocks"
+                ],
+                "properties": {
+                  "parent_id": {
+                    "type": "string",
+                    "description": "用户配置的同步页 ID。"
+                  },
+                  "blocks": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "type",
+                        "content"
+                      ],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "text"
+                          ]
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "用户明确提交的本地笔记正文。"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wolai 创建结果 JSON。客户端限制响应体最大 1 MiB。"
+          },
+          "201": {
+            "description": "创建成功。"
+          },
+          "400": {
+            "description": "请求正文无效。"
+          },
+          "401": {
+            "description": "Token 无效或失效。"
+          },
+          "403": {
+            "description": "无写入权限。"
+          },
+          "default": {
+            "description": "非 2xx 均作为失败处理，本地笔记保留待重试。"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "用户个人 Wolai Token；只能在运行时使用，禁止保存到 Apifox 示例、Git 或日志。"
+      }
+    }
+  }
+}

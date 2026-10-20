@@ -1,0 +1,18 @@
+{
+  "projectId": 8948095,
+  "reviewedAt": "2026-10-20",
+  "note": "Dynamic operation IDs must be rediscovered and reviewed before replacement. Delete operations are intentionally absent.",
+  "operations": [
+    { "id": "00a468815ec90da0", "method": "GET", "route": "/api/v1/api-detail-folders", "purpose": "list folders", "access": "read" },
+    { "id": "a669aaa8a7136b83", "method": "POST", "route": "/api/v1/api-detail-folders", "purpose": "create folder", "access": "write" },
+    { "id": "c93ebecd075ad562", "method": "PUT", "route": "/api/v1/api-detail-folders/{api_folder_id}", "purpose": "update managed folder", "access": "write" },
+    { "id": "aa85350f4c6df684", "method": "GET", "route": "/api/v1/projects/{projectId}/custom-endpoints", "purpose": "list custom protocol interfaces", "access": "read" },
+    { "id": "d2430159b28e4551", "method": "GET", "route": "/api/v1/projects/{projectId}/custom-endpoints/{id}", "purpose": "read custom protocol interface", "access": "read" },
+    { "id": "1cbdd18b600ccea1", "method": "POST", "route": "/api/v1/projects/{projectId}/custom-endpoints", "purpose": "create custom protocol interface", "access": "write" },
+    { "id": "0a1b56c981b3e8fc", "method": "PUT", "route": "/api/v1/projects/{projectId}/custom-endpoints/{id}", "purpose": "update custom protocol interface", "access": "write" },
+    { "id": "9738c601d6498b0a", "method": "GET", "route": "/api/v1/docs", "purpose": "list Markdown documents", "access": "read" },
+    { "id": "2c83ef72f52ed483", "method": "GET", "route": "/api/v1/docs/{docId}", "purpose": "read Markdown document", "access": "read" },
+    { "id": "12efa5c42b296c7c", "method": "POST", "route": "/api/v1/docs", "purpose": "create Markdown document", "access": "write" },
+    { "id": "fa8695f8e5037106", "method": "PUT", "route": "/api/v1/docs/{doc_id}", "purpose": "update Markdown document", "access": "write" }
+  ]
+}

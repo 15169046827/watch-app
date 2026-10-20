@@ -29,6 +29,7 @@
 - `config/`：机器可读的审计与发布标准；
 - `docs/audit/`：代码审计 profile；
 - `docs/release/`：WARS 与发布验收边界；
+- `docs/api/`：Apifox 通信契约清单、OpenAPI、同步摘要与维护入口；
 - `design/icon-system/`：应用图标设计规范与维护源。
 
 ## 3. 文档归属
