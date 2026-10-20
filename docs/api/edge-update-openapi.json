@@ -1,0 +1,94 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Tingdu Edge client updater",
+    "version": "1.0.0",
+    "description": "听读工坊仅用于检查和下载受检 edge-tts wheel 的官方 HTTPS 子集。禁止重定向，下载后必须校验 PyPI 提供的 SHA-256、包元数据、依赖和公开短句音频。"
+  },
+  "paths": {
+    "/pypi/edge-tts/json": {
+      "get": {
+        "operationId": "getEdgeTtsReleaseMetadata",
+        "summary": "读取 edge-tts 发布元数据",
+        "servers": [
+          {
+            "url": "https://pypi.org"
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "PyPI JSON；客户端上限 1 MiB，仅选择未撤回的 py3-none-any wheel。"
+          },
+          "404": {
+            "description": "项目不存在。"
+          },
+          "default": {
+            "description": "网络、重定向或非成功响应均视为检查失败，原组件保持不变。"
+          }
+        }
+      }
+    },
+    "/packages/{shard1}/{shard2}/{digest}/{filename}": {
+      "get": {
+        "operationId": "downloadEdgeTtsWheel",
+        "summary": "下载已选 edge-tts wheel",
+        "servers": [
+          {
+            "url": "https://files.pythonhosted.org"
+          }
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "shard1",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "PyPI 元数据返回 URL 的首级分片。"
+          },
+          {
+            "name": "shard2",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "PyPI 元数据返回 URL 的次级分片。"
+          },
+          {
+            "name": "digest",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "PyPI 文件存储摘要路径。"
+          },
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "必须是元数据选中的 edge_tts-VERSION-py3-none-any.whl。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "wheel 二进制；客户端上限 2 MiB，并验证元数据给出的 SHA-256。"
+          },
+          "404": {
+            "description": "文件不存在。"
+          },
+          "default": {
+            "description": "非官方 HTTPS 主机、端口、重定向或非成功响应均拒绝。"
+          }
+        }
+      }
+    }
+  }
+}

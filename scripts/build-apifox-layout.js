@@ -5,7 +5,7 @@ const root = join(__dirname, '..')
 const output = join(root, 'docs', 'api')
 mkdirSync(output, { recursive: true })
 
-const sourceCommit = '39091c44c3c65f1f6ca469c8b4ccb2503d56cc22'
+const sourceCommit = 'e04548fe0553e6e6d9769fd1c9dc0c4db1eb84d7'
 const folders = [
   { key: 'root', name: 'Watch-App API' },
   { key: 'ble', name: '01 跨设备 BLE', parent: 'root' },
@@ -13,11 +13,14 @@ const folders = [
   { key: 'ble.schedule', name: '日程', parent: 'ble' },
   { key: 'ble.probe', name: '能力探针', parent: 'ble' },
   { key: 'desktop', name: '02 Windows IPC 与 Worker', parent: 'root' },
+  { key: 'desktop.cli', name: '听读工坊 CLI', parent: 'desktop' },
   { key: 'desktop.tauri', name: '听读工坊 Tauri IPC', parent: 'desktop' },
+  { key: 'desktop.bridge', name: '听读工坊 Java Bridge', parent: 'desktop' },
   { key: 'desktop.worker', name: '听读工坊 TTS Worker', parent: 'desktop' },
   { key: 'http', name: '03 HTTP 外部集成', parent: 'root' },
   { key: 'http.wolai', name: 'Wolai 笔记', parent: 'http' },
   { key: 'http.wolai.api', name: 'Wolai Open API', parent: 'http.wolai' },
+  { key: 'http.reader', name: '听读工坊组件更新', parent: 'http' },
   { key: 'file', name: '04 文件与备份协议', parent: 'root' },
   { key: 'file.ledger', name: '记账', parent: 'file' },
   { key: 'file.notes', name: '笔记', parent: 'file' },
@@ -81,6 +84,22 @@ const interfaces = [
     '诊断接口不传业务数据、不代表生产同步安全模型；探针前台服务有时间边界。',
     '`X3AccessibilityProbe/BleProbeService.java`'),
 
+  entry('reader.cli.build', '听读工坊命令行构建', 'CLI', 'build', 'desktop.cli',
+    '公开控制台入口将一个或多个 EPUB/TXT 来源转换为 `.opbook`；可选择合并或逐文件输出。',
+    '命令 `build --input PATH [--input PATH ...] --output PATH`；可选 title、author、language、tts、voice、rate、pause、cover、ffmpeg、Provider 并发、created-at、separate 与 `--allow-online-tts`。',
+    '每个成功产物输出 `Built PATH`；失败以非零退出码和受限诊断结束。',
+    '来源/输出、Provider、并发和速率必须通过校验；Edge 在线语音必须显式传 `--allow-online-tts`，表示正文会发送到外部服务。', '`BuilderMain.java`、`BuilderOptions.java`'),
+  entry('reader.cli.voices', '列出 Windows 系统音色', 'CLI', 'voices', 'desktop.cli',
+    '公开控制台入口通过本机 SAPI 枚举已安装音色。',
+    '命令 `voices`，无其他参数。',
+    'stdout 每行一个 SAPI 音色描述；成功退出码为 0。',
+    'PowerShell/SAPI 不可用或枚举失败时非零退出；不访问网络、不输出私人正文。', '`BuilderMain.java`'),
+  entry('reader.cli.migrate-work', '迁移听读工坊旧工作目录', 'CLI', 'migrate-work', 'desktop.cli',
+    '一次性把旧版工作目录迁移到当前受管目录。',
+    '命令 `migrate-work --from LEGACY_DIRECTORY`。',
+    'stdout 返回迁移文件数、字节数及源目录是否已移除。',
+    '拒绝源/目标重叠、越界或冲突；先复制校验再清理，失败时保留可恢复状态。', '`BuilderMain.java`、`BuilderWorkDirectory.java`'),
+
   entry('reader.tauri.bridge-state', '读取听读工坊桥接状态', 'Tauri IPC', 'bridge_state', 'desktop.tauri',
     'Vue 调用本地 Tauri command，后者执行 Java CLI `bridge-state`。', '无参数。',
     'JSON：version、providers（含音色与在线标记）、cache 统计及可选 checkpoint。',
@@ -111,11 +130,42 @@ const interfaces = [
     '写入控制文件成功后返回 void；最终状态通过事件流报告。',
     '无活动任务或控制文件不可写时拒绝；不得直接终止子进程替代安全暂停。', '`lib.rs`、`BUILDER_UI_VUE_TAURI.md`'),
 
+  entry('reader.bridge.state', 'Java Bridge 状态查询', 'CLI JSON', 'bridge-state', 'desktop.bridge',
+    'Tauri 后端启动 Java 核心进程并通过 stdout 单行 JSON 读取工坊状态。',
+    '命令行首参数 `bridge-state`，无其他参数。',
+    '单行 JSON：version、providers、cache 与可选 checkpoint；成功退出码为 0。',
+    '工作目录或依赖不可用、输出为空/非 JSON 时调用失败；stderr 不承载业务正文。', '`BuilderBridge.java`、`builder/ui/src-tauri/src/lib.rs`'),
+  entry('reader.bridge.edge-update', 'Java Bridge Edge 组件更新', 'CLI JSON', 'bridge-edge-update', 'desktop.bridge',
+    'Tauri 后端通过 Java 核心调用独立 Python 更新器。',
+    '命令行 `bridge-edge-update ACTION`；ACTION 仅允许 `status`、`auto`、`force`。',
+    '单行 EdgeUpdate JSON：state、version、message、可选 lastChecked；成功退出码为 0。',
+    '并发转换/更新由上层拒绝；更新超时、来源验证或自检失败时保留原组件。', '`BuilderBridge.java`、`EdgeClientUpdater.java`、`builder/edge/updater.py`'),
+  entry('reader.bridge.preview', 'Java Bridge 音色试听', 'CLI JSON', 'bridge-preview', 'desktop.bridge',
+    'Tauri 后端请求 Java 核心读取预生成试听或生成公开固定短句试听。',
+    '命令行 `bridge-preview PROVIDER VOICE`。',
+    '单行 JSON：`mimeType=audio/wav` 与 `audioBase64`；成功退出码为 0。',
+    '未知 Provider/音色、在线授权或合成失败时命令失败；不接收任意私人试听正文。', '`BuilderBridge.java`、`VoicePreviewLibrary.java`'),
+  entry('reader.bridge.cache', 'Java Bridge 缓存维护', 'CLI JSON', 'bridge-cache', 'desktop.bridge',
+    'Tauri 后端请求 Java 核心执行受限缓存维护。',
+    '命令行 `bridge-cache ACTION`；ACTION 仅允许 `prune`、`stale`、`clear`。',
+    '单行 JSON：deletedFiles、deletedBytes 与 cache 统计；成功退出码为 0。',
+    '未知动作不执行；只能处理工坊受管缓存和过期工作目录，不删除来源或已输出书籍。', '`BuilderBridge.java`、`BuilderCacheManager.java`'),
+  entry('reader.bridge.build', 'Java Bridge 转换任务', 'CLI JSONL', 'bridge-build', 'desktop.bridge',
+    'Tauri 后端用短期 JSON 请求文件启动 Java 转换任务，并持续读取 stdout JSON-lines 事件。',
+    '命令行 `bridge-build REQUEST_JSON_PATH`；请求文件位于受管 ui-requests 目录，含 inputs/output、元数据、Provider/音色、并发、速率、封面、控制文件、在线授权与 resume。读取后立即删除。',
+    'JSON-lines 事件：estimate、progress、paused、failed、complete；成功/暂停退出 0，业务失败退出 2。',
+    '请求/控制文件必须位于受管目录；非法参数、无断点、未授权在线 TTS 或构建失败不产生伪完成事件。', '`BuilderBridge.java`、`BuildCheckpointStore.java`、`builder/ui/src-tauri/src/lib.rs`'),
+
   entry('reader.worker.edge', 'Edge TTS 单次 Worker', 'Worker IPC', 'reader.worker.edge', 'desktop.worker',
     '可选在线 TTS 子进程，一次启动处理一个 JSON 请求。',
     '`action=voices`；或合成请求含 action、text、voice、output、可选 rate(0.5–2.0)。',
     'stdout JSON：voices 返回 `{voices:[...]}`，合成返回 `{ok:true}`；失败在 stderr 输出脱敏 JSON 并以非零码退出。',
     '私人正文仅在用户对当前任务授权后传入；错误不得记录服务请求 URL 或正文。', '`builder/edge/worker.py`'),
+  entry('reader.service.edge', 'Microsoft Edge 在线语音服务依赖', 'WebSocket', 'reader.edge-tts.service', 'desktop.worker',
+    '可选 Edge Worker 通过固定版本 `edge-tts` 客户端访问 Microsoft 在线语音服务；具体握手与服务地址由受检客户端版本维护，不在本仓库伪造 REST 契约。',
+    '查询音色，或提交用户逐任务授权的 text、voice 与 rate 合成请求。',
+    '音色列表或音频流由 `edge-tts` 客户端处理，Worker 最终只向本地调用方返回脱敏 JSON/文件结果。',
+    '每个转换任务默认关闭在线 TTS；正文会离开本机。服务/网络失败只返回脱敏状态，不持久记录正文或完整服务 URL。', '`builder/edge/worker.py`、`EdgeTtsProvider.java`、`EDGE_CLIENT_UPDATES.md`'),
   entry('reader.worker.melo', 'Melo TTS 常驻 Worker', 'Worker IPC', 'reader.worker.melo', 'desktop.worker',
     '本地常驻语音进程。启动后 stdout 首行 `READY`。',
     '每行 `output<TAB>voice<TAB>speed<TAB>base64(UTF-8 text)`；`QUIT` 退出。另有 `--prefetch LANGUAGE` 和 `--self-test` 启动模式。',
@@ -157,6 +207,11 @@ const interfaces = [
     '20 字节 `X3SCHEDULE-BACKUP/1\\n` 魔数；重复 `[u32be length][1..2MiB JSON]`；零长度结束；32 字节原始 SHA-256；立即 EOF。全文件最大 32 MiB、最多 4096 块。',
     '首块为空数据头，其余块携带计划、实例、事件与设置；恢复先完整验证，再单事务无损合并。',
     '跨块元数据不一致、重复 ID、摘要/尾随数据、超限或语义错误均拒绝；文件未加密、不是签名。', '`X3Schedule/specification/BACKUP.md`'),
+  entry('schedule.file.ics', '日程 ICS 2.0 单次事件子集', 'iCalendar', 'schedule.ics.v2', 'file.schedule',
+    '手机端导入/导出的 VCALENDAR 2.0 子集，仅交换 EXECUTION/REMINDER 单次 VEVENT。',
+    '严格 UTF-8；完整 VCALENDAR 内每项须含 UID、SUMMARY、UTC DTSTART/DTEND，可选 `X-X3SCHEDULE-KIND`；最多 1000 项并受 Wire 最大字节数限制。',
+    '导入生成稳定计划 ID；导出将未来 180 天实例展开为 UTC 单次事件，不含待办和完成记录。',
+    '拒绝周期/全天/浮动时区、非零秒、超过 24 小时、取消/邀请、重复 UID、嵌套组件或不完整容器；完整数据使用 `.x3backup`。', '`X3Schedule/domain/Ics.java`、`IcsInput.java`、`specification/TYPES.md`'),
 
   entry('ledger.android.accessibility', '接收支付宝无障碍事件', 'Android', 'voiceledger.android.alipay-accessibility', 'android.ledger',
     'Android 系统在用户单独启用“支付自动记账”服务后回调。',
@@ -168,6 +223,11 @@ const interfaces = [
     '`ACTION_SEND` 单一 content URI；MIME 允许 xlsx/xls/zip/csv/tsv/json/octet-stream。',
     '进入预览与显式确认流程，支持的记录再导入本机数据库。',
     '无 URI、无临时读取授权、未知/伪装格式、越界内容或解析错误拒绝；不扫描任意存储。', '`X3VoiceLedger/phone/AndroidManifest.xml`、`PhoneMainActivity.java`'),
+  entry('ledger.android.yimu-addbill', '向一木记账发起账单导入', 'Intent URI', 'yimu://api/addbill', 'android.ledger',
+    '手机伴侣用显式包 `com.wangc.bill` 的 ACTION_VIEW URI 将用户确认的账目交给一木记账。',
+    '必填 query：parentCategory、money（两位小数）、time（yyyy-MM-dd HH:mm:ss）、remark；可选 childCategory、asset、bookName、tags。',
+    'Android 成功分派 Intent 即返回；一木记账内的最终保存结果不由本 App 回读。',
+    '未安装兼容接收方时提示用户并保留本地账目；URI 仅由已校验本地字段编码，不广播给其他包。', '`X3VoiceLedger/phone/YimuImporter.java`'),
   entry('ledger.android.sync-wake', '接收记账同步唤醒广播', 'Android', 'voiceledger.android.sync-wake', 'android.ledger',
     '手表与手机接收系统开机完成和蓝牙状态变化，用于恢复同步调度。',
     '`BOOT_COMPLETED` 或 `android.bluetooth.adapter.action.STATE_CHANGED`。',
@@ -190,22 +250,22 @@ const interfaces = [
     '不属于业务产品接口，不保存私人页面内容，不应扩展为常驻采集。', '`X3AccessibilityProbe/ProbeAccessibilityService.java`')
 ]
 
-if (interfaces.length !== 29 || new Set(interfaces.map(item => item.path)).size !== interfaces.length) {
+if (interfaces.length !== 40 || new Set(interfaces.map(item => item.path)).size !== interfaces.length) {
   throw new Error(`Interface inventory mismatch: ${interfaces.length}`)
 }
 
 const documents = [
   {
     key: 'overview', name: 'Watch-App API 总览与维护边界', group: 'guide',
-    content: `# Watch-App API 总览与维护边界\n\n本目录记录 Watch-App 仓库中跨进程、跨设备、跨应用、系统回调和可移植文件的真实通信契约。内部普通 Java/Rust 方法、仅供启动的 Launcher Activity、数据库私有实现和 UI 事件不是 API，不单独建条目。\n\n- HTTP：3 个 Wolai Open API 条目，以真实 HTTP method/path 维护。\n- 原生协议：${interfaces.length} 个，覆盖 BLE、Tauri IPC、TTS Worker、文件/备份及 Android 系统回调。\n- 安全边界：不保存个人 Token、密钥、设备序列号、私人正文、账目或日程数据。\n- 维护方式：本地清单为权威；默认只读计划，显式 Apply 才写入；发现远端人工修改或未受管同名项即停止。\n\n源码基线：\`${sourceCommit}\`。`
+    content: `# Watch-App API 总览与维护边界\n\n本目录记录 Watch-App 仓库中跨进程、跨设备、跨应用、系统回调和可移植文件的真实通信契约。内部普通 Java/Rust 方法、仅供启动的 Launcher Activity、数据库私有实现和 UI 事件不是 API，不单独建条目；构建依赖下载、开发服务器和用户选择的普通媒体/封面文件也不作为产品 API。\n\n- HTTP：3 个 Wolai Open API 与 2 个 Edge 组件更新端点，以真实 HTTP method/path 维护。\n- 原生协议：${interfaces.length} 个，覆盖 BLE、公开 CLI、Tauri IPC、Java Bridge、TTS Worker/外部服务、文件/备份及 Android 系统回调。\n- 安全边界：不保存个人 Token、密钥、设备序列号、私人正文、账目或日程数据。\n- 维护方式：本地清单为权威；默认只读计划，显式 Apply 才写入；发现远端人工修改或未受管同名项即停止。\n\n源码基线：\`${sourceCommit}\`。`
   },
   {
     key: 'models', name: '协议版本、容量与权限矩阵', group: 'guide',
-    content: `# 协议版本、容量与权限矩阵\n\n| 产品 | 边界 | 当前版本/容量 | 安全要求 |\n|---|---|---|---|\n| 记账 | BLE | schema 2；配置最大 64 KiB | 已配对、加密 ATT、显式 ACK |\n| 日程 | BLE | batch 4；Snapshot protocol 2/schema 5；32 MiB | 已选择绑定设备、两级 ACK、整批事务 |\n| 笔记 | Wolai HTTP | openapi.wolai.com/v1 | 个人 Token 运行时 Bearer；禁止回显/导出 |\n| 听读工坊 | Tauri/Worker | 本地 JSON/JSON-lines/TSV | 私人正文不写日志；在线 TTS 每任务授权 |\n| 记账备份 | JSON | schema 1；16 MiB/50,000 条 | 未加密，用户选择位置 |\n| 笔记备份 | JSON | schema 1；8 MiB/50,000 条 | 永不含 Token/页面配置 |\n| 听读备份 | JSON | schema 1；4 MiB/每类 10,000 | 不含正文/音频；路径是敏感元数据 |\n| 日程备份 | x3backup | 容器 v1；32 MiB/4096 块 | SHA-256 仅校验完整性，不是签名 |\n| 听读书籍 | opbook | formatVersion 1.0 | 受限 ZIP、Schema、语义、媒体头与 SHA-256 |\n\n兼容与迁移细节以各接口条目的仓库来源为准。源码基线：\`${sourceCommit}\`。`
+    content: `# 协议版本、容量与权限矩阵\n\n| 产品 | 边界 | 当前版本/容量 | 安全要求 |\n|---|---|---|---|\n| 记账 | BLE | schema 2；配置最大 64 KiB | 已配对、加密 ATT、显式 ACK |\n| 日程 | BLE | batch 4；Snapshot protocol 2/schema 5；32 MiB | 已选择绑定设备、两级 ACK、整批事务 |\n| 笔记 | Wolai HTTP | openapi.wolai.com/v1 | 个人 Token 运行时 Bearer；禁止回显/导出 |\n| 听读工坊 | CLI/Tauri/Java Bridge/Worker | 本地 JSON/JSON-lines/TSV | 私人正文不写日志；在线 TTS 每任务授权 |\n| 听读组件更新 | PyPI HTTPS | JSON 最大 1 MiB；wheel 最大 2 MiB | 官方主机、禁止重定向、SHA-256/元数据/音频自检 |\n| 记账备份 | JSON | schema 1；16 MiB/50,000 条 | 未加密，用户选择位置 |\n| 笔记备份 | JSON | schema 1；8 MiB/50,000 条 | 永不含 Token/页面配置 |\n| 听读备份 | JSON | schema 1；4 MiB/每类 10,000 | 不含正文/音频；路径是敏感元数据 |\n| 日程备份 | x3backup | 容器 v1；32 MiB/4096 块 | SHA-256 仅校验完整性，不是签名 |\n| 日程交换 | ICS 2.0 子集 | UTC 单次事件；最多 1000 项 | 不含待办、完成记录、周期/全天/浮动时区 |\n| 听读书籍 | opbook | formatVersion 1.0 | 受限 ZIP、Schema、语义、媒体头与 SHA-256 |\n\n兼容与迁移细节以各接口条目的仓库来源为准。源码基线：\`${sourceCommit}\`。`
   }
 ]
 
-const openapi = {
+const wolaiOpenapi = {
   openapi: '3.0.3',
   info: {
     title: 'Watch-App Wolai Open API integration',
@@ -240,9 +300,44 @@ const openapi = {
   components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', description: '用户个人 Wolai Token；只能在运行时使用，禁止保存到 Apifox 示例、Git 或日志。' } } }
 }
 
+const edgeUpdateOpenapi = {
+  openapi: '3.0.3',
+  info: {
+    title: 'Tingdu Edge client updater',
+    version: '1.0.0',
+    description: '听读工坊仅用于检查和下载受检 edge-tts wheel 的官方 HTTPS 子集。禁止重定向，下载后必须校验 PyPI 提供的 SHA-256、包元数据、依赖和公开短句音频。'
+  },
+  paths: {
+    '/pypi/edge-tts/json': {
+      get: {
+        operationId: 'getEdgeTtsReleaseMetadata', summary: '读取 edge-tts 发布元数据',
+        servers: [{ url: 'https://pypi.org' }], security: [],
+        responses: { '200': { description: 'PyPI JSON；客户端上限 1 MiB，仅选择未撤回的 py3-none-any wheel。' }, '404': { description: '项目不存在。' }, default: { description: '网络、重定向或非成功响应均视为检查失败，原组件保持不变。' } }
+      }
+    },
+    '/packages/{shard1}/{shard2}/{digest}/{filename}': {
+      get: {
+        operationId: 'downloadEdgeTtsWheel', summary: '下载已选 edge-tts wheel',
+        servers: [{ url: 'https://files.pythonhosted.org' }], security: [],
+        parameters: [
+          { name: 'shard1', in: 'path', required: true, schema: { type: 'string' }, description: 'PyPI 元数据返回 URL 的首级分片。' },
+          { name: 'shard2', in: 'path', required: true, schema: { type: 'string' }, description: 'PyPI 元数据返回 URL 的次级分片。' },
+          { name: 'digest', in: 'path', required: true, schema: { type: 'string' }, description: 'PyPI 文件存储摘要路径。' },
+          { name: 'filename', in: 'path', required: true, schema: { type: 'string' }, description: '必须是元数据选中的 edge_tts-VERSION-py3-none-any.whl。' }
+        ],
+        responses: { '200': { description: 'wheel 二进制；客户端上限 2 MiB，并验证元数据给出的 SHA-256。' }, '404': { description: '文件不存在。' }, default: { description: '非官方 HTTPS 主机、端口、重定向或非成功响应均拒绝。' } }
+      }
+    }
+  }
+}
+
 writeFileSync(join(output, 'apifox-layout.json'), JSON.stringify({
   sourceCommit, folders, interfaces, documents,
-  httpImportFolder: 'http.wolai', httpEndpointFolder: 'http.wolai.api'
+  httpCatalogs: [
+    { key: 'wolai', file: 'wolai-openapi.json', importFolder: 'http.wolai', endpointFolder: 'http.wolai.api' },
+    { key: 'edge-update', file: 'edge-update-openapi.json', importFolder: 'http.reader', endpointFolder: 'http.reader' }
+  ]
 }, null, 2) + '\n')
-writeFileSync(join(output, 'wolai-openapi.json'), JSON.stringify(openapi, null, 2) + '\n')
-console.log(JSON.stringify({ folders: folders.length, interfaces: interfaces.length, documents: documents.length, httpEndpoints: Object.keys(openapi.paths).length }))
+writeFileSync(join(output, 'wolai-openapi.json'), JSON.stringify(wolaiOpenapi, null, 2) + '\n')
+writeFileSync(join(output, 'edge-update-openapi.json'), JSON.stringify(edgeUpdateOpenapi, null, 2) + '\n')
+console.log(JSON.stringify({ folders: folders.length, interfaces: interfaces.length, documents: documents.length, httpEndpoints: Object.keys(wolaiOpenapi.paths).length + Object.keys(edgeUpdateOpenapi.paths).length }))
