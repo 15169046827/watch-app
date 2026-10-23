@@ -219,8 +219,8 @@ async function cacheAction(action: 'prune' | 'stale' | 'clear') {
   status.value = cleanupMessage.value
   try {
     await nextTick()
-    const result = await invoke<CacheStats & { deletedFiles: number; deletedBytes: number }>('cache_action', { action })
-    Object.assign(cache, result)
+    const result = await invoke<{ cache: CacheStats; deletedFiles: number; deletedBytes: number }>('cache_action', { action })
+    Object.assign(cache, result.cache)
     cleanupMessage.value = `整理完成：删除 ${result.deletedFiles} 个文件/目录，释放 ${humanBytes(result.deletedBytes)}。现在可以关闭工坊。`
   } catch (error) {
     cleanupFailed.value = true
