@@ -32,6 +32,15 @@ nav button.active { color: white; background: var(--coral); box-shadow: 0 8px 22
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #6fc694; box-shadow: 0 0 0 4px rgb(111 198 148 / 12%); }.status-dot.working { background: var(--ochre); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .45; } }
 main { min-width: 0; overflow: auto; padding: 28px 34px 48px; }
+.notice-stack { display: grid; gap: 14px; max-width: 1180px; margin-bottom: 20px; }
+.p-message { min-width: 0; }
+.p-message .p-message-content { padding: 12px 16px; align-items: flex-start; gap: 10px; }
+.p-message .p-message-text { min-width: 0; line-height: 1.65; overflow-wrap: anywhere; }
+.p-message .p-button { margin: 8px 0 0 8px; vertical-align: middle; }
+.cleanup-feedback { display: grid; gap: 12px; margin-top: 16px; }
+/* Storage cards and notices must never share a border. */
+.single-page > .p-card + .p-card,
+.single-page > .p-card + .storage-cards { margin-top: 17px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
 .topbar h1 { margin: 2px 0 0; font-size: 28px; letter-spacing: -.03em; }
 .eyebrow { margin: 0; color: var(--coral); font-size: 10px; font-weight: 700; letter-spacing: .16em; }

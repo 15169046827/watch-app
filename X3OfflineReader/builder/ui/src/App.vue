@@ -399,13 +399,15 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
         </div>
       </header>
 
-      <Message v-if="cleaning && page !== 'storage'" severity="info" :closable="false">正在整理存储，已耗时 {{ cleanupSeconds }} 秒；请等待完成后再关闭工坊。可在存储管理查看结果。</Message>
-      <Message v-if="status && (status.includes('失败') || status.includes('无法'))" severity="error" :closable="false">{{ status }}</Message>
-      <Message v-if="edgeUpdating" severity="info" :closable="false">正在检查在线语音组件并验证音频，完成后可开始或恢复转换。</Message>
-      <Message v-if="showDataNotice" severity="info" :closable="false">
-        工坊默认在本机处理源文件，并在用户数据目录保存断点、缓存、界面设置和最多 50 项来源识别历史。只有选用在线 Edge 音色并逐次确认后，待朗读正文才会发送给在线服务。在线组件自动更新会访问官方 Python 包索引，并仅发送公开短句验证连接，可在存储管理关闭；清理操作不会删除电子书源文件或已输出的 .opbook。
-        <Button label="知道了" size="small" text @click="acceptDataNotice" />
-      </Message>
+      <div v-if="(cleaning && page !== 'storage') || (status && (status.includes('失败') || status.includes('无法'))) || edgeUpdating || showDataNotice" class="notice-stack">
+        <Message v-if="cleaning && page !== 'storage'" severity="info" :closable="false">正在整理存储，已耗时 {{ cleanupSeconds }} 秒；请等待完成后再关闭工坊。可在存储管理查看结果。</Message>
+        <Message v-if="status && (status.includes('失败') || status.includes('无法'))" severity="error" :closable="false">{{ status }}</Message>
+        <Message v-if="edgeUpdating" severity="info" :closable="false">正在检查在线语音组件并验证音频，完成后可开始或恢复转换。</Message>
+        <Message v-if="showDataNotice" severity="info" :closable="false">
+          工坊默认在本机处理源文件，并在用户数据目录保存断点、缓存、界面设置和最多 50 项来源识别历史。只有选用在线 Edge 音色并逐次确认后，待朗读正文才会发送给在线服务。在线组件自动更新会访问官方 Python 包索引，并仅发送公开短句验证连接，可在存储管理关闭；清理操作不会删除电子书源文件或已输出的 .opbook。
+          <Button label="知道了" size="small" text @click="acceptDataNotice" />
+        </Message>
+      </div>
 
       <section v-if="page === 'build'" class="page-grid build-grid">
         <Card class="hero-card span-2">
@@ -539,7 +541,7 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
           <template #content>
             <p class="storage-note">工坊默认保留最近使用的句子音频以加速重复转换；超过 20 GB 或 180 天会自动整理。未完成任务的断点与缓存分开保存。断点和缓存依赖本机路径与运行环境，不作为可移植备份导出；电子书源文件和生成结果由你在原目录自行保管。</p>
             <div class="storage-actions"><Button label="按默认规则整理" icon="pi pi-sparkles" :disabled="busy || cleaning" @click="cacheAction('prune')" /><Button label="清理过期临时任务" icon="pi pi-clock" outlined :disabled="busy || cleaning" @click="cacheAction('stale')" /><Button :label="cleaning ? '正在清理…' : '清空句子缓存'" icon="pi pi-trash" severity="danger" outlined :loading="cleaning" :disabled="busy || cleaning" @click="cacheAction('clear')" /></div>
-            <div v-if="cleanupMessage" role="status" aria-live="polite" :aria-busy="cleaning">
+            <div v-if="cleanupMessage" class="cleanup-feedback" role="status" aria-live="polite" :aria-busy="cleaning">
               <ProgressBar v-if="cleaning" mode="indeterminate" aria-label="正在整理存储，尚无法计算百分比" />
               <Message :severity="cleaning ? 'info' : cleanupFailed ? 'error' : 'success'" :closable="false">{{ cleanupMessage }}<span v-if="cleaning"> 已耗时 {{ cleanupSeconds }} 秒（暂无法计算剩余时间）。</span></Message>
             </div>
