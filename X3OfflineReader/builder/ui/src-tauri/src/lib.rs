@@ -27,7 +27,7 @@ struct ActiveBuild {
 }
 
 #[derive(Default)]
-struct RuntimeState(Mutex<Option<ActiveBuild>>, AtomicBool);
+struct RuntimeState(Mutex<Option<ActiveBuild>>, AtomicBool, AtomicBool);
 
 struct UpdateGuard<'a>(&'a AtomicBool);
 
@@ -121,7 +121,15 @@ fn capture(args: Vec<String>) -> Result<Value, String> {
                 diagnostic.chars().take(240).collect::<String>()
             )
         })?;
-    serde_json::from_str(line).map_err(|error| format!("转换核心返回了无效结果：{error}"))
+    let value: Value =
+        serde_json::from_str(line).map_err(|error| format!("转换核心返回了无效结果：{error}"))?;
+    if !output.status.success() {
+        return Err(value["message"]
+            .as_str()
+            .unwrap_or("转换核心操作失败")
+            .to_string());
+    }
+    Ok(value)
 }
 
 #[tauri::command]
@@ -160,11 +168,22 @@ fn preview_audio(provider: String, voice: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn cache_action(action: String) -> Result<Value, String> {
+async fn cache_action(app: tauri::AppHandle, action: String) -> Result<Value, String> {
     if !matches!(action.as_str(), "prune" | "stale" | "clear") {
         return Err("未知的缓存操作".into());
     }
-    capture(vec!["bridge-cache".into(), action])
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<RuntimeState>();
+        let active = state.0.lock().map_err(|_| "任务状态不可用")?;
+        if active.is_some() || state.2.swap(true, Ordering::AcqRel) {
+            return Err("已有转换或清理任务正在运行".into());
+        }
+        let _cleaning = UpdateGuard(&state.2);
+        drop(active);
+        capture(vec!["bridge-cache".into(), action])
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 fn unique_file(directory: &Path, suffix: &str) -> PathBuf {
@@ -204,7 +223,7 @@ fn launch_build<R: Runtime>(
     .map_err(|error| format!("无法保存任务请求：{error}"))?;
 
     let mut active = state.0.lock().map_err(|_| "任务状态不可用")?;
-    if active.is_some() || state.1.load(Ordering::Acquire) {
+    if active.is_some() || state.1.load(Ordering::Acquire) || state.2.load(Ordering::Acquire) {
         return Err("已有转换任务正在运行".into());
     }
     let args = vec![
@@ -306,6 +325,11 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<RuntimeState>();
+                if state.2.load(Ordering::Acquire) {
+                    api.prevent_close();
+                    let _ = window.emit("cache-close-blocked", ());
+                    return;
+                }
                 let mut guard = state
                     .0
                     .lock()
@@ -323,4 +347,34 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("failed to run Tingdu Workshop");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cleanup_guard_releases_on_error() {
+        let state = RuntimeState::default();
+        let result: Result<(), &str> = {
+            assert!(!state.2.swap(true, Ordering::AcqRel));
+            let _guard = UpdateGuard(&state.2);
+            assert!(state.2.load(Ordering::Acquire));
+            Err("simulated cleanup failure")
+        };
+        assert!(result.is_err());
+        assert!(!state.2.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn cleanup_guard_rejects_duplicate_and_releases_on_success() {
+        let state = RuntimeState::default();
+        {
+            assert!(!state.2.swap(true, Ordering::AcqRel));
+            let _guard = UpdateGuard(&state.2);
+            assert!(state.2.swap(true, Ordering::AcqRel));
+        }
+        assert!(!state.2.load(Ordering::Acquire));
+        assert!(!state.0.lock().unwrap().is_some());
+    }
 }

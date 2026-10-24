@@ -30,6 +30,12 @@ watch(autoEdgeUpdate, value => localStorage.setItem('tingdu-edge-auto-update', v
 const page = ref<'build' | 'voices' | 'tasks' | 'storage'>('build')
 const loading = ref(true)
 const busy = ref(false)
+const cleaning = ref(false)
+const cleanupMessage = ref('')
+const cleanupFailed = ref(false)
+const cleanupSeconds = ref(0)
+let cleanupStartedAt = 0
+let unlistenCacheClose: UnlistenFn | undefined
 const pausing = ref(false)
 const status = ref('正在连接本地转换核心…')
 const progress = ref(0)
@@ -72,7 +78,7 @@ const selectedProvider = computed(() => providers.value.find(item => item.id ===
 const selectedVoice = computed(() => selectedProvider.value?.voices.find(item => item.id === form.voice))
 const voiceOptions = computed(() => selectedProvider.value?.voices.map(item => ({ label: item.id, value: item.id, preview: item.preview, previewType: item.previewType })) ?? [])
 const providerOptions = computed(() => providers.value.map(item => ({ label: `${item.label} · ${item.throughputLabel}`, value: item.id, online: item.online })))
-const canStart = computed(() => !busy.value && !edgeUpdating.value && form.inputs.length > 0 && (form.outputToSource || !!form.output))
+const canStart = computed(() => !busy.value && !cleaning.value && !edgeUpdating.value && form.inputs.length > 0 && (form.outputToSource || !!form.output))
 const remaining = computed(() => Math.max(0, Math.round(projectedTotal.value - elapsedSeconds.value)))
 const progressLabel = computed(() => busy.value ? `${progress.value}%` : progress.value === 100 ? '已完成' : '等待开始')
 
@@ -91,6 +97,9 @@ onMounted(async () => {
   showDataNotice.value = localStorage.getItem(dataNoticeStorageKey) !== 'accepted'
   try {
     unlisten = await listen<BuilderEvent>('builder-event', event => { void handleEvent(event.payload) })
+    unlistenCacheClose = await listen('cache-close-blocked', () => {
+      cleanupMessage.value = '正在清理，暂时不能关闭工坊。请等待完成提示后再关闭。'
+    })
     await refreshState()
     status.value = '准备就绪'
     void checkEdgeUpdate(autoEdgeUpdate.value ? 'auto' : 'status')
@@ -98,11 +107,12 @@ onMounted(async () => {
     status.value = `无法连接转换核心：${errorText(error)}`
   } finally { loading.value = false }
   timer = window.setInterval(() => {
+    if (cleaning.value) cleanupSeconds.value = Math.floor((Date.now() - cleanupStartedAt) / 1000)
     if (!busy.value || !startedAt.value) return
     elapsedSeconds.value = Math.floor((Date.now() - startedAt.value) / 1000)
   }, 1000)
 })
-onBeforeUnmount(() => { if (timer) clearInterval(timer); stopPreviewAudio(); unlisten?.() })
+onBeforeUnmount(() => { if (timer) clearInterval(timer); stopPreviewAudio(); unlisten?.(); unlistenCacheClose?.() })
 
 async function refreshState() {
   const state = await invoke<BridgeState>('bridge_state')
@@ -115,7 +125,7 @@ async function refreshState() {
 }
 
 async function checkEdgeUpdate(action: 'auto' | 'force' | 'status' = 'force') {
-  if (edgeUpdating.value || busy.value) return
+  if (edgeUpdating.value || busy.value || cleaning.value) return
   edgeUpdating.value = true
   try {
     edgeUpdate.value = await invoke<EdgeUpdate>('edge_update', { action })
@@ -147,7 +157,7 @@ function moveInput(index: number, delta: number) {
 function removeInput(index: number) { form.inputs.splice(index, 1) }
 
 async function startBuild(resume = false) {
-  if (busy.value || edgeUpdating.value) return
+  if (busy.value || edgeUpdating.value || cleaning.value) return
   const provider = selectedProvider.value
   if (!resume && provider?.online) {
     const ok = window.confirm('该音色需要把待朗读正文发送到在线服务。确认你拥有内容授权并同意继续吗？')
@@ -198,15 +208,27 @@ function stopPreviewAudio() {
   previewAudio = undefined
 }
 async function cacheAction(action: 'prune' | 'stale' | 'clear') {
-  if (busy.value) return
+  if (busy.value || cleaning.value) return
   if (action === 'stale' && !window.confirm('确定删除超过 30 天的未完成临时任务吗？对应断点将无法继续；电子书源文件和已输出的 .opbook 不会删除。')) return
   if (action === 'clear' && !window.confirm('确定清空句子音频缓存吗？未完成任务的断点不会删除。')) return
-  status.value = '正在整理存储…'
+  cleaning.value = true
+  cleanupFailed.value = false
+  cleanupSeconds.value = 0
+  cleanupStartedAt = Date.now()
+  cleanupMessage.value = '已开始整理存储，请勿关闭工坊；完成后会显示清理结果。'
+  status.value = cleanupMessage.value
   try {
-    const result = await invoke<CacheStats & { deletedFiles: number; deletedBytes: number }>('cache_action', { action })
-    Object.assign(cache, result)
-    status.value = `整理完成：删除 ${result.deletedFiles} 个文件，释放 ${humanBytes(result.deletedBytes)}`
-  } catch (error) { status.value = `整理失败：${errorText(error)}` }
+    await nextTick()
+    const result = await invoke<{ cache: CacheStats; deletedFiles: number; deletedBytes: number }>('cache_action', { action })
+    Object.assign(cache, result.cache)
+    cleanupMessage.value = `整理完成：删除 ${result.deletedFiles} 个文件/目录，释放 ${humanBytes(result.deletedBytes)}。现在可以关闭工坊。`
+  } catch (error) {
+    cleanupFailed.value = true
+    cleanupMessage.value = `整理失败：${errorText(error)}。可能已清理部分文件，可重试；现在可以关闭工坊。`
+  } finally {
+    cleaning.value = false
+    status.value = cleanupMessage.value
+  }
 }
 function acceptDataNotice() {
   localStorage.setItem(dataNoticeStorageKey, 'accepted')
@@ -377,12 +399,15 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
         </div>
       </header>
 
-      <Message v-if="status && (status.includes('失败') || status.includes('无法'))" severity="error" :closable="false">{{ status }}</Message>
-      <Message v-if="edgeUpdating" severity="info" :closable="false">正在检查在线语音组件并验证音频，完成后可开始或恢复转换。</Message>
-      <Message v-if="showDataNotice" severity="info" :closable="false">
-        工坊默认在本机处理源文件，并在用户数据目录保存断点、缓存、界面设置和最多 50 项来源识别历史。只有选用在线 Edge 音色并逐次确认后，待朗读正文才会发送给在线服务。在线组件自动更新会访问官方 Python 包索引，并仅发送公开短句验证连接，可在存储管理关闭；清理操作不会删除电子书源文件或已输出的 .opbook。
-        <Button label="知道了" size="small" text @click="acceptDataNotice" />
-      </Message>
+      <div v-if="(cleaning && page !== 'storage') || (status && (status.includes('失败') || status.includes('无法'))) || edgeUpdating || showDataNotice" class="notice-stack">
+        <Message v-if="cleaning && page !== 'storage'" severity="info" :closable="false">正在整理存储，已耗时 {{ cleanupSeconds }} 秒；请等待完成后再关闭工坊。可在存储管理查看结果。</Message>
+        <Message v-if="status && (status.includes('失败') || status.includes('无法'))" severity="error" :closable="false">{{ status }}</Message>
+        <Message v-if="edgeUpdating" severity="info" :closable="false">正在检查在线语音组件并验证音频，完成后可开始或恢复转换。</Message>
+        <Message v-if="showDataNotice" severity="info" :closable="false">
+          工坊默认在本机处理源文件，并在用户数据目录保存断点、缓存、界面设置和最多 50 项来源识别历史。只有选用在线 Edge 音色并逐次确认后，待朗读正文才会发送给在线服务。在线组件自动更新会访问官方 Python 包索引，并仅发送公开短句验证连接，可在存储管理关闭；清理操作不会删除电子书源文件或已输出的 .opbook。
+          <Button label="知道了" size="small" text @click="acceptDataNotice" />
+        </Message>
+      </div>
 
       <section v-if="page === 'build'" class="page-grid build-grid">
         <Card class="hero-card span-2">
@@ -515,7 +540,11 @@ function errorText(error: unknown) { return error instanceof Error ? error.messa
           <template #title>缓存清理</template>
           <template #content>
             <p class="storage-note">工坊默认保留最近使用的句子音频以加速重复转换；超过 20 GB 或 180 天会自动整理。未完成任务的断点与缓存分开保存。断点和缓存依赖本机路径与运行环境，不作为可移植备份导出；电子书源文件和生成结果由你在原目录自行保管。</p>
-            <div class="storage-actions"><Button label="按默认规则整理" icon="pi pi-sparkles" :disabled="busy" @click="cacheAction('prune')" /><Button label="清理过期临时任务" icon="pi pi-clock" outlined :disabled="busy" @click="cacheAction('stale')" /><Button label="清空句子缓存" icon="pi pi-trash" severity="danger" outlined :disabled="busy" @click="cacheAction('clear')" /></div>
+            <div class="storage-actions"><Button label="按默认规则整理" icon="pi pi-sparkles" :disabled="busy || cleaning" @click="cacheAction('prune')" /><Button label="清理过期临时任务" icon="pi pi-clock" outlined :disabled="busy || cleaning" @click="cacheAction('stale')" /><Button :label="cleaning ? '正在清理…' : '清空句子缓存'" icon="pi pi-trash" severity="danger" outlined :loading="cleaning" :disabled="busy || cleaning" @click="cacheAction('clear')" /></div>
+            <div v-if="cleanupMessage" class="cleanup-feedback" role="status" aria-live="polite" :aria-busy="cleaning">
+              <ProgressBar v-if="cleaning" mode="indeterminate" aria-label="正在整理存储，尚无法计算百分比" />
+              <Message :severity="cleaning ? 'info' : cleanupFailed ? 'error' : 'success'" :closable="false">{{ cleanupMessage }}<span v-if="cleaning"> 已耗时 {{ cleanupSeconds }} 秒（暂无法计算剩余时间）。</span></Message>
+            </div>
           </template>
         </Card>
         <Card>
