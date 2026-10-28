@@ -19,8 +19,8 @@ android {
         applicationId 'com.canace.x3offlinereader'
         minSdk 26
         targetSdk 30
-        versionCode 22
-        versionName '0.8.0'
+        versionCode 23
+        versionName '0.8.1'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
 

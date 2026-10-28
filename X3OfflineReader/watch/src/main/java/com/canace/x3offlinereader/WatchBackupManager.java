@@ -11,6 +11,7 @@ import com.canace.x3offlinereader.data.LibraryModels;
 import com.canace.x3offlinereader.importer.BookMediaCache;
 import com.canace.x3offlinereader.importer.OpbookImporter;
 import com.canace.x3offlinereader.music.MusicLibraryDb;
+import com.canace.x3offlinereader.playback.CrownVolumePreferences;
 import com.canace.x3offlinereader.playback.PlaybackService;
 import com.canace.x3offlinereader.playback.PlaybackTargetStore;
 import java.io.File;
@@ -163,6 +164,7 @@ final class WatchBackupManager implements AutoCloseable {
         clearNovelLibrary();
         clearMusicLibrary();
         clearPlaybackData();
+        CrownVolumePreferences.clear(context);
         context.getSharedPreferences("data_notice", Context.MODE_PRIVATE).edit().clear().apply();
     }
 
