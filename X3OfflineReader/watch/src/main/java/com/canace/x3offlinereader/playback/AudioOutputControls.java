@@ -126,6 +126,10 @@ public final class AudioOutputControls {
         if (delta == 0f) {
             return false;
         }
+        if (!CrownVolumePreferences.isEnabled(activity)) {
+            resetCrown();
+            return true;
+        }
         int step = crown.add(delta, event.getEventTime());
         if (step != 0) {
             int max = Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));

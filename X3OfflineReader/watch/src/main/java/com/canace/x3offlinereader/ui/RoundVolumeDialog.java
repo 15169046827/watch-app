@@ -13,9 +13,13 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
+import android.widget.Switch;
 import com.canace.x3offlinereader.R;
+import com.canace.x3offlinereader.playback.CrownMotionEvents;
+import com.canace.x3offlinereader.playback.CrownVolumePreferences;
 
 /** Full-screen round-safe drag control for the system media-volume steps. */
+@SuppressWarnings("deprecation")
 public final class RoundVolumeDialog {
 
     public interface Listener {
@@ -46,6 +50,7 @@ public final class RoundVolumeDialog {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         FrameLayout root = new FrameLayout(activity);
         root.setBackgroundColor(activity.getColor(R.color.screen_background));
+        addCrownSwitch(activity, root, crown);
         LinearLayout controls = new LinearLayout(activity);
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
@@ -81,6 +86,7 @@ public final class RoundVolumeDialog {
                         ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 64), Gravity.CENTER);
         controlsParams.leftMargin = dp(activity, 8);
         controlsParams.rightMargin = dp(activity, 8);
+        controlsParams.topMargin = dp(activity, 8);
         root.addView(controls, controlsParams);
         ImageButton close =
                 iconButton(
@@ -133,6 +139,25 @@ public final class RoundVolumeDialog {
         return dialog;
     }
 
+    private static void addCrownSwitch(Activity activity, FrameLayout root, CrownControl crown) {
+        Switch toggle = new Switch(activity);
+        toggle.setId(R.id.volume_dialog_crown_enabled);
+        toggle.setText(R.string.volume_crown_enabled);
+        toggle.setTextSize(14);
+        toggle.setTextColor(activity.getColor(R.color.text_primary));
+        toggle.setChecked(CrownVolumePreferences.isEnabled(activity));
+        toggle.setOnCheckedChangeListener((button, enabled) -> {
+            CrownVolumePreferences.setEnabled(activity, enabled);
+            if (crown != null) {
+                crown.reset();
+            }
+        });
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                dp(activity, 172), dp(activity, 48), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        params.topMargin = dp(activity, 44);
+        root.addView(toggle, params);
+    }
+
     private static ImageButton iconButton(
             Activity activity, int id, int drawable, int description) {
         ImageButton button = new ImageButton(activity);
@@ -168,6 +193,13 @@ public final class RoundVolumeDialog {
 
         @Override
         public boolean dispatchGenericMotionEvent(MotionEvent event) {
+            if (CrownMotionEvents.delta(event) != 0f
+                    && !CrownVolumePreferences.isEnabled(getContext())) {
+                if (crown != null) {
+                    crown.reset();
+                }
+                return true;
+            }
             if (crown != null && crown.onCrown(event)) {
                 syncing = true;
                 seek.setProgress(crown.currentVolume());

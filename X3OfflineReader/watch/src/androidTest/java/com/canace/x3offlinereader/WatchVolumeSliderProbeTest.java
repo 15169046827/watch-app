@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
 import com.canace.x3offlinereader.ui.RoundVolumeDialog;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -53,6 +54,9 @@ public final class WatchVolumeSliderProbeTest extends InstrumentationTestCase {
             ImageButton decrease = holder[0].findViewById(R.id.volume_dialog_decrease);
             ImageButton increase = holder[0].findViewById(R.id.volume_dialog_increase);
             ImageButton close = holder[0].findViewById(R.id.volume_dialog_close);
+            Switch crown = holder[0].findViewById(R.id.volume_dialog_crown_enabled);
+            assertNotNull(crown);
+            assertInsideDisplay(crown);
             assertNotNull(seek);
             assertNotNull(decrease);
             assertNotNull(increase);
@@ -101,7 +105,7 @@ public final class WatchVolumeSliderProbeTest extends InstrumentationTestCase {
     }
 
     private static void assertNoTextViews(View view) {
-        assertFalse(view instanceof TextView);
+        assertTrue(!(view instanceof TextView) || view instanceof Switch);
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) {

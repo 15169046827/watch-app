@@ -6,6 +6,7 @@
     <item name="volume_dialog_decrease" type="id" />
     <item name="volume_dialog_increase" type="id" />
     <item name="volume_dialog_close" type="id" />
+    <item name="volume_dialog_crown_enabled" type="id" />
     <item name="speed_dialog_seek" type="id" />
     <item name="speed_dialog_value" type="id" />
     <item name="speed_dialog_decrease" type="id" />
