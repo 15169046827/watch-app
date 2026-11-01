@@ -16,6 +16,8 @@ Android 手机与圆屏手表的本地日程工具（0.7.0，已通过批准范�
 
 0.7.0个人 GitHub 预览版已发布为 [LIMITED PREVIEW](https://github.com/15169046827/watch-app/releases/tag/schedule-0.7.0-preview-20261018)，提供手机/手表Release APK、SHA-256、清单及使用/隐私说明。安装、升级与恢复边界见 [发布说明](releases/0.7.0-preview.md)。
 
+下一候选为 **0.7.1/code18（未发布）**，用于纳入已合并的界面字符串资源化调整。公开下载仍为上方0.7.0个人预览；新候选已通过电脑质量门禁与独立验签，仍需最小实机回归，尚未正式生产放行。差异、兼容性与必测项目见 [候选说明](releases/0.7.1-candidate.md)。
+
 ## 模块与规范
 
 - domain：纯 Java 周期规则、执行记录、分层报告、提醒策略、备份与同步格式、自然语言草稿和 ICS。
@@ -126,7 +128,7 @@ Android 12+ 手机可通过系统窗口关联所选手表，使用伴随设备�
 协议、冲突、备份和迁移边界见 specification/PROTOCOL.md、specification/DATA.md；本地分析的有效样本、阈值与局限见 specification/OPTIMIZATION.md。开发测试只使用合成数据，操作真实设备前须取得具体设备连接确认。
 
 
-当前验收冻结版本0.7.0（versionCode17）；实时分批协议4，内部Snapshot为protocol2/schema5、SQLite6。两端须为0.7.0或兼容版本；旧实时协议拒绝，旧手机JSON及分块备份按原版本语义验证后迁移，旧任务不自动转换等级规则。用途与基础迁移见specification/TYPES.md，新等级契约见specification/PROGRESS.md。
+公开预览冻结版本0.7.0（versionCode17），当前未发布候选0.7.1（versionCode18）；实时分批协议4，内部Snapshot为protocol2/schema5、SQLite6。两端须为0.7.0或兼容版本；旧实时协议拒绝，旧手机JSON及分块备份按原版本语义验证后迁移，旧任务不自动转换等级规则。用途与基础迁移见specification/TYPES.md，新等级契约见specification/PROGRESS.md。
 
 0.6.0 新增双端首次运行说明及“隐私与本机数据”。清除区分日程与记录、缓存、设备连接配置、全部本机数据；影响和二次确认见 [隐私说明](PRIVACY.md)，版本变更见 [版本记录](CHANGELOG.md)。日程清除会暂停本机同步，避免另一设备的数据立即传回；在连接页恢复同步前请确认另一设备保留的数据是否需要继续使用。
 
