@@ -12,6 +12,15 @@
 
 普通内部函数、私有数据库实现、纯 UI 事件、Launcher Activity、构建依赖下载、开发服务器及普通媒体/封面文件选择不属于产品 API。当前清单由 `scripts/build-apifox-layout.js` 生成，共 40 个原生通用协议接口、5 个 HTTP 接口和 2 份规范文档。
 
+### 当前供应商连接状态（2026-11-01）
+
+Apifox 文档列出的 Streamable HTTP 入口 `https://api.apifox.com/mcp` 与
+`https://apifox.com/api/v1/mcp` 在只读初始化时均返回供应商侧
+`Invalid Host header`。更新后的令牌已从当前用户环境变量重新加载，未打印或
+持久化。Apifox 恢复任一官方入口前，远端漂移核验保持受阻；不得猜测其他主机、
+关闭 TLS 校验或运行 `sync-apifox-api.ps1 -Apply`。本地清单与契约测试只证明仓库
+副本自洽，不能替代远端一致性证据。
+
 ## 安全同步
 
 1. 令牌只从运行时环境变量 `ApiFox_MCP_TOKEN` 读取，不进入参数、输出、本目录或 Git。
