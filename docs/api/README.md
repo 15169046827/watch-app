@@ -12,6 +12,17 @@
 
 普通内部函数、私有数据库实现、纯 UI 事件、Launcher Activity、构建依赖下载、开发服务器及普通媒体/封面文件选择不属于产品 API。当前清单由 `scripts/build-apifox-layout.js` 生成，共 40 个原生通用协议接口、5 个 HTTP 接口和 2 份规范文档。
 
+### 当前供应商连接状态（2026-11-02）
+
+Apifox 新版 MCP 已恢复。只读现场确认项目 `8948095`、主分支 `8751743` 和默认模块
+`8741710`，并使用 PowerShell 7 运行默认只读同步：24 个目录、40 个通用协议接口、
+2 份文档和 5 个 HTTP 接口全部 `UNCHANGED`，`apply=False`。令牌只从当前用户环境
+变量加载，未打印或持久化。
+
+2026-11-01 两个官方 Streamable HTTP 入口曾返回供应商侧 `Invalid Host header`；该
+故障已解除，但安全边界不变：不得猜测其他主机、关闭 TLS 校验，或在只读结果未核对
+前运行 `-Apply`。脚本保留脱敏错误诊断，以便故障复发时区分提供方网关问题与凭据问题。
+
 ## 安全同步
 
 1. 令牌只从运行时环境变量 `ApiFox_MCP_TOKEN` 读取，不进入参数、输出、本目录或 Git。
@@ -28,15 +39,18 @@
 ```powershell
 node .\scripts\build-apifox-layout.js
 node --test .\scripts\apifox-contract.test.js
-.\scripts\sync-apifox-api.ps1
+pwsh -NoProfile -File .\scripts\sync-apifox-api.ps1
 ```
 
 确认计划后才执行：
 
 ```powershell
-.\scripts\sync-apifox-api.ps1 -Apply
-.\scripts\sync-apifox-api.ps1
+pwsh -NoProfile -File .\scripts\sync-apifox-api.ps1 -Apply
+pwsh -NoProfile -File .\scripts\sync-apifox-api.ps1
 ```
+
+同步脚本使用 `ConvertFrom-Json -AsHashtable`，因此要求 PowerShell 7；Windows PowerShell
+5.1 不属于受支持的执行环境。
 
 最后一次只读运行必须全部显示 `UNCHANGED`，且总数为 24 个目录、40 个通用协议接口、2 份文档和 5 个 HTTP 接口。
 

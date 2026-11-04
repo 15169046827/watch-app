@@ -81,7 +81,12 @@ function Send-ApifoxMessage {
         } else {
             0
         }
-        throw "Apifox MCP request failed (HTTP $status); credentials were not logged."
+        $providerDetail = ''
+        $errorBody = [string]$_.ErrorDetails.Message
+        if ($errorBody -match '"message"\s*:\s*"(Invalid Host header: [A-Za-z0-9.-]+)"') {
+            $providerDetail = " Provider response: $($Matches[1])."
+        }
+        throw "Apifox MCP request failed (HTTP $status).$providerDetail Credentials were not logged."
     }
     if ($response.Headers['Mcp-Session-Id']) {
         $headers['Mcp-Session-Id'] = [string]$response.Headers['Mcp-Session-Id']

@@ -54,6 +54,8 @@ test('project binding and write operations are narrowly scoped', () => {
   assert.match(helper, /MaximumRedirection 0/)
   assert.match(helper, /ApiFox_MCP_TOKEN/)
   assert.doesNotMatch(helper, /ApiFox_MCP_TOKEN\s*=\s*['"][^'"]+['"]/);
+  assert.match(helper, /Invalid Host header: \[A-Za-z0-9\.\-\]\+/)
+  assert.match(helper, /Credentials were not logged/)
   assert.match(sync, /param\(\[switch\]\$Apply, \[switch\]\$RecoverImportedHttp\)/)
   assert.match(sync, /entityId = \$matches\[0\]\.entityId/)
   assert.match(sync, /Write outcome is unclear|creation outcome is unclear/i)
