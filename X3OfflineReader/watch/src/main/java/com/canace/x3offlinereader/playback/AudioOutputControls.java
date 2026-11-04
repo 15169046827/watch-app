@@ -1,10 +1,14 @@
 package com.canace.x3offlinereader.playback;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Context;
 import android.media.AudioManager;
 import android.media.MediaRouter;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
@@ -34,24 +38,32 @@ public final class AudioOutputControls {
 
     private final CrownStepAccumulator crown = new CrownStepAccumulator();
 
+    private final Handler handler = new Handler(Looper.getMainLooper());
+
+    private final Runnable verifyVolume = this::refresh;
+
+    private Dialog volumeDialog;
+
+    private long nextSystemUiTime;
+
     private final MediaRouter.Callback callback =
             new MediaRouter.SimpleCallback() {
 
                 @Override
                 public void onRouteSelected(
                         MediaRouter router, int type, MediaRouter.RouteInfo info) {
-                    refresh();
+                    refreshAndRecheck();
                 }
 
                 @Override
                 public void onRouteUnselected(
                         MediaRouter router, int type, MediaRouter.RouteInfo info) {
-                    refresh();
+                    refreshAndRecheck();
                 }
 
                 @Override
                 public void onRouteChanged(MediaRouter router, MediaRouter.RouteInfo info) {
-                    refresh();
+                    refreshAndRecheck();
                 }
 
                 @Override
@@ -88,12 +100,20 @@ public final class AudioOutputControls {
 
     public void stop() {
         router.removeCallback(callback);
+        handler.removeCallbacks(verifyVolume);
         resetCrown();
+    }
+
+    public void refreshAndRecheck() {
+        refresh();
+        handler.removeCallbacks(verifyVolume);
+        handler.postDelayed(verifyVolume, 350);
     }
 
     public void refresh() {
         int max = Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
         int current = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+        RoundVolumeDialog.syncActualVolume(volumeDialog, max, current);
         if (volumeButton instanceof ImageButton) {
             ((ImageButton) volumeButton).setImageResource(R.drawable.ic_player_volume);
             volumeButton.setContentDescription(
@@ -135,10 +155,7 @@ public final class AudioOutputControls {
             int max = Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
             int current = currentVolume();
             int target = Math.max(0, Math.min(max, current + step));
-            if (target != current) {
-                audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0);
-            }
-            refresh();
+            requestVolume(target);
         }
         return true;
     }
@@ -151,18 +168,30 @@ public final class AudioOutputControls {
         return audio.getStreamVolume(AudioManager.STREAM_MUSIC);
     }
 
+    private void requestVolume(int target) {
+        MediaVolumeRequest.apply(target, this::currentVolume,
+                value -> audio.setStreamVolume(AudioManager.STREAM_MUSIC, value, 0),
+                this::requestSystemVolumeUi);
+        refreshAndRecheck();
+    }
+
+    private void requestSystemVolumeUi(int target) {
+        long now = SystemClock.uptimeMillis();
+        if (now >= nextSystemUiTime) {
+            nextSystemUiTime = now + 2500;
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
+        }
+    }
+
     private void showVolume() {
         resetCrown();
         int max = Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
         int current = currentVolume();
-        RoundVolumeDialog.show(
+        volumeDialog = RoundVolumeDialog.show(
                 activity,
                 max,
                 current,
-                which -> {
-                    audio.setStreamVolume(AudioManager.STREAM_MUSIC, which, 0);
-                    refresh();
-                },
+                this::requestVolume,
                 new RoundVolumeDialog.CrownControl() {
 
                     @Override
@@ -179,7 +208,14 @@ public final class AudioOutputControls {
                     public void reset() {
                         resetCrown();
                     }
+
+                    @Override
+                    public void onFocusRestored() {
+                        refreshAndRecheck();
+                    }
                 });
+        volumeDialog.setOnDismissListener(dialog -> volumeDialog = null);
+        refreshAndRecheck();
     }
 
     private void showOutputs() {

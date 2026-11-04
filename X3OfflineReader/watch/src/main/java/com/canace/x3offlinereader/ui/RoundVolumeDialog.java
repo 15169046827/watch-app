@@ -34,9 +34,17 @@ public final class RoundVolumeDialog {
         int currentVolume();
 
         void reset();
+
+        default void onFocusRestored() { }
     }
 
     private RoundVolumeDialog() { }
+
+    public static void syncActualVolume(Dialog dialog, int maximum, int current) {
+        if (dialog instanceof VolumeDialog) {
+            ((VolumeDialog) dialog).sync(maximum, current);
+        }
+    }
 
     public static Dialog show(Activity activity, int maximum, int current, Listener listener) {
         return show(activity, maximum, current, listener, null);
@@ -103,7 +111,8 @@ public final class RoundVolumeDialog {
         closeParams.bottomMargin = dp(activity, 8);
         root.addView(close, closeParams);
         decrease.setOnClickListener(v -> seek.setProgress(Math.max(0, seek.getProgress() - 1)));
-        increase.setOnClickListener(v -> seek.setProgress(Math.min(max, seek.getProgress() + 1)));
+        increase.setOnClickListener(
+                v -> seek.setProgress(Math.min(seek.getMax(), seek.getProgress() + 1)));
         close.setOnClickListener(v -> dialog.dismiss());
         seek.setOnSeekBarChangeListener(
                 new SeekBar.OnSeekBarChangeListener() {
@@ -191,6 +200,16 @@ public final class RoundVolumeDialog {
             this.seek = seek;
         }
 
+        void sync(int maximum, int current) {
+            syncing = true;
+            try {
+                seek.setMax(maximum);
+                seek.setProgress(current);
+            } finally {
+                syncing = false;
+            }
+        }
+
         @Override
         public boolean dispatchGenericMotionEvent(MotionEvent event) {
             if (CrownMotionEvents.delta(event) != 0f
@@ -201,9 +220,7 @@ public final class RoundVolumeDialog {
                 return true;
             }
             if (crown != null && crown.onCrown(event)) {
-                syncing = true;
-                seek.setProgress(crown.currentVolume());
-                syncing = false;
+                sync(seek.getMax(), crown.currentVolume());
                 return true;
             }
             return super.dispatchGenericMotionEvent(event);
@@ -213,6 +230,9 @@ public final class RoundVolumeDialog {
         public void onWindowFocusChanged(boolean hasFocus) {
             if (!hasFocus && crown != null) {
                 crown.reset();
+            } else if (hasFocus && crown != null) {
+                crown.onFocusRestored();
+                sync(seek.getMax(), crown.currentVolume());
             }
             super.onWindowFocusChanged(hasFocus);
         }
