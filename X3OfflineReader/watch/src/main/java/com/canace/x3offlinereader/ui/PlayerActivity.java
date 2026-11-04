@@ -871,6 +871,9 @@ public final class PlayerActivity extends SwipeBackActivity {
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
+        if (hasFocus && audioControls != null) {
+            audioControls.refreshAndRecheck();
+        }
         if (!hasFocus) {
             readerCrown.reset();
             if (audioControls != null) {
