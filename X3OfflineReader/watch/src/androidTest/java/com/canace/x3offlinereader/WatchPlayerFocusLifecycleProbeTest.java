@@ -1,16 +1,19 @@
 package com.canace.x3offlinereader;
 
 import android.app.Activity;
+import android.app.Application;
 import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.os.SystemClock;
 import android.test.InstrumentationTestCase;
 import android.view.MotionEvent;
 import android.widget.TextView;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
+import com.canace.x3offlinereader.music.MusicLibraryActivity;
 import com.canace.x3offlinereader.music.MusicLibraryDb;
 import com.canace.x3offlinereader.music.MusicModels;
 import com.canace.x3offlinereader.music.MusicPlayerActivity;
@@ -20,6 +23,8 @@ import com.google.common.util.concurrent.ListenableFuture;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -29,9 +34,19 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class WatchPlayerFocusLifecycleProbeTest extends InstrumentationTestCase {
 
     public void testDesktopAndMediaShortcutsReturnToPlayerUntilRightSwipeStops() throws Exception {
+        verifyShortcut(false);
+        verifyShortcut(true);
+    }
+
+    private void verifyShortcut(boolean fromMedia) throws Exception {
         Context context = getInstrumentation().getTargetContext();
+        Application application = (Application) context.getApplicationContext();
+        ObservedActivities observed = new ObservedActivities();
+        onMain(() -> {
+            application.registerActivityLifecycleCallbacks(observed);
+            return null;
+        });
         MusicLibraryDb db = new MusicLibraryDb(context);
-        Activity player = null;
         ListenableFuture<MediaController> future = null;
         MediaController observer = null;
         String oldSpeed = db.settingValue("playback_speed", "1.0");
@@ -52,10 +67,9 @@ public final class WatchPlayerFocusLifecycleProbeTest extends InstrumentationTes
             db.saveProgress(selected.id, 0);
             Intent intent =
                     new Intent(context, MusicPlayerActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                             .putExtra("track_id", selected.id);
-            player = getInstrumentation().startActivitySync(intent);
-            final Activity active = player;
+            Activity active = getInstrumentation().startActivitySync(intent);
             waitFor(
                     () ->
                             active.findViewById(R.id.play_button).isEnabled()
@@ -86,50 +100,27 @@ public final class WatchPlayerFocusLifecycleProbeTest extends InstrumentationTes
             Thread.sleep(1500);
             assertFalse(active.isFinishing());
             assertTrue("Home/background must keep playing", onMain(session::isPlaying));
-            Intent launcher =
-                    new Intent(Intent.ACTION_MAIN)
-                            .addCategory(Intent.CATEGORY_LAUNCHER)
-                            .setComponent(new ComponentName(context, MainActivity.class))
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(launcher);
-            waitFor(() -> onMain(active::hasWindowFocus), 5000);
-            assertTrue(
-                    "Desktop launcher must return to the player", onMain(active::hasWindowFocus));
+            openShortcut(context, shortcut, fromMedia);
+            Activity resumed = awaitFocus(observed, MusicPlayerActivity.class);
+            assertEquals("music:" + selected.id, onMain(() -> session.getCurrentMediaItem().mediaId));
             assertTrue(onMain(session::isPlaying));
-            getInstrumentation().runOnMainSync(() -> active.moveTaskToBack(true));
-            Thread.sleep(500);
-            shortcut.send();
-            waitFor(() -> onMain(active::hasWindowFocus), 5000);
-            assertTrue(
-                    "System media shortcut must return to the player",
-                    onMain(active::hasWindowFocus));
-            assertTrue(onMain(session::isPlaying));
-            long time = SystemClock.uptimeMillis();
-            getInstrumentation()
-                    .runOnMainSync(
-                            () -> {
-                                active.dispatchTouchEvent(
-                                        MotionEvent.obtain(
-                                                time, time, MotionEvent.ACTION_DOWN, 40, 230, 0));
-                                active.dispatchTouchEvent(
-                                        MotionEvent.obtain(
-                                                time,
-                                                time + 200,
-                                                MotionEvent.ACTION_UP,
-                                                180,
-                                                230,
-                                                0));
-                            });
+            int restoredTask = resumed.getTaskId();
+            swipeRight(resumed);
+            Activity library = awaitFocus(observed, MusicLibraryActivity.class);
+            assertEquals(restoredTask, library.getTaskId());
             waitFor(
                     () -> onMain(() -> !session.isPlaying() && session.getMediaItemCount() == 0),
                     5000);
-            assertTrue(active.isFinishing());
-            player = null;
+            assertTrue(resumed.isFinishing());
+            swipeRight(library);
+            Activity home = awaitFocus(observed, MainActivity.class);
+            assertEquals(restoredTask, home.getTaskId());
         } finally {
-            if (player != null) {
-                player.finish();
-                getInstrumentation().waitForIdleSync();
-            }
+            getInstrumentation().runOnMainSync(() -> {
+                application.unregisterActivityLifecycleCallbacks(observed);
+                observed.finishCreated();
+            });
+            getInstrumentation().waitForIdleSync();
             if (future != null) {
                 ListenableFuture<MediaController> release = future;
                 getInstrumentation().runOnMainSync(() -> MediaController.releaseFuture(release));
@@ -142,6 +133,89 @@ public final class WatchPlayerFocusLifecycleProbeTest extends InstrumentationTes
             }
             MusicScanner.scan(context, db);
             db.close();
+        }
+    }
+
+    private Activity awaitFocus(ObservedActivities observed, Class<? extends Activity> type) throws Exception {
+        AtomicReference<Activity> found = new AtomicReference<>();
+        waitFor(() -> onMain(() -> {
+            Activity current = observed.resumed;
+            if (type.isInstance(current) && current.hasWindowFocus()) {
+                found.set(current);
+            }
+            return found.get() != null;
+        }), 8000);
+        return found.get();
+    }
+
+    private static void openShortcut(Context context, PendingIntent shortcut, boolean fromMedia)
+            throws PendingIntent.CanceledException {
+        if (fromMedia) {
+            shortcut.send();
+            return;
+        }
+        context.startActivity(new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .setComponent(new ComponentName(context, MainActivity.class))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    private void swipeRight(Activity activity) {
+        getInstrumentation().runOnMainSync(() -> {
+            long time = SystemClock.uptimeMillis();
+            MotionEvent down = MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN, 80, 230, 0);
+            MotionEvent up = MotionEvent.obtain(time, time + 200, MotionEvent.ACTION_UP, 230, 230, 0);
+            try {
+                activity.dispatchTouchEvent(down);
+                activity.dispatchTouchEvent(up);
+            } finally {
+                down.recycle();
+                up.recycle();
+            }
+        });
+    }
+
+    private static final class ObservedActivities implements Application.ActivityLifecycleCallbacks {
+        private final List<Activity> created = new ArrayList<>();
+        private Activity resumed;
+
+        @Override
+        public void onActivityCreated(Activity activity, Bundle state) {
+            created.add(activity);
+        }
+
+        @Override
+        public void onActivityStarted(Activity activity) { }
+
+        @Override
+        public void onActivityResumed(Activity activity) {
+            resumed = activity;
+        }
+
+        @Override
+        public void onActivityPaused(Activity activity) {
+            if (resumed == activity) {
+                resumed = null;
+            }
+        }
+
+        @Override
+        public void onActivityStopped(Activity activity) { }
+
+        @Override
+        public void onActivitySaveInstanceState(Activity activity, Bundle state) { }
+
+        @Override
+        public void onActivityDestroyed(Activity activity) {
+            created.remove(activity);
+        }
+
+        void finishCreated() {
+            for (Activity activity : new ArrayList<>(created)) {
+                if (!activity.isFinishing()) {
+                    activity.finish();
+                }
+            }
         }
     }
 

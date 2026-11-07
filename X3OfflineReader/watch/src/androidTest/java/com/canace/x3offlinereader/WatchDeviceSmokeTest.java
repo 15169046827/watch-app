@@ -6,6 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.DatabaseUtils;
 import android.net.Uri;
 import android.os.SystemClock;
 import android.test.ActivityInstrumentationTestCase2;
@@ -19,6 +20,7 @@ import android.widget.ListView;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import androidx.media3.common.MediaItem;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
 import com.canace.x3offlinereader.data.LibraryDb;
@@ -39,12 +41,14 @@ import com.canace.x3offlinereader.ui.PageIndicatorView;
 import com.canace.x3offlinereader.ui.PlayerActivity;
 import com.canace.x3offlinereader.ui.RoundChoiceDialog;
 import com.canace.x3offlinereader.ui.RoundSpeedDialog;
+import com.google.common.util.concurrent.ListenableFuture;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Framework-only smoke coverage that can run on the API 30 target without extra test libraries. */
@@ -63,16 +67,9 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         target.edit().clear().commit();
         MainActivity activity = getActivity();
         restore(target, savedTarget);
-        assertInsideDisplay(activity.findViewById(R.id.books_button));
-        assertInsideDisplay(activity.findViewById(R.id.music_button));
+        assertStaggeredHomeEntries(activity);
         assertEquals("小说", text(activity, R.id.books_button));
         assertEquals("音乐", text(activity, R.id.music_button));
-        int[] booksAt = new int[2];
-        int[] musicAt = new int[2];
-        activity.findViewById(R.id.books_button).getLocationOnScreen(booksAt);
-        activity.findViewById(R.id.music_button).getLocationOnScreen(musicAt);
-        assertEquals(booksAt[1], musicAt[1]);
-        assertTrue(booksAt[0] < musicAt[0]);
         Activity library =
                 getInstrumentation()
                         .startActivitySync(
@@ -488,82 +485,101 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
     }
 
     public void test04Mp3SystemDecoderAndProgress() throws Exception {
+        verifyShortMusicDecoder("device-smoke.mp3", false);
+    }
+
+    public void test04bFlacMedia3DecoderAndProgress() throws Exception {
+        verifyShortMusicDecoder("device-smoke.flac", false);
+    }
+
+    public void test04cDeletedMusicTrackDoesNotPersistOnPause() throws Exception {
+        verifyShortMusicDecoder("device-smoke.mp3", true);
+    }
+
+    private void verifyShortMusicDecoder(String fileName, boolean removeBeforeExit) throws Exception {
         Context context = getInstrumentation().getTargetContext();
         MusicLibraryDb db = new MusicLibraryDb(context);
+        String oldMode = db.settingValue("playback_mode", "stop_after_track");
+        String oldSpeed = db.settingValue("playback_speed", "1.0");
         Activity player = null;
         try {
             ensureMusicFixtures(context, db);
-            MusicModels.Track track = findTrack(db.tracks(), "device-smoke.mp3");
+            MusicModels.Track track = findTrack(db.tracks(), fileName);
+            db.putSetting("playback_mode", "stop_after_track");
+            db.putSetting("playback_speed", "1.0");
             db.saveProgress(track.id, 0);
-            Intent intent =
-                    new Intent(context, MusicPlayerActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            .putExtra("track_id", track.id);
-            player = getInstrumentation().startActivitySync(intent);
-            final Activity active = player;
-            waitFor(
-                    () ->
-                            active.findViewById(R.id.play_button).isEnabled()
-                                    && text(active, R.id.title).length() > 0
-                                    && text(active, R.id.position).contains(" / "),
-                    TIMEOUT_MS);
-            getInstrumentation()
-                    .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
-            Thread.sleep(1800);
-            assertFalse(text(active, R.id.position).startsWith("00:00 /"));
-            getInstrumentation()
-                    .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
+            player = getInstrumentation().startActivitySync(new Intent(context, MusicPlayerActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("track_id", track.id));
+            Activity active = player;
+            waitFor("short track prepared", () -> active.findViewById(R.id.play_button).isEnabled()
+                    && text(active, R.id.position).contains(" / "), TIMEOUT_MS);
+            captureDecoderProgress(context, active, "music:" + track.id);
+            if (removeBeforeExit) {
+                waitFor("decoded progress saved before removal", () -> db.progress(track.id) > 0, 5000);
+                assertTrue(db.removeTrack(track.id, true));
+            }
             getInstrumentation().runOnMainSync(active::finish);
             getInstrumentation().waitForIdleSync();
             player = null;
-            assertTrue(db.progress(track.id) > 0);
+            assertDecoderProgress(db, track, fileName, removeBeforeExit);
         } finally {
             if (player != null) {
-                player.finish();
+                Activity closing = player;
+                getInstrumentation().runOnMainSync(closing::finish);
+                getInstrumentation().waitForIdleSync();
             }
+            db.putSetting("playback_mode", oldMode);
+            db.putSetting("playback_speed", oldSpeed);
             removeMusicFixtures(context, db);
             db.close();
         }
     }
 
-    public void test04bFlacMedia3DecoderAndProgress() throws Exception {
-        Context context = getInstrumentation().getTargetContext();
-        MusicLibraryDb db = new MusicLibraryDb(context);
-        Activity player = null;
-        try {
-            ensureMusicFixtures(context, db);
-            MusicModels.Track track = findTrack(db.tracks(), "device-smoke.flac");
-            db.saveProgress(track.id, 0);
-            Intent intent =
-                    new Intent(context, MusicPlayerActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            .putExtra("track_id", track.id);
-            player = getInstrumentation().startActivitySync(intent);
-            final Activity active = player;
-            waitFor(
-                    () ->
-                            active.findViewById(R.id.play_button).isEnabled()
-                                    && text(active, R.id.title).length() > 0
-                                    && text(active, R.id.position).contains(" / "),
-                    TIMEOUT_MS);
-            getInstrumentation()
-                    .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
-            Thread.sleep(1800);
-            assertFalse(text(active, R.id.position).startsWith("00:00 /"));
-            getInstrumentation()
-                    .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
-            getInstrumentation().runOnMainSync(active::finish);
-            getInstrumentation().waitForIdleSync();
-            player = null;
-            assertTrue(db.progress(track.id) > 0);
-        } finally {
-            if (player != null) {
-                player.finish();
-            }
-            removeMusicFixtures(context, db);
-            db.close();
+    private static void assertDecoderProgress(MusicLibraryDb db, MusicModels.Track track,
+            String fileName, boolean removed) {
+        if (removed) {
+            assertEquals("Late pause must not recreate deleted progress", 0L,
+                    DatabaseUtils.longForQuery(db.getReadableDatabase(),
+                            "SELECT COUNT(*) FROM progress WHERE track_id=?",
+                            new String[] {Long.toString(track.id)}));
+        } else {
+            assertTrue(fileName + " playback must persist real progress", db.progress(track.id) > 0);
         }
     }
+
+    private void captureDecoderProgress(Context context, Activity activity, String mediaId) throws Exception {
+        AtomicReference<ListenableFuture<MediaController>> pending = new AtomicReference<>();
+        getInstrumentation().runOnMainSync(() -> pending.set(new MediaController.Builder(
+                context, new SessionToken(context, new ComponentName(context, PlaybackService.class)))
+                .buildAsync()));
+        ListenableFuture<MediaController> future = pending.get();
+        try {
+            MediaController session = future.get(10, TimeUnit.SECONDS);
+            getInstrumentation().runOnMainSync(() -> activity.findViewById(R.id.play_button).performClick());
+            AtomicBoolean advanced = new AtomicBoolean();
+            long deadline = SystemClock.elapsedRealtime() + TIMEOUT_MS;
+            while (SystemClock.elapsedRealtime() < deadline && !advanced.get()) {
+                getInstrumentation().runOnMainSync(() -> pauseAfterDecode(session, mediaId, advanced));
+                if (!advanced.get()) {
+                    Thread.sleep(50);
+                }
+            }
+            assertTrue("Expected decoded playback to advance for " + mediaId, advanced.get());
+        } finally {
+            getInstrumentation().runOnMainSync(() -> MediaController.releaseFuture(future));
+        }
+    }
+
+    private static void pauseAfterDecode(MediaController session, String mediaId, AtomicBoolean advanced) {
+        assertNull("Media3 reported a decoder or playback error", session.getPlayerError());
+        MediaItem item = session.getCurrentMediaItem();
+        if (item != null && mediaId.equals(item.mediaId)
+                && session.isPlaying() && session.getCurrentPosition() > 0) {
+            session.pause();
+            advanced.set(true);
+        }
+    }
+
 
     public void test05RightSwipeExit() throws Exception {
         Context context = getInstrumentation().getTargetContext();
@@ -987,6 +1003,32 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                 }
             }
         }
+    }
+
+    private static void assertStaggeredHomeEntries(Activity activity) {
+        View books = activity.findViewById(R.id.books_button);
+        View music = activity.findViewById(R.id.music_button);
+        int[] booksAt = assertInsideRoundHome(books);
+        int[] musicAt = assertInsideRoundHome(music);
+        int offset = Math.round(16 * activity.getResources().getDisplayMetrics().density);
+        assertTrue("Books must be left of music without overlap",
+                booksAt[0] + books.getWidth() <= musicAt[0]);
+        assertTrue("Music must be lower than books by 16dp",
+                Math.abs(musicAt[1] - booksAt[1] - offset) <= 1);
+    }
+
+    private static int[] assertInsideRoundHome(View view) {
+        assertInsideDisplay(view);
+        assertTrue("Home entry must have a nonempty touch area",
+                view.getWidth() > 0 && view.getHeight() > 0);
+        int[] at = new int[2];
+        view.getLocationOnScreen(at);
+        int radius = 233;
+        int farX = Math.max(Math.abs(at[0] - radius), Math.abs(at[0] + view.getWidth() - radius));
+        int farY = Math.max(Math.abs(at[1] - radius), Math.abs(at[1] + view.getHeight() - radius));
+        assertTrue("Home entry corners must fit inside the 466px circle",
+                farX * farX + farY * farY <= radius * radius);
+        return at;
     }
 
     private static void assertInsideDisplay(View view) {

@@ -10,10 +10,15 @@ public final class NowPlayingActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        Intent target =
-                PlaybackTargetStore.destination(this)
-                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        startActivity(target);
+        Intent target = PlaybackTargetStore.activeDestination(this);
+        if (target == null) {
+            startActivity(MainActivity.homeIntent(this).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
+        } else if (isTaskRoot()) {
+            startActivities(new Intent[] {MainActivity.homeIntent(this),
+                    PlaybackTargetStore.libraryFor(this, target), target});
+        } else {
+            startActivity(target.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        }
         finish();
     }
 }

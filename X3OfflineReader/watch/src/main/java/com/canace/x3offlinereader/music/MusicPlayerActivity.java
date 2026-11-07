@@ -2,6 +2,7 @@ package com.canace.x3offlinereader.music;
 
 import android.annotation.SuppressLint;
 import android.content.ComponentName;
+import android.content.Intent;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
@@ -593,6 +594,11 @@ public final class MusicPlayerActivity extends SwipeBackActivity {
     @Override
     protected boolean canSwipeBack() {
         return pager == null || pager.currentPage() == 0;
+    }
+
+    @Override
+    protected Intent rootBackParent() {
+        return PlaybackTargetStore.libraryFor(this, getIntent());
     }
 
     @Override

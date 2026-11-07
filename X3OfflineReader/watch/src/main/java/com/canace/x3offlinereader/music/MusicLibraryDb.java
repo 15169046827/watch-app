@@ -118,12 +118,12 @@ public final class MusicLibraryDb extends SQLiteOpenHelper {
     }
 
     public void saveProgress(long id, long ms) {
-        ContentValues v = new ContentValues();
-        v.put("track_id", id);
-        v.put("position_ms", ms);
-        v.put("updated_at", System.currentTimeMillis());
-        getWritableDatabase()
-                .insertWithOnConflict("progress", null, v, SQLiteDatabase.CONFLICT_REPLACE);
+        // A player can receive a late pause callback after its track has been removed.
+        // Check the parent within the write statement so concurrent removal cannot race it.
+        getWritableDatabase().execSQL(
+                "INSERT OR REPLACE INTO progress(track_id,position_ms,updated_at) "
+                        + "SELECT id,?,? FROM tracks WHERE id=?",
+                new Object[] {ms, System.currentTimeMillis(), id});
     }
 
     public long progress(long id) {
