@@ -1,11 +1,14 @@
 package com.canace.x3offlinereader;
 
 import android.app.Activity;
+import android.app.Instrumentation;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.test.InstrumentationTestCase;
+import android.view.MotionEvent;
 import android.widget.TextView;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
@@ -24,6 +27,48 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Holds real AAC playback long enough for shell-side lock-screen and MediaSession probes. */
 public final class WatchBackgroundPlaybackProbeTest extends InstrumentationTestCase {
+    public void testRootPlayerSwipeRebuildsLibraryParent() throws Exception {
+        Context context = getInstrumentation().getTargetContext();
+        Instrumentation.ActivityMonitor monitor = getInstrumentation()
+                .addMonitor(BookLibraryActivity.class.getName(), null, false);
+        Activity player = null;
+        Activity library = null;
+        try (LibraryDb db = new LibraryDb(context)) {
+            ensureBook(context, db);
+            LibraryModels.BookSummary book = goldenBook(db);
+            String chapter = db.chapters(book.id).get(0).id;
+            player = getInstrumentation().startActivitySync(new Intent(context, PlayerActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                    .putExtra("book_id", book.id).putExtra("track_id", chapter));
+            assertTrue(player.isTaskRoot());
+            Activity active = player;
+            getInstrumentation().runOnMainSync(() -> swipeRight(active));
+            library = getInstrumentation().waitForMonitorWithTimeout(monitor, 5000);
+            assertNotNull(library);
+            assertEquals(player.getTaskId(), library.getTaskId());
+            assertFalse(library.isTaskRoot());
+        } finally {
+            getInstrumentation().removeMonitor(monitor);
+            Activity closing = library == null ? player : library;
+            if (closing != null) {
+                getInstrumentation().runOnMainSync(closing::finishAndRemoveTask);
+            }
+        }
+    }
+
+    private static void swipeRight(Activity activity) {
+        long now = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, 110, 300, 0);
+        MotionEvent up = MotionEvent.obtain(now, now + 150, MotionEvent.ACTION_UP, 255, 300, 0);
+        try {
+            activity.dispatchTouchEvent(down);
+            activity.dispatchTouchEvent(up);
+        } finally {
+            down.recycle();
+            up.recycle();
+        }
+    }
+
     public void testBackgroundPlaybackAndAutomaticTrackTransition() throws Exception {
         Context context = getInstrumentation().getTargetContext();
         LibraryDb db = new LibraryDb(context);

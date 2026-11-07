@@ -3,7 +3,8 @@ package com.canace.x3offlinereader.playback;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import com.canace.x3offlinereader.MainActivity;
+import com.canace.x3offlinereader.BookLibraryActivity;
+import com.canace.x3offlinereader.music.MusicLibraryActivity;
 import com.canace.x3offlinereader.music.MusicPlayerActivity;
 import com.canace.x3offlinereader.ui.PlayerActivity;
 import java.util.UUID;
@@ -90,8 +91,9 @@ public final class PlaybackTargetStore {
         return null;
     }
 
-    public static Intent destination(Context context) {
-        Intent active = activeDestination(context);
-        return active == null ? new Intent(context, MainActivity.class) : active;
+    public static Intent libraryFor(Context context, Intent player) {
+        return new Intent(context, MusicPlayerActivity.class.getName().equals(
+                player.getComponent().getClassName())
+                ? MusicLibraryActivity.class : BookLibraryActivity.class);
     }
 }

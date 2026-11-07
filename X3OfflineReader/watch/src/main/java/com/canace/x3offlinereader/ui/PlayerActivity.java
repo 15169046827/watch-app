@@ -2,6 +2,7 @@ package com.canace.x3offlinereader.ui;
 
 import android.annotation.SuppressLint;
 import android.content.ComponentName;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -842,6 +843,11 @@ public final class PlayerActivity extends SwipeBackActivity {
     @Override
     protected boolean canSwipeBack() {
         return pager == null || pager.currentPage() == 0;
+    }
+
+    @Override
+    protected Intent rootBackParent() {
+        return PlaybackTargetStore.libraryFor(this, getIntent());
     }
 
     @Override

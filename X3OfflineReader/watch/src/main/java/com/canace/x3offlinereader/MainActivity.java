@@ -10,12 +10,15 @@ import com.canace.x3offlinereader.ui.SwipeBackActivity;
 
 /** Product-level entry point: novel and music are equal, isolated modes. */
 public final class MainActivity extends SwipeBackActivity {
+    private static final String OPEN_HOME = "open_home";
+
+    public static Intent homeIntent(Context context) {
+        return new Intent(context, MainActivity.class).putExtra(OPEN_HOME, true);
+    }
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        if (routeToActivePlayer()) {
-            return;
-        }
         setContentView(R.layout.activity_main);
         enableSwipeBack(R.id.root);
         findViewById(R.id.books_button)
@@ -27,7 +30,9 @@ public final class MainActivity extends SwipeBackActivity {
         findViewById(R.id.data_button)
                 .setOnClickListener(
                         v -> startActivity(new Intent(this, DataManagementActivity.class)));
-        showDataNoticeIfNeeded();
+        if (state != null || !routeToActivePlayer()) {
+            showDataNoticeIfNeeded();
+        }
     }
 
     private void showDataNoticeIfNeeded() {
@@ -53,13 +58,20 @@ public final class MainActivity extends SwipeBackActivity {
     }
 
     private boolean routeToActivePlayer() {
+        if (getIntent().getBooleanExtra(OPEN_HOME, false)) {
+            return false;
+        }
         Intent target = PlaybackTargetStore.activeDestination(this);
         if (target == null) {
             return false;
         }
-        startActivity(
-                target.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-        finish();
+        if (isTaskRoot()) {
+            startActivities(new Intent[] {PlaybackTargetStore.libraryFor(this, target), target});
+        } else {
+            startActivity(
+                    target.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+            finish();
+        }
         return true;
     }
 }
