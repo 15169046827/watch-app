@@ -44,6 +44,8 @@
 
 `WatchMusicModesProbeTest` 在专用验收环境点击播放器的上一首和下一首，以曲目 ID 和队列下标确认切歌。它使用公开 MP3 样本跨越曲尾，核验播完暂停、单曲重播、列表回绕及随机完整遍历，并同时核对 MediaSession 的循环与随机配置。用例要求空音乐库、无活动播放页和空会话队列。用例结束后移除自身创建的样本、曲目记录和播放页，恢复原播放模式设置。
 
+0.8.3 在 OPPO Watch X3 的独立验收安装中通过了上述切歌和四种播放模式，以及 MP3/FLAC 解码进度、删除曲目后的延迟保存、启动器与媒体入口恢复、右滑逐级返回、音频焦点和音量读回。熄屏验收确认显示屏关闭 8 秒期间播放继续。验收结束后两个验收包均已移除，公开样本无残留。正式版已保数据覆盖至 0.8.3，保留原首次安装时间。
+
 ### 独立验收安装
 
 在产品根目录运行 `gradlew.bat -PreaderValidation :watch:assembleValidationDebug :watch:assembleValidationDebugAndroidTest`。生成的两个包仅用于实机验收，并使用工作区共享 Debug 证书。省略该选项时仍使用普通 Debug 和对应的 AndroidTest 构建。
