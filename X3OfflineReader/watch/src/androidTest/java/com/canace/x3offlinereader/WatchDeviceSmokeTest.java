@@ -21,6 +21,7 @@ import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
 import com.canace.x3offlinereader.data.LibraryDb;
@@ -55,6 +56,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2<MainActivity> {
 
     private static final long TIMEOUT_MS = 20000;
+
+    private static final long DECODED_PROGRESS_MS = 1_000;
 
     public WatchDeviceSmokeTest() {
         super(MainActivity.class);
@@ -513,9 +516,8 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
             Activity active = player;
             waitFor("short track prepared", () -> active.findViewById(R.id.play_button).isEnabled()
                     && text(active, R.id.position).contains(" / "), TIMEOUT_MS);
-            captureDecoderProgress(context, active, "music:" + track.id);
+            captureDecoderProgress(context, active, db, track.id);
             if (removeBeforeExit) {
-                waitFor("decoded progress saved before removal", () -> db.progress(track.id) > 0, 5000);
                 assertTrue(db.removeTrack(track.id, true));
             }
             getInstrumentation().runOnMainSync(active::finish);
@@ -547,7 +549,9 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         }
     }
 
-    private void captureDecoderProgress(Context context, Activity activity, String mediaId) throws Exception {
+    private void captureDecoderProgress(Context context, Activity activity, MusicLibraryDb db, long trackId)
+            throws Exception {
+        String mediaId = "music:" + trackId;
         AtomicReference<ListenableFuture<MediaController>> pending = new AtomicReference<>();
         getInstrumentation().runOnMainSync(() -> pending.set(new MediaController.Builder(
                 context, new SessionToken(context, new ComponentName(context, PlaybackService.class)))
@@ -556,28 +560,48 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         try {
             MediaController session = future.get(10, TimeUnit.SECONDS);
             getInstrumentation().runOnMainSync(() -> activity.findViewById(R.id.play_button).performClick());
-            AtomicBoolean advanced = new AtomicBoolean();
+            AtomicBoolean paused = new AtomicBoolean();
+            AtomicReference<PlaybackException> playbackError = new AtomicReference<>();
             long deadline = SystemClock.elapsedRealtime() + TIMEOUT_MS;
-            while (SystemClock.elapsedRealtime() < deadline && !advanced.get()) {
-                getInstrumentation().runOnMainSync(() -> pauseAfterDecode(session, mediaId, advanced));
-                if (!advanced.get()) {
-                    Thread.sleep(50);
+            while (SystemClock.elapsedRealtime() < deadline && !paused.get()) {
+                getInstrumentation().runOnMainSync(() -> {
+                    playbackError.set(session.getPlayerError());
+                    if (canPauseDecodedTrack(activity, session, mediaId)) {
+                        paused.set(activity.findViewById(R.id.play_button).performClick());
+                    }
+                });
+                assertNull("Media3 reported a decoder or playback error", playbackError.get());
+                if (!paused.get()) {
+                    SystemClock.sleep(50);
                 }
             }
-            assertTrue("Expected decoded playback to advance for " + mediaId, advanced.get());
+            assertTrue("Expected playback to advance and pause before the end of " + mediaId, paused.get());
+            AtomicBoolean stopped = new AtomicBoolean();
+            waitFor("same decoded track paused before its end", () -> {
+                getInstrumentation().runOnMainSync(() -> stopped.set(
+                        isCurrentTrack(session, mediaId) && !session.getPlayWhenReady()
+                                && session.getCurrentPosition() >= DECODED_PROGRESS_MS / 2
+                                && session.getCurrentPosition() < session.getDuration()));
+                return stopped.get();
+            }, 5000);
+            waitFor("decoded playback progress saved on pause",
+                    () -> db.progress(trackId) >= DECODED_PROGRESS_MS / 2, 5000);
         } finally {
             getInstrumentation().runOnMainSync(() -> MediaController.releaseFuture(future));
         }
     }
 
-    private static void pauseAfterDecode(MediaController session, String mediaId, AtomicBoolean advanced) {
-        assertNull("Media3 reported a decoder or playback error", session.getPlayerError());
+    private static boolean canPauseDecodedTrack(Activity activity, MediaController session, String mediaId) {
+        long position = session.getCurrentPosition();
+        return isCurrentTrack(session, mediaId) && session.isPlaying()
+                && position >= DECODED_PROGRESS_MS && position < session.getDuration() - 500
+                && activity.getText(R.string.pause).equals(activity.findViewById(R.id.play_button)
+                        .getContentDescription());
+    }
+
+    private static boolean isCurrentTrack(MediaController session, String mediaId) {
         MediaItem item = session.getCurrentMediaItem();
-        if (item != null && mediaId.equals(item.mediaId)
-                && session.isPlaying() && session.getCurrentPosition() > 0) {
-            session.pause();
-            advanced.set(true);
-        }
+        return item != null && mediaId.equals(item.mediaId);
     }
 
 

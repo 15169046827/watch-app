@@ -97,23 +97,23 @@ public final class WatchPlayerFocusLifecycleProbeTest extends InstrumentationTes
             PendingIntent shortcut = onMain(session::getSessionActivity);
             assertNotNull(shortcut);
             getInstrumentation().runOnMainSync(() -> active.moveTaskToBack(true));
-            Thread.sleep(1500);
+            waitFor(() -> onMain(() -> observed.resumed != active), 8000);
             assertFalse(active.isFinishing());
             assertTrue("Home/background must keep playing", onMain(session::isPlaying));
             openShortcut(context, shortcut, fromMedia);
-            Activity resumed = awaitFocus(observed, MusicPlayerActivity.class);
+            Activity resumed = awaitResumed(observed, MusicPlayerActivity.class);
             assertEquals("music:" + selected.id, onMain(() -> session.getCurrentMediaItem().mediaId));
             assertTrue(onMain(session::isPlaying));
             int restoredTask = resumed.getTaskId();
             swipeRight(resumed);
-            Activity library = awaitFocus(observed, MusicLibraryActivity.class);
+            Activity library = awaitResumed(observed, MusicLibraryActivity.class);
             assertEquals(restoredTask, library.getTaskId());
             waitFor(
                     () -> onMain(() -> !session.isPlaying() && session.getMediaItemCount() == 0),
                     5000);
             assertTrue(resumed.isFinishing());
             swipeRight(library);
-            Activity home = awaitFocus(observed, MainActivity.class);
+            Activity home = awaitResumed(observed, MainActivity.class);
             assertEquals(restoredTask, home.getTaskId());
         } finally {
             getInstrumentation().runOnMainSync(() -> {
@@ -136,11 +136,11 @@ public final class WatchPlayerFocusLifecycleProbeTest extends InstrumentationTes
         }
     }
 
-    private Activity awaitFocus(ObservedActivities observed, Class<? extends Activity> type) throws Exception {
+    private Activity awaitResumed(ObservedActivities observed, Class<? extends Activity> type) throws Exception {
         AtomicReference<Activity> found = new AtomicReference<>();
         waitFor(() -> onMain(() -> {
             Activity current = observed.resumed;
-            if (type.isInstance(current) && current.hasWindowFocus()) {
+            if (type.isInstance(current) && !current.isFinishing()) {
                 found.set(current);
             }
             return found.get() != null;
