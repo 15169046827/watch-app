@@ -66,7 +66,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         target.edit().clear().commit();
         MainActivity activity = getActivity();
         restore(target, savedTarget);
-        assertStaggeredHomeEntries(activity);
+        assertAlignedHomeEntries(activity);
         assertEquals("小说", text(activity, R.id.books_button));
         assertEquals("音乐", text(activity, R.id.music_button));
         Activity library =
@@ -959,16 +959,18 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         }
     }
 
-    private static void assertStaggeredHomeEntries(Activity activity) {
-        View books = activity.findViewById(R.id.books_button);
-        View music = activity.findViewById(R.id.music_button);
+    private static void assertAlignedHomeEntries(Activity activity) {
+        TextView books = activity.findViewById(R.id.books_button);
+        TextView music = activity.findViewById(R.id.music_button);
         int[] booksAt = assertInsideRoundHome(books);
         int[] musicAt = assertInsideRoundHome(music);
-        int offset = Math.round(16 * activity.getResources().getDisplayMetrics().density);
         assertTrue("Books must be left of music without overlap",
                 booksAt[0] + books.getWidth() <= musicAt[0]);
-        assertTrue("Music must be lower than books by 16dp",
-                Math.abs(musicAt[1] - booksAt[1] - offset) <= 1);
+        assertEquals("Home entries must start on the same row", booksAt[1], musicAt[1]);
+        assertEquals("Home entries must be the same height", books.getHeight(), music.getHeight());
+        assertTrue("Home entries must have equal width up to rounding",
+                Math.abs(books.getWidth() - music.getWidth()) <= 1);
+        assertEquals("Home labels must share a baseline", books.getBaseline(), music.getBaseline());
     }
 
     private static int[] assertInsideRoundHome(View view) {
