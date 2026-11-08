@@ -67,6 +67,12 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         MainActivity activity = getActivity();
         restore(target, savedTarget);
         assertAlignedHomeEntries(activity);
+        TextView data = activity.findViewById(R.id.data_button);
+        assertInsideRoundHome(data);
+        assertEquals(1, data.getLineCount());
+        assertEquals(0, data.getLayout().getEllipsisCount(0));
+        assertTrue("Data action label must fit on screen", data.getPaint().measureText(data.getText().toString())
+                <= data.getWidth() - data.getCompoundPaddingLeft() - data.getCompoundPaddingRight());
         assertEquals("小说", text(activity, R.id.books_button));
         assertEquals("音乐", text(activity, R.id.music_button));
         Activity library =

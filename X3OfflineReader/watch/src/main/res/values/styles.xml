@@ -54,6 +54,14 @@
         <item name="android:paddingTop">0dp</item>
         <item name="android:paddingBottom">0dp</item>
     </style>
+    <style name="BookLibraryScroll">
+        <item name="android:colorEdgeEffect">#79E1CD</item>
+    </style>
+
+    <style name="MusicLibraryScroll">
+        <item name="android:colorEdgeEffect">#DEA5F4</item>
+    </style>
+
     <style name="LibraryActionButton" parent="android:style/Widget.Material.Button">
         <item name="android:background">@drawable/watch_action_pill</item>
         <item name="android:minHeight">0dp</item>
