@@ -86,10 +86,8 @@ public final class WatchMusicModesProbeTest extends InstrumentationTestCase {
                         at(2) && !session.getPlayWhenReady()
                                 && transitionReason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO);
             });
-            inMode(context, db, "repeat_one", Player.REPEAT_MODE_ONE, false, 1, activity -> {
-                reachEnd(1);
-                expectPlaying(1, Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT);
-            });
+            inMode(context, db, "repeat_one", Player.REPEAT_MODE_ONE, false, 1,
+                    activity -> verifyRepeatOne(1));
             inMode(context, db, "repeat_all", Player.REPEAT_MODE_ALL, false, 2, activity -> {
                 reachEnd(2);
                 expectPlaying(0, Player.MEDIA_ITEM_TRANSITION_REASON_AUTO);
@@ -143,6 +141,16 @@ public final class WatchMusicModesProbeTest extends InstrumentationTestCase {
             index = next;
         }
         assertEquals("Shuffle must wrap to the starting item", 0, index);
+    }
+
+    private void verifyRepeatOne(int index) {
+        reachEnd(index);
+        // Observe playback near the end first, so a seek or initial position cannot count as a repeat.
+        await("same fixture playing near its end", () -> at(index) && session.isPlaying()
+                && session.getCurrentPosition() >= session.getDuration() - 700);
+        await("same fixture playing again near its beginning", () -> at(index) && session.isPlaying()
+                && session.getCurrentPosition() > 40
+                && session.getCurrentPosition() < Math.min(750, session.getDuration() / 4));
     }
 
     private void clickAndCheck(Activity activity, int button, int index) {
