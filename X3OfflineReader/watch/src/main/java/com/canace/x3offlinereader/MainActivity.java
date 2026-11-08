@@ -1,11 +1,11 @@
 package com.canace.x3offlinereader;
 
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import com.canace.x3offlinereader.music.MusicLibraryActivity;
 import com.canace.x3offlinereader.playback.PlaybackTargetStore;
+import com.canace.x3offlinereader.ui.RoundConfirmationDialog;
 import com.canace.x3offlinereader.ui.SwipeBackActivity;
 
 /** Product-level entry point: novel and music are equal, isolated modes. */
@@ -40,14 +40,10 @@ public final class MainActivity extends SwipeBackActivity {
                 .getBoolean("accepted", false)) {
             return;
         }
-        new AlertDialog.Builder(this)
-                .setTitle("离线数据说明")
-                .setMessage("听读不联网。源 .opbook、音乐和歌词由你保管；手表只保存目录索引、播放缓存、进度、收藏和设置。备份未加密，不含源文件；清除本机数据不会删除源文件。")
-                .setCancelable(false)
-                .setPositiveButton("知道了", (dialog, which) ->
-                        getSharedPreferences("data_notice", Context.MODE_PRIVATE)
-                                .edit().putBoolean("accepted", true).apply())
-                .show();
+        RoundConfirmationDialog.notice(this, "离线数据说明",
+                "听读不联网。源 .opbook、音乐和歌词由你保管；手表只保存目录索引、播放缓存、进度、收藏和设置。备份未加密，不含源文件；清除本机数据不会删除源文件。",
+                R.string.acknowledge, () -> getSharedPreferences("data_notice", Context.MODE_PRIVATE)
+                        .edit().putBoolean("accepted", true).apply());
     }
 
     @Override

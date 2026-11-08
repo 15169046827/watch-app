@@ -1,6 +1,5 @@
 package com.canace.x3offlinereader;
 
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -15,6 +14,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.canace.x3offlinereader.ui.RoundConfirmationDialog;
 import com.canace.x3offlinereader.ui.SwipeBackActivity;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -32,7 +32,6 @@ public final class DataManagementActivity extends SwipeBackActivity {
     private static final int MUTED = Color.rgb(171, 183, 199);
     private static final int WARN = Color.rgb(255, 191, 105);
     private WatchBackupManager manager;
-    private byte[] pendingImport;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -129,20 +128,16 @@ public final class DataManagementActivity extends SwipeBackActivity {
 
     private void prepareImport(Uri uri) {
         try {
-            pendingImport = readLimited(uri);
-            new AlertDialog.Builder(this).setTitle("导入并合并此备份？")
-                    .setMessage("文件会先完整校验；只恢复已重新导入书籍和已扫描音乐的匹配项，较旧进度不会覆盖较新进度。")
-                    .setNegativeButton("取消", (dialog, which) -> pendingImport = null)
-                    .setPositiveButton("确认", (dialog, which) -> finishImport()).show();
+            byte[] bytes = readLimited(uri);
+            RoundConfirmationDialog.confirm(this, "导入并合并此备份？",
+                    "文件会先完整校验；只恢复已重新导入书籍和已扫描音乐的匹配项，较旧进度不会覆盖较新进度。",
+                    R.string.confirm, false, () -> finishImport(bytes));
         } catch (Exception error) {
-            pendingImport = null;
             toast("备份文件无效或过大");
         }
     }
 
-    private void finishImport() {
-        byte[] bytes = pendingImport;
-        pendingImport = null;
+    private void finishImport(byte[] bytes) {
         try {
             int count = manager.importJson(bytes);
             toast("已处理 " + count + " 项备份数据");
@@ -171,16 +166,14 @@ public final class DataManagementActivity extends SwipeBackActivity {
     }
 
     private void confirm(String title, String message, Runnable action) {
-        new AlertDialog.Builder(this).setTitle(title).setMessage(message)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("确认", (dialog, which) -> {
-                    try {
-                        action.run();
-                        toast("本机数据已清除；源文件保持不变");
-                    } catch (RuntimeException error) {
-                        toast("清除失败");
-                    }
-                }).show();
+        RoundConfirmationDialog.confirm(this, title, message, R.string.confirm, true, () -> {
+            try {
+                action.run();
+                toast("本机数据已清除；源文件保持不变");
+            } catch (RuntimeException error) {
+                toast("清除失败");
+            }
+        });
     }
 
     private TextView text(String value, int sp, int color, boolean bold) {

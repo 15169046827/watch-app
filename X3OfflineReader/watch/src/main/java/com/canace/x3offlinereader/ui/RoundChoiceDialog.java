@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -48,11 +49,15 @@ public final class RoundChoiceDialog {
         header.setTextSize(17);
         header.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         header.setGravity(Gravity.CENTER);
+        header.setMaxLines(2);
+        header.setMinHeight(dp(activity, 34));
+        header.setPadding(dp(activity, 20), 0, dp(activity, 20), 0);
+        header.setEllipsize(TextUtils.TruncateAt.END);
         header.setBackgroundColor(activity.getColor(R.color.dialog_background));
         root.addView(
                 header,
                 new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 34)));
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         View divider = new View(activity);
         divider.setBackgroundColor(activity.getColor(R.color.divider));
         root.addView(
@@ -61,12 +66,17 @@ public final class RoundChoiceDialog {
                         ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 1)));
         ListView list = new ListView(activity);
         list.setId(R.id.choice_dialog_list);
-        list.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
-        list.setDivider(new ColorDrawable(activity.getColor(R.color.divider)));
-        list.setDividerHeight(dp(activity, 1));
+        if (checked >= 0) {
+            list.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
+        }
+        list.setDivider(new ColorDrawable(Color.TRANSPARENT));
+        list.setDividerHeight(dp(activity, 3));
+        list.setDrawSelectorOnTop(true);
+        list.setSelector(R.drawable.watch_book_row_feedback);
         list.setAdapter(
                 new ArrayAdapter<>(
-                        activity, R.layout.item_choice_entry, android.R.id.text1, labels));
+                        activity, checked >= 0 ? R.layout.item_choice_entry : R.layout.item_library_entry,
+                        android.R.id.text1, labels));
         if (checked >= 0 && checked < labels.length) {
             list.setItemChecked(checked, true);
         }
@@ -74,18 +84,20 @@ public final class RoundChoiceDialog {
                 list, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         Button cancel = new Button(activity);
         cancel.setText(android.R.string.cancel);
+        cancel.setBackgroundResource(R.drawable.watch_action_pill);
+        cancel.setStateListAnimator(null);
         cancel.setMinHeight(0);
         cancel.setPadding(0, 0, 0, 0);
         cancel.setTextSize(11);
         cancel.setOnClickListener(v -> dialog.dismiss());
-        root.addView(
-                cancel,
-                new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 30)));
+        LinearLayout.LayoutParams cancelBounds = new LinearLayout.LayoutParams(
+                dp(activity, 110), dp(activity, 30));
+        cancelBounds.gravity = Gravity.CENTER_HORIZONTAL;
+        root.addView(cancel, cancelBounds);
         list.setOnItemClickListener(
                 (parent, view, position, id) -> {
-                    listener.onChoice(position);
                     dialog.dismiss();
+                    listener.onChoice(position);
                 });
         dialog.setContentView(root);
         dialog.setCanceledOnTouchOutside(true);
