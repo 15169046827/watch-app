@@ -63,6 +63,12 @@
 adb shell am instrument -w -e class com.canace.x3offlinereader.WatchMusicModesProbeTest com.canace.x3offlinereader.validation.test/android.test.InstrumentationTestRunner
 ```
 
+小说验收用例会自行导入并清理公开 Golden 样本，支持单独运行。若早期用例曾在正式应用中运行并遗留该样本，可安装与正式应用签名兼容的普通 Debug AndroidTest 包并单独执行下列清理用例。它只处理固定的 Golden 样本书籍 ID、索引、缓存和测试包文件。
+
+```powershell
+adb shell am instrument -w -e class com.canace.x3offlinereader.WatchGoldenFixtureCleanupTest#testRemoveLegacyGoldenBookFixture com.canace.x3offlinereader.test/android.test.InstrumentationTestRunner
+```
+
 原下一阶段体验清单已在 0.3.0 完成，包括最近章节定位、每章内部进度与一键续听、章节级上一项/下一项、音乐随机、Music 初始目录、多文件导入反馈、统一段落高亮、首段标题和多 Track 无感播放。详见 [`../specification/NEXT_PHASE_BACKLOG.md`](../specification/NEXT_PHASE_BACKLOG.md)。
 
 书内搜索、安全上限与 Timeline 定位契约见 [`../specification/WATCH_BOOK_SEARCH.md`](../specification/WATCH_BOOK_SEARCH.md)。

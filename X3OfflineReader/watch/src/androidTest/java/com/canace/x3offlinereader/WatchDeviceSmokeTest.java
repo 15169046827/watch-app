@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.DatabaseUtils;
-import android.net.Uri;
 import android.os.SystemClock;
 import android.test.ActivityInstrumentationTestCase2;
 import android.text.Spanned;
@@ -26,9 +25,6 @@ import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
 import com.canace.x3offlinereader.data.LibraryDb;
 import com.canace.x3offlinereader.data.LibraryModels;
-import com.canace.x3offlinereader.importer.BookImportCoordinator;
-import com.canace.x3offlinereader.importer.BookMediaCache;
-import com.canace.x3offlinereader.importer.OpbookImporter;
 import com.canace.x3offlinereader.music.MusicLibraryActivity;
 import com.canace.x3offlinereader.music.MusicLibraryDb;
 import com.canace.x3offlinereader.music.MusicModels;
@@ -79,11 +75,13 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                                 new Intent(activity, BookLibraryActivity.class)
                                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         LibraryDb db = new LibraryDb(activity);
+        Activity direct = null;
+        android.app.Instrumentation.ActivityMonitor monitor = null;
         try {
             assertInsideDisplay(library.findViewById(R.id.choose_button));
             assertTrue(library.findViewById(R.id.book_list).getHeight() >= 180);
             assertTrue(library.findViewById(R.id.book_list).getWidth() >= 360);
-            ensureBook(library, db);
+            GoldenBookFixture.ensureBook(getInstrumentation(), library, db);
             List<LibraryModels.BookSummary> books = db.books();
             assertFalse(books.isEmpty());
             LibraryModels.BookSummary golden = goldenBook(db);
@@ -109,8 +107,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                     books.size(), ((ListView) library.findViewById(R.id.book_list)).getCount());
             final int goldenIndex = findBookIndex(books, golden.id);
             assertTrue(goldenIndex >= 0);
-            android.app.Instrumentation.ActivityMonitor monitor =
-                    getInstrumentation().addMonitor(PlayerActivity.class.getName(), null, false);
+            monitor = getInstrumentation().addMonitor(PlayerActivity.class.getName(), null, false);
             ListView bookList = library.findViewById(R.id.book_list);
             getInstrumentation()
                     .runOnMainSync(
@@ -119,34 +116,24 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                                             null,
                                             goldenIndex,
                                             bookList.getAdapter().getItemId(goldenIndex)));
-            Activity direct = getInstrumentation().waitForMonitorWithTimeout(monitor, 5000);
+            direct = getInstrumentation().waitForMonitorWithTimeout(monitor, 5000);
             assertNotNull(direct);
             assertTrue(direct.getIntent().getBooleanExtra("resume_latest", false));
-            getInstrumentation().runOnMainSync(direct::finish);
-            getInstrumentation().removeMonitor(monitor);
         } finally {
-            library.finish();
-            db.close();
+            if (monitor != null) {
+                getInstrumentation().removeMonitor(monitor);
+            }
+            cleanGoldenBook(context, db, direct, library);
         }
     }
 
     public void test02BookPlaybackTimelineAndSettings() throws Exception {
         Context context = getInstrumentation().getTargetContext();
         LibraryDb db = new LibraryDb(context);
+        String oldSpeed = db.settingValue("playback_speed", null);
         Activity player = null;
         try {
-            if (db.books().isEmpty()) {
-                Activity library =
-                        getInstrumentation()
-                                .startActivitySync(
-                                        new Intent(context, BookLibraryActivity.class)
-                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                try {
-                    ensureBook(library, db);
-                } finally {
-                    library.finish();
-                }
-            }
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             List<LibraryModels.ChapterSummary> chapters = db.chapters(book.id);
             assertFalse(chapters.isEmpty());
@@ -264,15 +251,12 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                     .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
             getInstrumentation().runOnMainSync(active::finish);
             getInstrumentation().waitForIdleSync();
-            player = null;
             assertTrue(
                     "Book playback must advance and persist",
                     db.progress(book.id, chapters.get(0).id) > 0);
         } finally {
-            if (player != null) {
-                player.finish();
-            }
-            db.close();
+            GoldenBookFixture.restorePlaybackSpeed(db, oldSpeed);
+            cleanGoldenBook(context, db, player);
         }
     }
 
@@ -610,6 +594,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         LibraryDb db = new LibraryDb(context);
         Activity chapters = null;
         try {
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             Intent intent =
                     new Intent(context, ChaptersActivity.class)
@@ -636,20 +621,18 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                                                 0));
                             });
             assertTrue(active.isFinishing());
-            chapters = null;
         } finally {
-            if (chapters != null) {
-                chapters.finish();
-            }
-            db.close();
+            cleanGoldenBook(context, db, chapters);
         }
     }
 
     public void test06FiveTimesBookPlayback() throws Exception {
         Context context = getInstrumentation().getTargetContext();
         LibraryDb db = new LibraryDb(context);
+        String oldSpeed = db.settingValue("playback_speed", null);
         Activity player = null;
         try {
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             LibraryModels.ChapterSummary chapter = db.chapters(book.id).get(0);
             db.putSetting("playback_speed", "5.0");
@@ -674,11 +657,8 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                     .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
             assertTrue(db.progress(book.id, chapter.id) > 0);
         } finally {
-            db.putSetting("playback_speed", "1.25");
-            if (player != null) {
-                player.finish();
-            }
-            db.close();
+            GoldenBookFixture.restorePlaybackSpeed(db, oldSpeed);
+            cleanGoldenBook(context, db, player);
         }
     }
 
@@ -787,18 +767,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         Activity chapters = null;
         Activity player = null;
         try {
-            if (!db.containsBook("x3-golden-sample-ebfa1632c722")) {
-                Activity library =
-                        getInstrumentation()
-                                .startActivitySync(
-                                        new Intent(context, BookLibraryActivity.class)
-                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                try {
-                    ensureBook(library, db);
-                } finally {
-                    library.finish();
-                }
-            }
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             LibraryModels.ChapterSummary chapter = db.chapters(book.id).get(0);
             chapters =
@@ -838,26 +807,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
             assertFalse(chapterList.isDestroyed());
             assertTrue(chapterList.findViewById(R.id.chapter_list).getWidth() >= 360);
         } finally {
-            if (player != null) {
-                player.finish();
-            }
-            if (chapters != null) {
-                chapters.finish();
-            }
-            LibraryModels.BookStorage storage = db.storage("x3-golden-sample-ebfa1632c722");
-            db.removeBook("x3-golden-sample-ebfa1632c722");
-            BookMediaCache.clear(context, "x3-golden-sample-ebfa1632c722");
-            if (storage != null) {
-                OpbookImporter.delete(new File(storage.rootPath));
-            }
-            File packageFile =
-                    new File(
-                            context.getExternalFilesDir("test-packages"),
-                            "golden-two-volume.opbook");
-            packageFile.delete();
-            assertFalse(db.containsBook("x3-golden-sample-ebfa1632c722"));
-            assertFalse(packageFile.exists());
-            db.close();
+            cleanGoldenBook(context, db, player, chapters);
         }
     }
 
@@ -977,37 +927,17 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         assertTrue(MusicScanner.scan(context, db) >= 3);
     }
 
-    private void ensureBook(Activity activity, LibraryDb db) throws Exception {
-        for (LibraryModels.BookSummary book : db.books()) {
-            if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
-                return;
-            }
+    private void cleanGoldenBook(Context context, LibraryDb db, Activity... activities)
+            throws Exception {
+        try (LibraryDb fixtureDb = db) {
+            GoldenBookFixture.finishActivities(getInstrumentation(), activities);
+            GoldenBookFixture.clean(getInstrumentation(), context, fixtureDb);
         }
-        File target =
-                new File(activity.getExternalFilesDir("test-packages"), "golden-two-volume.opbook");
-        copyAsset("golden-two-volume.opbook", target);
-        assertTrue(
-                BookImportCoordinator.get()
-                        .start(
-                                activity,
-                                java.util.Collections.singletonList(
-                                        new BookImportCoordinator.Source(
-                                                Uri.fromFile(target), target.getName()))));
-        waitFor(
-                () -> {
-                    for (LibraryModels.BookSummary book : db.books()) {
-                        if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                },
-                TIMEOUT_MS);
     }
 
     private static LibraryModels.BookSummary goldenBook(LibraryDb db) {
         for (LibraryModels.BookSummary book : db.books()) {
-            if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
+            if (GoldenBookFixture.BOOK_ID.equals(book.id)) {
                 return book;
             }
         }

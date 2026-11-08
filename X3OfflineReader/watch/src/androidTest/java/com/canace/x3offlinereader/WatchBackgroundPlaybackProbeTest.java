@@ -5,7 +5,6 @@ import android.app.Instrumentation;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.SystemClock;
 import android.test.InstrumentationTestCase;
 import android.view.MotionEvent;
@@ -14,13 +13,9 @@ import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
 import com.canace.x3offlinereader.data.LibraryDb;
 import com.canace.x3offlinereader.data.LibraryModels;
-import com.canace.x3offlinereader.importer.BookImportCoordinator;
 import com.canace.x3offlinereader.playback.PlaybackService;
 import com.canace.x3offlinereader.ui.PlayerActivity;
 import com.google.common.util.concurrent.ListenableFuture;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,8 +28,9 @@ public final class WatchBackgroundPlaybackProbeTest extends InstrumentationTestC
                 .addMonitor(BookLibraryActivity.class.getName(), null, false);
         Activity player = null;
         Activity library = null;
-        try (LibraryDb db = new LibraryDb(context)) {
-            ensureBook(context, db);
+        LibraryDb db = new LibraryDb(context);
+        try {
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             String chapter = db.chapters(book.id).get(0).id;
             player = getInstrumentation().startActivitySync(new Intent(context, PlayerActivity.class)
@@ -48,10 +44,10 @@ public final class WatchBackgroundPlaybackProbeTest extends InstrumentationTestC
             assertEquals(player.getTaskId(), library.getTaskId());
             assertFalse(library.isTaskRoot());
         } finally {
-            getInstrumentation().removeMonitor(monitor);
-            Activity closing = library == null ? player : library;
-            if (closing != null) {
-                getInstrumentation().runOnMainSync(closing::finishAndRemoveTask);
+            try (LibraryDb fixtureDb = db) {
+                getInstrumentation().removeMonitor(monitor);
+                GoldenBookFixture.finishActivities(getInstrumentation(), player, library);
+                GoldenBookFixture.clean(getInstrumentation(), context, fixtureDb);
             }
         }
     }
@@ -72,10 +68,11 @@ public final class WatchBackgroundPlaybackProbeTest extends InstrumentationTestC
     public void testBackgroundPlaybackAndAutomaticTrackTransition() throws Exception {
         Context context = getInstrumentation().getTargetContext();
         LibraryDb db = new LibraryDb(context);
+        String oldSpeed = db.settingValue("playback_speed", null);
         Activity player = null;
         ListenableFuture<MediaController> future = null;
         try {
-            ensureBook(context, db);
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             List<LibraryModels.ChapterSummary> chapters = db.chapters(book.id);
             assertTrue(chapters.size() > 1);
@@ -128,17 +125,15 @@ public final class WatchBackgroundPlaybackProbeTest extends InstrumentationTestC
             }
             assertTrue(saved);
         } finally {
-            if (future != null) {
-                ListenableFuture<MediaController> release = future;
-                getInstrumentation().runOnMainSync(() -> MediaController.releaseFuture(release));
+            try (LibraryDb fixtureDb = db) {
+                if (future != null) {
+                    ListenableFuture<MediaController> release = future;
+                    getInstrumentation().runOnMainSync(() -> MediaController.releaseFuture(release));
+                }
+                GoldenBookFixture.restorePlaybackSpeed(db, oldSpeed);
+                GoldenBookFixture.finishActivities(getInstrumentation(), player);
+                GoldenBookFixture.clean(getInstrumentation(), context, fixtureDb);
             }
-            db.putSetting("playback_speed", "1.25");
-            if (player != null) {
-                Activity closing = player;
-                getInstrumentation().runOnMainSync(closing::finish);
-                getInstrumentation().waitForIdleSync();
-            }
-            db.close();
         }
     }
 
@@ -147,51 +142,9 @@ public final class WatchBackgroundPlaybackProbeTest extends InstrumentationTestC
         return value == null ? "" : value.toString();
     }
 
-    private void ensureBook(Context context, LibraryDb db) throws Exception {
-        for (LibraryModels.BookSummary book : db.books()) {
-            if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
-                return;
-            }
-        }
-        File target =
-                new File(context.getExternalFilesDir("test-packages"), "golden-two-volume.opbook");
-        File parent = target.getParentFile();
-        assertTrue(parent.mkdirs() || parent.isDirectory());
-        try (InputStream input =
-                        getInstrumentation()
-                                .getContext()
-                                .getAssets()
-                                .open("golden-two-volume.opbook");
-                FileOutputStream output = new FileOutputStream(target)) {
-            byte[] buffer = new byte[65536];
-            for (int count; (count = input.read(buffer)) != -1; ) {
-                if (count > 0) {
-                    output.write(buffer, 0, count);
-                }
-            }
-        }
-        assertTrue(
-                BookImportCoordinator.get()
-                        .start(
-                                context,
-                                java.util.Collections.singletonList(
-                                        new BookImportCoordinator.Source(
-                                                Uri.fromFile(target), target.getName()))));
-        waitFor(
-                () -> {
-                    for (LibraryModels.BookSummary book : db.books()) {
-                        if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                },
-                20000);
-    }
-
     private static LibraryModels.BookSummary goldenBook(LibraryDb db) {
         for (LibraryModels.BookSummary book : db.books()) {
-            if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
+            if (GoldenBookFixture.BOOK_ID.equals(book.id)) {
                 return book;
             }
         }
