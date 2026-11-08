@@ -53,7 +53,8 @@
     <string name="importing_music">%1$d / %2$d 个音乐文件导入中</string>
     <string name="volume_title">媒体音量</string>
     <string name="volume_value">音量 %1$d%%</string>
-    <string name="volume_drag_hint">旋转表冠或拖动调节音量</string>
+    <string name="volume_drag_hint">拖动调节音量</string>
+    <string name="volume_crown_enabled">旋钮调节音量</string>
     <string name="volume_lower">减小音量</string>
     <string name="volume_raise">增大音量</string>
     <string name="close">关闭</string>
