@@ -42,6 +42,8 @@
 
 桌面快捷菜单恢复专项回归会启动真实音乐播放、退回桌面，再以 Launcher 的 `MAIN/LAUNCHER` 路径重新进入 App，并验证仍回到同一个播放页且音频不中断；随后还会复测 MediaSession 入口与右滑停止。OPPO Watch X3 结果为 `OK (1 test)`，测试后错误日志为 0，公开音频夹具已自动删除；右滑结束后再次冷启动仍正常进入首页。
 
+`WatchMusicModesProbeTest` 在专用验收环境点击播放器的上一首和下一首，以曲目 ID 和队列下标确认切歌。它使用公开 MP3 样本跨越曲尾，核验播完暂停、单曲重播、列表回绕及随机完整遍历，并同时核对 MediaSession 的循环与随机配置。用例要求空音乐库、无活动播放页和空会话队列。用例结束后移除自身创建的样本、曲目记录和播放页，恢复原播放模式设置。
+
 原下一阶段体验清单已在 0.3.0 完成，包括最近章节定位、每章内部进度与一键续听、章节级上一项/下一项、音乐随机、Music 初始目录、多文件导入反馈、统一段落高亮、首段标题和多 Track 无感播放。详见 [`../specification/NEXT_PHASE_BACKLOG.md`](../specification/NEXT_PHASE_BACKLOG.md)。
 
 书内搜索、安全上限与 Timeline 定位契约见 [`../specification/WATCH_BOOK_SEARCH.md`](../specification/WATCH_BOOK_SEARCH.md)。
