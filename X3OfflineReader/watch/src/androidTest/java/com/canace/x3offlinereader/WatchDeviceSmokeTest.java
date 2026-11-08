@@ -6,7 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
+import android.database.DatabaseUtils;
 import android.os.SystemClock;
 import android.test.ActivityInstrumentationTestCase2;
 import android.text.Spanned;
@@ -19,13 +19,12 @@ import android.widget.ListView;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
 import com.canace.x3offlinereader.data.LibraryDb;
 import com.canace.x3offlinereader.data.LibraryModels;
-import com.canace.x3offlinereader.importer.BookImportCoordinator;
-import com.canace.x3offlinereader.importer.BookMediaCache;
-import com.canace.x3offlinereader.importer.OpbookImporter;
 import com.canace.x3offlinereader.music.MusicLibraryActivity;
 import com.canace.x3offlinereader.music.MusicLibraryDb;
 import com.canace.x3offlinereader.music.MusicModels;
@@ -39,18 +38,22 @@ import com.canace.x3offlinereader.ui.PageIndicatorView;
 import com.canace.x3offlinereader.ui.PlayerActivity;
 import com.canace.x3offlinereader.ui.RoundChoiceDialog;
 import com.canace.x3offlinereader.ui.RoundSpeedDialog;
+import com.google.common.util.concurrent.ListenableFuture;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Framework-only smoke coverage that can run on the API 30 target without extra test libraries. */
 public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2<MainActivity> {
 
     private static final long TIMEOUT_MS = 20000;
+
+    private static final long DECODED_PROGRESS_MS = 1_000;
 
     public WatchDeviceSmokeTest() {
         super(MainActivity.class);
@@ -63,27 +66,28 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         target.edit().clear().commit();
         MainActivity activity = getActivity();
         restore(target, savedTarget);
-        assertInsideDisplay(activity.findViewById(R.id.books_button));
-        assertInsideDisplay(activity.findViewById(R.id.music_button));
+        assertAlignedHomeEntries(activity);
+        TextView data = activity.findViewById(R.id.data_button);
+        assertInsideRoundHome(data);
+        assertEquals(1, data.getLineCount());
+        assertEquals(0, data.getLayout().getEllipsisCount(0));
+        assertTrue("Data action label must fit on screen", data.getPaint().measureText(data.getText().toString())
+                <= data.getWidth() - data.getCompoundPaddingLeft() - data.getCompoundPaddingRight());
         assertEquals("小说", text(activity, R.id.books_button));
         assertEquals("音乐", text(activity, R.id.music_button));
-        int[] booksAt = new int[2];
-        int[] musicAt = new int[2];
-        activity.findViewById(R.id.books_button).getLocationOnScreen(booksAt);
-        activity.findViewById(R.id.music_button).getLocationOnScreen(musicAt);
-        assertEquals(booksAt[1], musicAt[1]);
-        assertTrue(booksAt[0] < musicAt[0]);
         Activity library =
                 getInstrumentation()
                         .startActivitySync(
                                 new Intent(activity, BookLibraryActivity.class)
                                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         LibraryDb db = new LibraryDb(activity);
+        Activity direct = null;
+        android.app.Instrumentation.ActivityMonitor monitor = null;
         try {
             assertInsideDisplay(library.findViewById(R.id.choose_button));
             assertTrue(library.findViewById(R.id.book_list).getHeight() >= 180);
             assertTrue(library.findViewById(R.id.book_list).getWidth() >= 360);
-            ensureBook(library, db);
+            GoldenBookFixture.ensureBook(getInstrumentation(), library, db);
             List<LibraryModels.BookSummary> books = db.books();
             assertFalse(books.isEmpty());
             LibraryModels.BookSummary golden = goldenBook(db);
@@ -109,8 +113,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                     books.size(), ((ListView) library.findViewById(R.id.book_list)).getCount());
             final int goldenIndex = findBookIndex(books, golden.id);
             assertTrue(goldenIndex >= 0);
-            android.app.Instrumentation.ActivityMonitor monitor =
-                    getInstrumentation().addMonitor(PlayerActivity.class.getName(), null, false);
+            monitor = getInstrumentation().addMonitor(PlayerActivity.class.getName(), null, false);
             ListView bookList = library.findViewById(R.id.book_list);
             getInstrumentation()
                     .runOnMainSync(
@@ -119,34 +122,24 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                                             null,
                                             goldenIndex,
                                             bookList.getAdapter().getItemId(goldenIndex)));
-            Activity direct = getInstrumentation().waitForMonitorWithTimeout(monitor, 5000);
+            direct = getInstrumentation().waitForMonitorWithTimeout(monitor, 5000);
             assertNotNull(direct);
             assertTrue(direct.getIntent().getBooleanExtra("resume_latest", false));
-            getInstrumentation().runOnMainSync(direct::finish);
-            getInstrumentation().removeMonitor(monitor);
         } finally {
-            library.finish();
-            db.close();
+            if (monitor != null) {
+                getInstrumentation().removeMonitor(monitor);
+            }
+            cleanGoldenBook(context, db, direct, library);
         }
     }
 
     public void test02BookPlaybackTimelineAndSettings() throws Exception {
         Context context = getInstrumentation().getTargetContext();
         LibraryDb db = new LibraryDb(context);
+        String oldSpeed = db.settingValue("playback_speed", null);
         Activity player = null;
         try {
-            if (db.books().isEmpty()) {
-                Activity library =
-                        getInstrumentation()
-                                .startActivitySync(
-                                        new Intent(context, BookLibraryActivity.class)
-                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                try {
-                    ensureBook(library, db);
-                } finally {
-                    library.finish();
-                }
-            }
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             List<LibraryModels.ChapterSummary> chapters = db.chapters(book.id);
             assertFalse(chapters.isEmpty());
@@ -264,15 +257,12 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                     .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
             getInstrumentation().runOnMainSync(active::finish);
             getInstrumentation().waitForIdleSync();
-            player = null;
             assertTrue(
                     "Book playback must advance and persist",
                     db.progress(book.id, chapters.get(0).id) > 0);
         } finally {
-            if (player != null) {
-                player.finish();
-            }
-            db.close();
+            GoldenBookFixture.restorePlaybackSpeed(db, oldSpeed);
+            cleanGoldenBook(context, db, player);
         }
     }
 
@@ -488,88 +478,129 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
     }
 
     public void test04Mp3SystemDecoderAndProgress() throws Exception {
+        verifyShortMusicDecoder("device-smoke.mp3", false);
+    }
+
+    public void test04bFlacMedia3DecoderAndProgress() throws Exception {
+        verifyShortMusicDecoder("device-smoke.flac", false);
+    }
+
+    public void test04cDeletedMusicTrackDoesNotPersistOnPause() throws Exception {
+        verifyShortMusicDecoder("device-smoke.mp3", true);
+    }
+
+    private void verifyShortMusicDecoder(String fileName, boolean removeBeforeExit) throws Exception {
         Context context = getInstrumentation().getTargetContext();
         MusicLibraryDb db = new MusicLibraryDb(context);
+        String oldMode = db.settingValue("playback_mode", "stop_after_track");
+        String oldSpeed = db.settingValue("playback_speed", "1.0");
         Activity player = null;
         try {
             ensureMusicFixtures(context, db);
-            MusicModels.Track track = findTrack(db.tracks(), "device-smoke.mp3");
+            MusicModels.Track track = findTrack(db.tracks(), fileName);
+            db.putSetting("playback_mode", "stop_after_track");
+            db.putSetting("playback_speed", "1.0");
             db.saveProgress(track.id, 0);
-            Intent intent =
-                    new Intent(context, MusicPlayerActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            .putExtra("track_id", track.id);
-            player = getInstrumentation().startActivitySync(intent);
-            final Activity active = player;
-            waitFor(
-                    () ->
-                            active.findViewById(R.id.play_button).isEnabled()
-                                    && text(active, R.id.title).length() > 0
-                                    && text(active, R.id.position).contains(" / "),
-                    TIMEOUT_MS);
-            getInstrumentation()
-                    .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
-            Thread.sleep(1800);
-            assertFalse(text(active, R.id.position).startsWith("00:00 /"));
-            getInstrumentation()
-                    .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
+            player = getInstrumentation().startActivitySync(new Intent(context, MusicPlayerActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("track_id", track.id));
+            Activity active = player;
+            waitFor("short track prepared", () -> active.findViewById(R.id.play_button).isEnabled()
+                    && text(active, R.id.position).contains(" / "), TIMEOUT_MS);
+            captureDecoderProgress(context, active, db, track.id);
+            if (removeBeforeExit) {
+                assertTrue(db.removeTrack(track.id, true));
+            }
             getInstrumentation().runOnMainSync(active::finish);
             getInstrumentation().waitForIdleSync();
             player = null;
-            assertTrue(db.progress(track.id) > 0);
+            assertDecoderProgress(db, track, fileName, removeBeforeExit);
         } finally {
             if (player != null) {
-                player.finish();
+                Activity closing = player;
+                getInstrumentation().runOnMainSync(closing::finish);
+                getInstrumentation().waitForIdleSync();
             }
+            db.putSetting("playback_mode", oldMode);
+            db.putSetting("playback_speed", oldSpeed);
             removeMusicFixtures(context, db);
             db.close();
         }
     }
 
-    public void test04bFlacMedia3DecoderAndProgress() throws Exception {
-        Context context = getInstrumentation().getTargetContext();
-        MusicLibraryDb db = new MusicLibraryDb(context);
-        Activity player = null;
-        try {
-            ensureMusicFixtures(context, db);
-            MusicModels.Track track = findTrack(db.tracks(), "device-smoke.flac");
-            db.saveProgress(track.id, 0);
-            Intent intent =
-                    new Intent(context, MusicPlayerActivity.class)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            .putExtra("track_id", track.id);
-            player = getInstrumentation().startActivitySync(intent);
-            final Activity active = player;
-            waitFor(
-                    () ->
-                            active.findViewById(R.id.play_button).isEnabled()
-                                    && text(active, R.id.title).length() > 0
-                                    && text(active, R.id.position).contains(" / "),
-                    TIMEOUT_MS);
-            getInstrumentation()
-                    .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
-            Thread.sleep(1800);
-            assertFalse(text(active, R.id.position).startsWith("00:00 /"));
-            getInstrumentation()
-                    .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
-            getInstrumentation().runOnMainSync(active::finish);
-            getInstrumentation().waitForIdleSync();
-            player = null;
-            assertTrue(db.progress(track.id) > 0);
-        } finally {
-            if (player != null) {
-                player.finish();
-            }
-            removeMusicFixtures(context, db);
-            db.close();
+    private static void assertDecoderProgress(MusicLibraryDb db, MusicModels.Track track,
+            String fileName, boolean removed) {
+        if (removed) {
+            assertEquals("Late pause must not recreate deleted progress", 0L,
+                    DatabaseUtils.longForQuery(db.getReadableDatabase(),
+                            "SELECT COUNT(*) FROM progress WHERE track_id=?",
+                            new String[] {Long.toString(track.id)}));
+        } else {
+            assertTrue(fileName + " playback must persist real progress", db.progress(track.id) > 0);
         }
     }
+
+    private void captureDecoderProgress(Context context, Activity activity, MusicLibraryDb db, long trackId)
+            throws Exception {
+        String mediaId = "music:" + trackId;
+        AtomicReference<ListenableFuture<MediaController>> pending = new AtomicReference<>();
+        getInstrumentation().runOnMainSync(() -> pending.set(new MediaController.Builder(
+                context, new SessionToken(context, new ComponentName(context, PlaybackService.class)))
+                .buildAsync()));
+        ListenableFuture<MediaController> future = pending.get();
+        try {
+            MediaController session = future.get(10, TimeUnit.SECONDS);
+            getInstrumentation().runOnMainSync(() -> activity.findViewById(R.id.play_button).performClick());
+            AtomicBoolean paused = new AtomicBoolean();
+            AtomicReference<PlaybackException> playbackError = new AtomicReference<>();
+            long deadline = SystemClock.elapsedRealtime() + TIMEOUT_MS;
+            while (SystemClock.elapsedRealtime() < deadline && !paused.get()) {
+                getInstrumentation().runOnMainSync(() -> {
+                    playbackError.set(session.getPlayerError());
+                    if (canPauseDecodedTrack(activity, session, mediaId)) {
+                        paused.set(activity.findViewById(R.id.play_button).performClick());
+                    }
+                });
+                assertNull("Media3 reported a decoder or playback error", playbackError.get());
+                if (!paused.get()) {
+                    SystemClock.sleep(50);
+                }
+            }
+            assertTrue("Expected playback to advance and pause before the end of " + mediaId, paused.get());
+            AtomicBoolean stopped = new AtomicBoolean();
+            waitFor("same decoded track paused before its end", () -> {
+                getInstrumentation().runOnMainSync(() -> stopped.set(
+                        isCurrentTrack(session, mediaId) && !session.getPlayWhenReady()
+                                && session.getCurrentPosition() >= DECODED_PROGRESS_MS / 2
+                                && session.getCurrentPosition() < session.getDuration()));
+                return stopped.get();
+            }, 5000);
+            waitFor("decoded playback progress saved on pause",
+                    () -> db.progress(trackId) >= DECODED_PROGRESS_MS / 2, 5000);
+        } finally {
+            getInstrumentation().runOnMainSync(() -> MediaController.releaseFuture(future));
+        }
+    }
+
+    private static boolean canPauseDecodedTrack(Activity activity, MediaController session, String mediaId) {
+        long position = session.getCurrentPosition();
+        return isCurrentTrack(session, mediaId) && session.isPlaying()
+                && position >= DECODED_PROGRESS_MS && position < session.getDuration() - 500
+                && activity.getText(R.string.pause).equals(activity.findViewById(R.id.play_button)
+                        .getContentDescription());
+    }
+
+    private static boolean isCurrentTrack(MediaController session, String mediaId) {
+        MediaItem item = session.getCurrentMediaItem();
+        return item != null && mediaId.equals(item.mediaId);
+    }
+
 
     public void test05RightSwipeExit() throws Exception {
         Context context = getInstrumentation().getTargetContext();
         LibraryDb db = new LibraryDb(context);
         Activity chapters = null;
         try {
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             Intent intent =
                     new Intent(context, ChaptersActivity.class)
@@ -596,20 +627,18 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                                                 0));
                             });
             assertTrue(active.isFinishing());
-            chapters = null;
         } finally {
-            if (chapters != null) {
-                chapters.finish();
-            }
-            db.close();
+            cleanGoldenBook(context, db, chapters);
         }
     }
 
     public void test06FiveTimesBookPlayback() throws Exception {
         Context context = getInstrumentation().getTargetContext();
         LibraryDb db = new LibraryDb(context);
+        String oldSpeed = db.settingValue("playback_speed", null);
         Activity player = null;
         try {
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             LibraryModels.ChapterSummary chapter = db.chapters(book.id).get(0);
             db.putSetting("playback_speed", "5.0");
@@ -634,11 +663,8 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                     .runOnMainSync(() -> active.findViewById(R.id.play_button).performClick());
             assertTrue(db.progress(book.id, chapter.id) > 0);
         } finally {
-            db.putSetting("playback_speed", "1.25");
-            if (player != null) {
-                player.finish();
-            }
-            db.close();
+            GoldenBookFixture.restorePlaybackSpeed(db, oldSpeed);
+            cleanGoldenBook(context, db, player);
         }
     }
 
@@ -747,18 +773,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         Activity chapters = null;
         Activity player = null;
         try {
-            if (!db.containsBook("x3-golden-sample-ebfa1632c722")) {
-                Activity library =
-                        getInstrumentation()
-                                .startActivitySync(
-                                        new Intent(context, BookLibraryActivity.class)
-                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                try {
-                    ensureBook(library, db);
-                } finally {
-                    library.finish();
-                }
-            }
+            GoldenBookFixture.ensureBook(getInstrumentation(), context, db);
             LibraryModels.BookSummary book = goldenBook(db);
             LibraryModels.ChapterSummary chapter = db.chapters(book.id).get(0);
             chapters =
@@ -798,26 +813,7 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
             assertFalse(chapterList.isDestroyed());
             assertTrue(chapterList.findViewById(R.id.chapter_list).getWidth() >= 360);
         } finally {
-            if (player != null) {
-                player.finish();
-            }
-            if (chapters != null) {
-                chapters.finish();
-            }
-            LibraryModels.BookStorage storage = db.storage("x3-golden-sample-ebfa1632c722");
-            db.removeBook("x3-golden-sample-ebfa1632c722");
-            BookMediaCache.clear(context, "x3-golden-sample-ebfa1632c722");
-            if (storage != null) {
-                OpbookImporter.delete(new File(storage.rootPath));
-            }
-            File packageFile =
-                    new File(
-                            context.getExternalFilesDir("test-packages"),
-                            "golden-two-volume.opbook");
-            packageFile.delete();
-            assertFalse(db.containsBook("x3-golden-sample-ebfa1632c722"));
-            assertFalse(packageFile.exists());
-            db.close();
+            cleanGoldenBook(context, db, player, chapters);
         }
     }
 
@@ -937,37 +933,17 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
         assertTrue(MusicScanner.scan(context, db) >= 3);
     }
 
-    private void ensureBook(Activity activity, LibraryDb db) throws Exception {
-        for (LibraryModels.BookSummary book : db.books()) {
-            if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
-                return;
-            }
+    private void cleanGoldenBook(Context context, LibraryDb db, Activity... activities)
+            throws Exception {
+        try (LibraryDb fixtureDb = db) {
+            GoldenBookFixture.finishActivities(getInstrumentation(), activities);
+            GoldenBookFixture.clean(getInstrumentation(), context, fixtureDb);
         }
-        File target =
-                new File(activity.getExternalFilesDir("test-packages"), "golden-two-volume.opbook");
-        copyAsset("golden-two-volume.opbook", target);
-        assertTrue(
-                BookImportCoordinator.get()
-                        .start(
-                                activity,
-                                java.util.Collections.singletonList(
-                                        new BookImportCoordinator.Source(
-                                                Uri.fromFile(target), target.getName()))));
-        waitFor(
-                () -> {
-                    for (LibraryModels.BookSummary book : db.books()) {
-                        if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                },
-                TIMEOUT_MS);
     }
 
     private static LibraryModels.BookSummary goldenBook(LibraryDb db) {
         for (LibraryModels.BookSummary book : db.books()) {
-            if ("x3-golden-sample-ebfa1632c722".equals(book.id)) {
+            if (GoldenBookFixture.BOOK_ID.equals(book.id)) {
                 return book;
             }
         }
@@ -987,6 +963,34 @@ public final class WatchDeviceSmokeTest extends ActivityInstrumentationTestCase2
                 }
             }
         }
+    }
+
+    private static void assertAlignedHomeEntries(Activity activity) {
+        TextView books = activity.findViewById(R.id.books_button);
+        TextView music = activity.findViewById(R.id.music_button);
+        int[] booksAt = assertInsideRoundHome(books);
+        int[] musicAt = assertInsideRoundHome(music);
+        assertTrue("Books must be left of music without overlap",
+                booksAt[0] + books.getWidth() <= musicAt[0]);
+        assertEquals("Home entries must start on the same row", booksAt[1], musicAt[1]);
+        assertEquals("Home entries must be the same height", books.getHeight(), music.getHeight());
+        assertTrue("Home entries must have equal width up to rounding",
+                Math.abs(books.getWidth() - music.getWidth()) <= 1);
+        assertEquals("Home labels must share a baseline", books.getBaseline(), music.getBaseline());
+    }
+
+    private static int[] assertInsideRoundHome(View view) {
+        assertInsideDisplay(view);
+        assertTrue("Home entry must have a nonempty touch area",
+                view.getWidth() > 0 && view.getHeight() > 0);
+        int[] at = new int[2];
+        view.getLocationOnScreen(at);
+        int radius = 233;
+        int farX = Math.max(Math.abs(at[0] - radius), Math.abs(at[0] + view.getWidth() - radius));
+        int farY = Math.max(Math.abs(at[1] - radius), Math.abs(at[1] + view.getHeight() - radius));
+        assertTrue("Home entry corners must fit inside the 466px circle",
+                farX * farX + farY * farY <= radius * radius);
+        return at;
     }
 
     private static void assertInsideDisplay(View view) {

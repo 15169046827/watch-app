@@ -14,6 +14,7 @@ import com.canace.x3offlinereader.R;
 import com.canace.x3offlinereader.playback.PlaybackService;
 import com.canace.x3offlinereader.playback.PlaybackTargetStore;
 import com.canace.x3offlinereader.ui.RoundChoiceDialog;
+import com.canace.x3offlinereader.ui.RoundConfirmationDialog;
 import com.canace.x3offlinereader.ui.StoragePicker;
 import com.canace.x3offlinereader.ui.SwipeBackActivity;
 import java.io.File;
@@ -305,29 +306,23 @@ public final class MusicLibraryActivity extends SwipeBackActivity {
     }
 
     private void confirmDelete(MusicModels.Track track, boolean source) {
-        RoundChoiceDialog.show(
+        RoundConfirmationDialog.confirm(
                 this,
                 source
                         ? getString(R.string.confirm_delete_music_source)
                         : getString(R.string.confirm_remove_music),
-                new String[] {getString(R.string.confirm), getString(android.R.string.cancel)},
-                -1,
-                which -> {
-                    if (which == 0) {
-                        boolean removed = db.removeTrack(track.id, source);
-                        if (removed) {
-                            stopService(new Intent(this, PlaybackService.class));
-                            PlaybackTargetStore.clear(this);
-                            refresh();
-                        }
-                        Toast.makeText(
-                                        this,
-                                        removed
-                                                ? R.string.music_removed
-                                                : R.string.music_delete_failed,
-                                        Toast.LENGTH_LONG)
-                                .show();
+                "",
+                source ? R.string.delete_action : R.string.remove_action,
+                source,
+                () -> {
+                    boolean removed = db.removeTrack(track.id, source);
+                    if (removed) {
+                        stopService(new Intent(this, PlaybackService.class));
+                        PlaybackTargetStore.clear(this);
+                        refresh();
                     }
+                    Toast.makeText(this, removed ? R.string.music_removed : R.string.music_delete_failed,
+                            Toast.LENGTH_LONG).show();
                 });
     }
 

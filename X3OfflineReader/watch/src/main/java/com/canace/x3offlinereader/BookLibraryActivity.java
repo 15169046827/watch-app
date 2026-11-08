@@ -20,6 +20,7 @@ import com.canace.x3offlinereader.playback.PlaybackService;
 import com.canace.x3offlinereader.playback.PlaybackTargetStore;
 import com.canace.x3offlinereader.ui.PlayerActivity;
 import com.canace.x3offlinereader.ui.RoundChoiceDialog;
+import com.canace.x3offlinereader.ui.RoundConfirmationDialog;
 import com.canace.x3offlinereader.ui.StoragePicker;
 import com.canace.x3offlinereader.ui.SwipeBackActivity;
 import java.io.File;
@@ -247,16 +248,9 @@ public final class BookLibraryActivity extends SwipeBackActivity {
                 source
                         ? getString(R.string.confirm_delete_source)
                         : getString(R.string.confirm_remove_book);
-        RoundChoiceDialog.show(
-                this,
-                label,
-                new String[] {getString(R.string.confirm), getString(android.R.string.cancel)},
-                -1,
-                which -> {
-                    if (which == 0) {
-                        deleteBook(book, source);
-                    }
-                });
+        RoundConfirmationDialog.confirm(this, label, "",
+                source ? R.string.delete_action : R.string.remove_action, source,
+                () -> deleteBook(book, source));
     }
 
     private void deleteBook(LibraryModels.BookSummary book, boolean source) {

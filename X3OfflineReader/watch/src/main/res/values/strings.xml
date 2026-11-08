@@ -18,6 +18,9 @@
     <string name="confirm_remove_book">确认从书库移除？源文件将保留</string>
     <string name="confirm_delete_source">确认连同源文件永久删除？</string>
     <string name="confirm">确认</string>
+    <string name="acknowledge">知道了</string>
+    <string name="delete_action">永久删除</string>
+    <string name="remove_action">移除</string>
     <string name="book_removed">书籍已移除</string>
     <string name="source_delete_failed">源文件删除失败，书库未更改</string>
     <string name="chapters">章节</string>

@@ -8,6 +8,7 @@ apply from: rootProject.file('../gradle/android-java-quality.gradle')
 // Media3 1.10.x requires compileSdk 36. Keep the first device-risk spike on the
 // workspace-standard AGP 8.7.3 / compileSdk 35 toolchain and validate 1.8.0 on API 30.
 def media3Version = '1.8.0'
+def readerValidation = providers.gradleProperty('readerValidation').isPresent()
 
 android {
     namespace 'com.canace.x3offlinereader'
@@ -19,8 +20,8 @@ android {
         applicationId 'com.canace.x3offlinereader'
         minSdk 26
         targetSdk 30
-        versionCode 24
-        versionName '0.8.2'
+        versionCode 25
+        versionName '0.8.3'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
 
@@ -30,6 +31,16 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        if (readerValidation) {
+            validationDebug {
+                initWith debug
+                applicationIdSuffix '.validation'
+                matchingFallbacks = ['debug']
+            }
+        }
+    }
+    if (readerValidation) {
+        testBuildType 'validationDebug'
     }
 
     compileOptions {
