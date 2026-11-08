@@ -44,6 +44,23 @@
 
 `WatchMusicModesProbeTest` 在专用验收环境点击播放器的上一首和下一首，以曲目 ID 和队列下标确认切歌。它使用公开 MP3 样本跨越曲尾，核验播完暂停、单曲重播、列表回绕及随机完整遍历，并同时核对 MediaSession 的循环与随机配置。用例要求空音乐库、无活动播放页和空会话队列。用例结束后移除自身创建的样本、曲目记录和播放页，恢复原播放模式设置。
 
+### 独立验收安装
+
+在产品根目录运行 `gradlew.bat -PreaderValidation :watch:assembleValidationDebug :watch:assembleValidationDebugAndroidTest`。生成的两个包仅用于实机验收，并使用工作区共享 Debug 证书。省略该选项时仍使用普通 Debug 和对应的 AndroidTest 构建。
+
+| 用途 | 应用 ID | 相对产品根目录的 APK 路径 |
+| --- | --- | --- |
+| 听读（验收） | `com.canace.x3offlinereader.validation` | `watch/build/outputs/apk/validationDebug/watch-validationDebug.apk` |
+| 验收测试 | `com.canace.x3offlinereader.validation.test` | `watch/build/outputs/apk/androidTest/validationDebug/watch-validationDebug-androidTest.apk` |
+
+安装前可从工作区根目录运行 `scripts/verify-debug-signatures.ps1` 的全量发现模式验证两个验收 APK，或分别用 Android SDK 的 `apksigner verify --print-certs` 核对共享 Debug 证书。应用 ID 隔离应用数据、外部应用目录和各自的 MediaSession。设备的音频焦点与系统媒体音量仍为系统共享状态，验收前关闭正式播放。
+
+两个验收包安装后可运行下列命令。结束时只卸载表中的两个验收应用 ID。
+
+```powershell
+adb shell am instrument -w -e class com.canace.x3offlinereader.WatchMusicModesProbeTest com.canace.x3offlinereader.validation.test/android.test.InstrumentationTestRunner
+```
+
 原下一阶段体验清单已在 0.3.0 完成，包括最近章节定位、每章内部进度与一键续听、章节级上一项/下一项、音乐随机、Music 初始目录、多文件导入反馈、统一段落高亮、首段标题和多 Track 无感播放。详见 [`../specification/NEXT_PHASE_BACKLOG.md`](../specification/NEXT_PHASE_BACKLOG.md)。
 
 书内搜索、安全上限与 Timeline 定位契约见 [`../specification/WATCH_BOOK_SEARCH.md`](../specification/WATCH_BOOK_SEARCH.md)。
